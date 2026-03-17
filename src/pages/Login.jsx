@@ -83,7 +83,7 @@ const Login = () => {
         loop
         className="video-bg brightness-50 opacity-40"
       >
-        <source src="/animate-login-bg.mp4" type="video/mp4" />
+        <source src="https://res.cloudinary.com/dgobbuvqf/video/upload/v1773744348/turn-this-image-into-an-animation-in-a-factory-inv_t3kzvw.mp4" type="video/mp4" />
       </video>
 
       {/* Floating Orbs */}
