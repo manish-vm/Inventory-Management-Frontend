@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
-
+const API_URL = "https://inventory-management-backend-k76m.onrender.com/api"; 
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -109,6 +108,7 @@ export const productAPI = {
   createSubcategory: (data) => api.post('/products/subcategories', data),
   updateSubcategory: (id, data) => api.put('/products/subcategories/' + id, data),
   deleteSubcategory: (id) => api.delete('/products/subcategories/' + id),
+  getProductAnalytics: (id) => api.get(`/products/${id}/analytics`),
 };
 
 // Billing APIs

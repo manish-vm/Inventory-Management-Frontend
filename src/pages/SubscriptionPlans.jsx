@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { superAdminAPI } from '../api/api';
 
+const formatCurrency = (value) => new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+  }).format(value || 0);
+
 const SubscriptionPlans = () => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -168,8 +173,9 @@ const SubscriptionPlans = () => {
               </div>
               
               <div className="mb-4">
-                <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                  ${plan.price}
+                <span className="flex items-baseline gap-1 text-3xl font-bold text-slate-900 dark:text-white">
+                  <span>₹</span>
+                  <span>{formatCurrency(plan.price).replace('₹', '')}</span>
                 </span>
                 <span className="text-slate-500 dark:text-slate-400">/{plan.duration}</span>
               </div>

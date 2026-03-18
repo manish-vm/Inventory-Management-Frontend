@@ -8,15 +8,21 @@ import {
   Trash2, 
   Package,
   AlertTriangle,
+  BarChart3,
   X,
   Loader2,
-  ZoomIn
+  ZoomIn,
+  ShoppingCart,
+  Users,
+  TrendingUp,
+  DollarSign
 } from 'lucide-react';
 import Barcode from 'react-barcode';
 import { productAPI } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { CheckCircle, MinusCircle, Tag } from 'lucide-react';
 import CategoryManager from '../components/CategoryManager';
+import ProductAnalyticsModal from './ProductAnalyticsModal';
 
 // Helper function to encode product details into barcode (table format)
 const encodeProductForBarcode = (product) => {
@@ -542,8 +548,11 @@ const Products = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [showLowStock, setShowLowStock] = useState(false);
+const [showLowStock, setShowLowStock] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // Initialize showLowStock from URL query parameter
   useEffect(() => {
@@ -649,6 +658,19 @@ const Products = () => {
       fetchProducts();
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to save product');
+    }
+  };
+
+  const handleAnalyticsClick = async (product) => {
+    try {
+      setAnalyticsLoading(true);
+      const response = await productAPI.getProductAnalytics(product._id);
+      setAnalyticsData(response.data);
+      setShowAnalyticsModal(true);
+    } catch (error) {
+      toast.error('Failed to load analytics: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setAnalyticsLoading(false);
     }
   };
 
@@ -815,14 +837,15 @@ const Products = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                {products.map((product) => (
-                  <tr key={product._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+{products.map((product) => (
+                  <tr key={product._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer" onClick={() => handleAnalyticsClick(product)}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
                           <Package className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                         </div>
-                        <span className="font-medium text-slate-900 dark:text-white">{product.productName}</span>
+            <span className="font-medium text-slate-900 dark:text-white">{product.productName}</span>
+                        <BarChart3 className="w-4 h-4 text-blue-600 ml-2" />
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -936,15 +959,24 @@ const Products = () => {
         />
       )}
 
-      {selectedProduct && (
+{selectedProduct && (
         <BarcodePopup 
           product={selectedProduct} 
           onClose={() => setSelectedProduct(null)} 
         />
       )}
+
+{showAnalyticsModal && analyticsData && (
+        <ProductAnalyticsModal 
+          data={analyticsData} 
+          onClose={() => {
+            setShowAnalyticsModal(false);
+            setAnalyticsData(null);
+          }} 
+        />
+      )}
     </div>
   );
-};
+}
 
 export default Products;
-

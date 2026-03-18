@@ -498,6 +498,11 @@ function PricingSection() {
     fetchPlans();
   }, []);
 
+  const formatCurrency = (value) => new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+  }).format(value || 0);
+
   const fetchPlans = async () => {
     try {
       const response = await publicAPI.getPlans();
@@ -534,15 +539,18 @@ function PricingSection() {
           {loading ? (
             <div className="col-span-3 text-center py-8 text-slate-500">Loading plans...</div>
           ) : plans.length > 0 ? (
-            plans.filter(p => p.status === 'active').map((plan, index) => (
-              <PricingCard 
-                key={index} 
-                plan={plan.planName} 
-                price={plan.price === 0 ? 'Free' : `${plan.price}`} 
-                features={plan.features || []} 
-                delay={index * 0.1} 
-              />
-            ))
+            plans.filter(p => p.status === 'active').map((plan, index) => {
+              const displayPrice = plan.price === 0 ? 'Free' : `₹${formatCurrency(plan.price).replace('₹', '').replace(',00', '')}`;
+              return (
+                <PricingCard 
+                  key={index} 
+                  plan={plan.planName} 
+                  price={displayPrice} 
+                  features={plan.features || []} 
+                  delay={index * 0.1} 
+                />
+              );
+            })
           ) : (
             <div className="col-span-3 text-center py-8 text-slate-500">No plans available</div>
           )}
