@@ -150,7 +150,7 @@ const AIChatbot = () => {
                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-primary-600"></span>
               </div>
               <div>
-                <h3 className="text-white font-semibold text-base">AI Assistant</h3>
+                <h3 className="text-white font-semibold text-base">InventoryPro's Agent Support</h3>
                 <p className="text-primary-100 text-xs">Online • Always ready to help</p>
               </div>
             </div>
