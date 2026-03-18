@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
-import axios from 'axios';
+import { api } from '../api/api.js';
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
@@ -25,15 +25,6 @@ export const AuthProvider = ({ children }) => {
   const isEmployee = useMemo(() => user?.role === 'employee', [user]);
   const isCustomer = useMemo(() => user?.role === 'customer', [user]);
 
-  // Configure axios defaults
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }, [token]);
-
   // Check if user is logged in on mount
   useEffect(() => {
     // Prevent multiple auth checks
@@ -43,7 +34,7 @@ export const AuthProvider = ({ children }) => {
     const checkAuth = async () => {
       if (token) {
         try {
-          const response = await axios.get('/api/auth/me');
+          const response = await api.get('/auth/me');
           setUser(response.data);
         } catch (error) {
           localStorage.removeItem('token');
@@ -58,7 +49,7 @@ export const AuthProvider = ({ children }) => {
 
   // Unified login function - handles all roles (superadmin, admin, employee, customer)
   const login = async (email, password) => {
-    const response = await axios.post('/api/auth/login', { email, password });
+    const response = await api.post('/auth/login', { email, password });
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem('token', newToken);
     setToken(newToken);
@@ -80,7 +71,7 @@ export const AuthProvider = ({ children }) => {
 
   // Customer signup - backend assigns role="customer"
   const signup = async (name, email, password) => {
-    const response = await axios.post('/api/auth/signup', { name, email, password });
+    const response = await api.post('/auth/signup', { name, email, password });
     // Backend returns token/user - set session
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem('token', newToken);

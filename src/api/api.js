@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
 
 // Create axios instance
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',

@@ -712,9 +712,9 @@ function Footer() {
 /* ---------------- IMAGE SLIDER COMPONENT ---------------- */
 function ImageSlider() {
   const images = [
-    'https://github.com/manish-vm/Inventory-Management-Frontend/blob/main/banner-1.png?raw=true',
-    'https://github.com/manish-vm/Inventory-Management-Frontend/blob/main/banner-2.png?raw=true',
-    'https://github.com/manish-vm/Inventory-Management-Frontend/blob/main/inventory.png?raw=true'
+    '../banner-1.png',
+    '../banner-2.png',
+    'inventory.png'
   ];
   const [currentIndex, setCurrentIndex] = useState(0);
 
