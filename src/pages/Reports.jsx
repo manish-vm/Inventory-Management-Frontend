@@ -343,7 +343,7 @@ const Reports = () => {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="px-3 py-2 bg-slate-800 text-slate-900 dark:text-white outline-none"
+              className="px-3 py-2 bg-slate-800 bg-white text-black dark:bg-slate-800 text-white outline-none"
             >
               <option value="7">Last 7 days</option>
               <option value="14">Last 14 days</option>
