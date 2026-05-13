@@ -15,14 +15,14 @@ import {
   Lock,
   Key
 } from 'lucide-react';
-import { employeeAPI } from '../api/api';
+import { employeeAPI, manufacturingConfigAPI } from '../api/api';
 
 
 import { useAuth } from '../context/AuthContext';
 
 
 
-const EmployeeModal = ({ employee, onClose, onSave }) => {
+const EmployeeModal = ({ employee, onClose, onSave, manufacturingLevels }) => {
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     phone: employee?.phone || '',
@@ -30,6 +30,7 @@ const EmployeeModal = ({ employee, onClose, onSave }) => {
     address: employee?.address || '',
     password: '',
     canLogin: employee?.canLogin || false,
+    manufacturingLevel: employee?.manufacturingLevel || 1,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -155,6 +156,31 @@ const EmployeeModal = ({ employee, onClose, onSave }) => {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Manufacturing Level
+            </label>
+            <select
+              value={formData.manufacturingLevel}
+              onChange={(e) => setFormData({ ...formData, manufacturingLevel: Number(e.target.value) })}
+              className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
+            >
+              {manufacturingLevels && manufacturingLevels.length > 0 ? (
+                manufacturingLevels.map((level) => (
+                  <option key={`${level.stageNumber}-${level.stageName}`} value={level.stageNumber}>
+                    {level.stageName}
+                  </option>
+                ))
+              ) : (
+                <option value={1}>Level 1</option>
+              )}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">Assign the level at which this employee works in manufacturing</p>
+            {manufacturingLevels.length === 0 && (
+              <p className="text-xs text-amber-500 mt-1">No manufacturing levels configured yet. Create a manufacturing config first.</p>
+            )}
+          </div>
+
           {/* Login Access Section */}
           <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
@@ -236,10 +262,39 @@ const AdminEmployees = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [manufacturingLevels, setManufacturingLevels] = useState([]);
 
   useEffect(() => {
     fetchEmployees();
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    const fetchManufacturingLevels = async () => {
+      try {
+        const response = await manufacturingConfigAPI.getAll();
+        const configs = response.data || [];
+        const levelMap = new Map();
+
+        configs.flatMap((config) => config.stages || []).forEach((stage) => {
+          const stageNumber = Number(stage.stageNumber);
+          const stageName = stage.stageName?.trim();
+          if (!Number.isFinite(stageNumber) || !stageName) return;
+          const key = `${stageNumber}|${stageName}`;
+          if (!levelMap.has(key)) {
+            levelMap.set(key, { stageNumber, stageName });
+          }
+        });
+
+        const levels = Array.from(levelMap.values()).sort((a, b) => a.stageNumber - b.stageNumber);
+        setManufacturingLevels(levels);
+      } catch (err) {
+        console.error('Failed to fetch manufacturing levels:', err);
+        setManufacturingLevels([]);
+      }
+    };
+
+    fetchManufacturingLevels();
+  }, []);
 
   const fetchEmployees = async () => {
     try {
@@ -443,6 +498,7 @@ const AdminEmployees = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Phone</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Email</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Address</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Manufacturing Level</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Status</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">Actions</th>
                 </tr>
@@ -477,6 +533,11 @@ const AdminEmployees = () => {
                         <MapPin className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{employee.address || '-'}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                      <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                        {manufacturingLevels.find((level) => level.stageNumber === employee.manufacturingLevel)?.stageName || `Level ${employee.manufacturingLevel || 1}`}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -533,6 +594,7 @@ const AdminEmployees = () => {
       {showModal && (
         <EmployeeModal
           employee={editingEmployee}
+          manufacturingLevels={manufacturingLevels}
           onClose={() => {
             setShowModal(false);
             setEditingEmployee(null);

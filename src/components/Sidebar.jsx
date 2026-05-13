@@ -17,7 +17,12 @@ import {
   AlertTriangle,
   MessageSquare,
   ChevronRight,
-  Boxes
+  Boxes,
+  QrCode,
+  Workflow,
+  Scan,
+  PieChart,
+  UserCheck
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +30,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useSidebar } from '../context/SidebarContext';
 import { refundRequestAPI, productAPI } from '../api/api';
 import ThemeToggle from './ThemeToggle';
+import BrandModelManager from './BrandModelManager';
 
 const Sidebar = ({ isSuperAdmin }) => {
   const { user, logout, isAdmin, isCustomer, isSuperAdmin: isSA, isEmployee } = useAuth();
@@ -32,6 +38,7 @@ const Sidebar = ({ isSuperAdmin }) => {
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const { isCollapsed, setIsCollapsed } = useSidebar();
+  const [brandModelOpen, setBrandModelOpen] = useState(false);
 
   // Check if it's superadmin from prop or context
   const isSuperAdminView = isSuperAdmin || isSA;
@@ -65,24 +72,32 @@ const Sidebar = ({ isSuperAdmin }) => {
   const superAdminNavItems = [
     { path: '/superadmin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/superadmin/admins', icon: Shield, label: 'Admin Management' },
-    { path: '/superadmin/dealers', icon: Store, label: 'Dealer Management' },
+    { path: '/superadmin/dealers', icon: Store, label: 'Vendor Management' },
     { path: '/superadmin/plans', icon: FileText, label: 'Subscription Plans' },
     { path: '/superadmin/logs', icon: BarChart3, label: 'Activity Logs' },
   ];
 
-  // Admin gets full access
+  {/* Admin gets full access */}
   const adminNavItems = [
     { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/app/billing', icon: ShoppingCart, label: 'Billing / POS' },
+    // Billing/POS hidden for admins (customers only)
     { path: '/app/products', icon: Package, label: 'Products' },
-    { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
-    { path: '/app/refund-requests', icon: RefreshCcw, label: 'Refund Requests', badge: pendingRefundCount },
-    { path: '/app/messages', icon: MessageSquare, label: 'Messages' },
-    { path: '/app/customers', icon: Users, label: 'Customers' },
+    { path: '/app/manufacturing-config', icon: Workflow, label: 'Manufacturing Config' },
+    { path: '/app/qr-generator', icon: QrCode, label: 'QR Generator' },
+    // { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
+    // { path: '/app/refund-requests', icon: RefreshCcw, label: 'Refund Requests', badge: pendingRefundCount },
+    // { path: '/app/messages', icon: MessageSquare, label: 'Messages' },
+    // { path: '/app/customers', icon: Users, label: 'Customers' },
     { path: '/app/admin-employees', icon: Users, label: 'Employees' },
-    { path: '/app/reports', icon: BarChart3, label: 'Reports' },
-    { path: '/app/settings', icon: Settings, label: 'Settings' },
+    { path: '/app/role-management', icon: UserCheck, label: 'Role Management' },
+    // { path: '/app/reports', icon: BarChart3, label: 'Reports' },
+    // { path: '/app/settings', icon: Settings, label: 'Settings' },
+    // Helmet Production System
+    // { path: '/app/product-master', icon: Package, label: 'Product Master' },
+    { path: '/app/operator', icon: Scan, label: 'Operator Dashboard' },
+    { path: '/app/production-analytics', icon: PieChart, label: 'Analytics' },
   ];
+
 
   // Low Stock Alert - separate item for admins
   const lowStockNavItem = { 
@@ -102,12 +117,13 @@ const Sidebar = ({ isSuperAdmin }) => {
     { path: '/app/refund-requests', icon: RefreshCcw, label: 'My Refunds' },
   ];
 
-  // Employee gets profile with analytics, products (read-only), invoices
+  // Employee gets profile with analytics, products (read-only), invoices, and production
   const employeeNavItems = [
     { path: '/app/employee-profile', icon: User, label: 'My Profile' },
     { path: '/app/products', icon: Package, label: 'Products' },
     { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
     { path: '/app/refund-requests', icon: RefreshCcw, label: 'My Refunds' },
+    { path: '/app/operator', icon: Scan, label: 'Operator Dashboard' },
   ];
 
   let navItems;
@@ -205,22 +221,33 @@ const Sidebar = ({ isSuperAdmin }) => {
           
           {/* Category Manager Button - Admin only */}
           {isAdmin && !isCollapsed && (
-            <button
-              onClick={() => {
-                import('./CategoryManager').then((module) => {
-                  const event = new CustomEvent('openCategoryManager');
-                  window.dispatchEvent(event);
-                });
-              }}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100 transition-all duration-200 cursor-pointer w-full group"
-            >
-              <Package className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
-              <span className="font-medium text-sm">Manage Categories</span>
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  import('./CategoryManager').then(() => {
+                    const event = new CustomEvent('openCategoryManager');
+                    window.dispatchEvent(event);
+                  });
+                }}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100 transition-all duration-200 cursor-pointer w-full group"
+              >
+                <Package className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
+                <span className="font-medium text-sm">Manage Categories</span>
+              </button>
+
+              {/* Brand/Model Manager */}
+              <button
+                onClick={() => setBrandModelOpen(true)}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100 transition-all duration-200 cursor-pointer w-full group"
+              >
+                <Package className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
+                <span className="font-medium text-sm">Manage Brand & Model</span>
+              </button>
+            </>
           )}
 
           {/* Low Stock Alert - Only show for admins when there are low stock items */}
-          {isAdmin && lowStockCount > 0 && (
+          {/* {isAdmin && lowStockCount > 0 && (
             <NavLink
               to={lowStockNavItem.path}
               className={({ isActive }) =>
@@ -241,7 +268,7 @@ const Sidebar = ({ isSuperAdmin }) => {
                 </>
               )}
             </NavLink>
-          )}
+          )} */}
         </nav>
 
         {/* User Info & Theme Toggle */}
@@ -294,9 +321,15 @@ const Sidebar = ({ isSuperAdmin }) => {
           )}
         </div>
       </aside>
+
+      {/* Brand/Model Manager Modal */}
+      {brandModelOpen && isAdmin && (
+        <BrandModelManager onClose={() => setBrandModelOpen(false)} />
+      )}
     </>
   );
 };
 
 export default Sidebar;
+
 

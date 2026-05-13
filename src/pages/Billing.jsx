@@ -223,6 +223,15 @@ const BarcodePopup = ({ product, onClose, onAddToCart }) => {
 
 const Billing = () => {
   const { user, isCustomer } = useAuth();
+  if (user?.role === 'admin') {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Billing / POS</h1>
+        <p className="text-slate-500 dark:text-slate-400">Access restricted for admins.</p>
+      </div>
+    );
+  }
+
   const [cart, setCart] = useState([]);
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
@@ -605,55 +614,93 @@ const Billing = () => {
             )}
           </div>
 
-          {/* Products Grid */}
+          {/* Products Table */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
               Products ({products.length})
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto">
-              {products.map((product) => (
-                <div
-                  key={product._id}
-                  className="p-4 bg-slate-50 dark:bg-slate-700/50 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded">
-                      {product.productCode}
-                    </span>
-                    {product.stockQuantity <= product.minStockLevel && (
-                      <span className="text-xs text-red-500">Low</span>
-                    )}
-                  </div>
-                  <p className="font-medium text-slate-900 dark:text-white text-sm mb-1 truncate">
-                    {product.productName}
-                  </p>
-                  <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                    {formatCurrency(product.sellingPrice)}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Stock: {product.stockQuantity}
-                  </p>
-                  <div className="block gap-2 mt-3">
-                    <button
-                      onClick={() => setShowBarcodePopup(product)}
-                      className="flex-1 py-2 px-3 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium flex items-center justify-center gap-1"
-                    >
-                      <ScanBarcode className="w-3 h-3" />
-                      View Barcode
-                    </button>
-  
-                    <button
-                      onClick={() => addToCart(product)}
-                      disabled={product.stockQuantity < 1}
-                      className="flex-1 py-2 px-3 mt-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center"
-                    >
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
-              ))}
+
+            <div className="overflow-x-auto">
+              <div className="max-h-[520px] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+                <table className="w-full">
+                  <thead className="bg-slate-50 dark:bg-slate-700/50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-white">Product</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-white">Code</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-white">Brand</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-white">Model</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-white">Category</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-white">Subcategory</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900 dark:text-white">Price</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900 dark:text-white">Stock</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900 dark:text-white">Actions</th>
+
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                    {products.map((product) => (
+                      <tr key={product._id} className="hover:bg-primary-50 dark:hover:bg-primary-900/30">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <p className="font-medium text-slate-900 dark:text-white text-sm">{product.productName}</p>
+                              {product.stockQuantity <= product.minStockLevel && (
+                                <p className="text-xs text-red-500">Low</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded inline-block">
+                            {product.productCode}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">{product.brandName || '-'}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">{product.model || '-'}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">{product.category?.name || '-'}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">{product.subcategory?.name || '-'}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm font-bold text-primary-600 dark:text-primary-400">{formatCurrency(product.sellingPrice)}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">{product.stockQuantity}</span>
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setShowBarcodePopup(product)}
+                              className="py-2 px-3 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                            >
+                              <ScanBarcode className="w-3 h-3" />
+                              Barcode
+                            </button>
+
+                            <button
+                              onClick={() => addToCart(product)}
+                              disabled={product.stockQuantity < 1}
+                              className="py-2 px-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
+
         </div>
 
         {/* Right Panel - Cart */}

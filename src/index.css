@@ -347,6 +347,73 @@
   @apply w-full px-4 py-2.5 rounded-xl border border-surface-700 bg-surface-800 text-surface-100 placeholder-surface-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;
 }
 
+/* Global cursor and text-selection baseline */
+html,
+body,
+#root {
+  min-height: 100%;
+  cursor: default;
+}
+
+body,
+body * {
+  caret-color: transparent;
+}
+
+p,
+span,
+div,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+label,
+li,
+td,
+th {
+  cursor: default;
+}
+
+button,
+a,
+[role="button"],
+summary,
+label:has(input),
+input[type="button"],
+input[type="checkbox"],
+input[type="color"],
+input[type="file"],
+input[type="radio"],
+input[type="range"],
+input[type="reset"],
+input[type="submit"],
+select {
+  cursor: pointer;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  cursor: text;
+  caret-color: auto;
+  user-select: text;
+}
+
+input[disabled],
+textarea[disabled],
+select[disabled],
+button[disabled],
+input[readonly],
+textarea[readonly],
+select[readonly],
+[aria-disabled="true"] {
+  cursor: not-allowed;
+  user-select: none;
+  caret-color: transparent;
+}
+
 /* Badge styles */
 .badge {
   @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
@@ -500,3 +567,103 @@
   filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.2));
 }
 
+/* =========================================================
+   GLOBAL ROOT FIX — APPLY APP-WIDE
+   ========================================================= */
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Universal box sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Prevent all elements from causing horizontal overflow */
+* {
+  max-width: 100%;
+}
+
+/* Media elements responsive fix */
+img,
+video,
+canvas,
+svg,
+iframe {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Fix flex/grid overflow issues */
+.flex,
+.grid {
+  min-width: 0;
+}
+
+/* Prevent text/content overflow */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+div {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Fix tables overflowing on mobile */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Prevent inputs/buttons from exceeding width */
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
+}
+
+/* Fix Tailwind container overflow */
+.container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Prevent absolute/fixed elements from creating overflow */
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Better mobile rendering */
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+/* Fix long URLs/text breaking layouts */
+a {
+  word-break: break-word;
+}
+
+/* Optional: smoother rendering */
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

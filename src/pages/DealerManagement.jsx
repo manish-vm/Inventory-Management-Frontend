@@ -16,7 +16,9 @@ const DealerManagement = () => {
     email: '',
     adminId: '',
     subscriptionPlan: '',
-    status: 'active'
+    status: 'active',
+    vendorType: 'get_manufacturing',
+    vendorCode: ''
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -73,7 +75,9 @@ const DealerManagement = () => {
       email: dealer.email,
       adminId: dealer.adminId?._id || dealer.adminId || '',
       subscriptionPlan: dealer.subscriptionPlan?._id || dealer.subscriptionPlan || '',
-      status: dealer.status
+      status: dealer.status,
+      vendorType: dealer.vendorType || 'get_manufacturing',
+      vendorCode: dealer.vendorCode || ''
     });
     setShowModal(true);
   };
@@ -110,7 +114,9 @@ const DealerManagement = () => {
       email: '',
       adminId: '',
       subscriptionPlan: '',
-      status: 'active'
+      status: 'active',
+      vendorType: 'get_manufacturing',
+      vendorCode: ''
     });
     setEditingDealer(null);
     setError('');
@@ -133,13 +139,13 @@ const DealerManagement = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-          Dealer Management
+          Vendor Management
         </h1>
         <button
           onClick={openCreateModal}
           className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg hover:shadow-lg transition-colors"
         >
-          + Create Dealer
+          + Create Vendor
         </button>
       </div>
 
@@ -174,16 +180,19 @@ const DealerManagement = () => {
                   Phone
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
-                  Admin Assigned
+                  Assigned To
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
                   Plan
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                  Vendor Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
-                  Created
+                  Created At
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
                   Actions
@@ -225,6 +234,15 @@ const DealerManagement = () => {
                     <div className="text-sm text-slate-600 dark:text-slate-300">
                       {dealer.subscriptionPlan?.planName || '-'}
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      dealer.vendorType === 'base_manufacturing' 
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' 
+                        : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                    }`}>
+                      {dealer.vendorType === 'base_manufacturing' ? 'Base Manufacturing' : 'Get Manufacturing'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -352,6 +370,33 @@ const DealerManagement = () => {
                     />
                   </div>
                   
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Vendor Type
+                    </label>
+                    <select
+                      value={formData.vendorType}
+                      onChange={(e) => setFormData({ ...formData, vendorType: e.target.value })}
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-slate-700 dark:text-white"
+                    >
+                      <option value="get_manufacturing">Get Manufacturing (External)</option>
+                      <option value="base_manufacturing">Base Manufacturing (Internal)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Vendor Code
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.vendorCode}
+                      onChange={(e) => setFormData({ ...formData, vendorCode: e.target.value })}
+                      placeholder="Optional vendor code"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-slate-700 dark:text-white"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                       Assign Admin

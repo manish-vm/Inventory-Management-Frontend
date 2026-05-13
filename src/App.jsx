@@ -21,7 +21,13 @@ import Messages from './pages/Messages';
 import MessageInbox from './pages/Inbox';
 import AdminMessages from './pages/AdminMessages';
 import AdminEmployees from './pages/AdminEmployees';
+import RoleManagement from './pages/RoleManagement';
 import EmployeeProfile from './pages/EmployeeProfile';
+import ProductMaster from './pages/ProductMaster';
+import QRGenerator from './pages/QRGenerator';
+import ManufacturingConfig from './pages/ManufacturingConfig';
+import OperatorDashboard from './pages/OperatorDashboard';
+import Analytics from './pages/Analytics';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -227,7 +233,39 @@ function AppRoutes() {
             <AdminEmployees />
           </ProtectedRoute>
         } />
-      </Route>
+        <Route path="role-management" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <RoleManagement />
+          </ProtectedRoute>
+        } />
+         
+         {/* Helmet Production System Routes */}
+         <Route path="product-master" element={
+           <ProtectedRoute allowedRoles={['admin']}>
+             <ProductMaster />
+           </ProtectedRoute>
+         } />
+         <Route path="qr-generator" element={
+           <ProtectedRoute allowedRoles={['admin', 'employee']}>
+             <QRGenerator />
+           </ProtectedRoute>
+         } />
+         <Route path="manufacturing-config" element={
+           <ProtectedRoute allowedRoles={['admin']}>
+             <ManufacturingConfig />
+           </ProtectedRoute>
+         } />
+         <Route path="operator" element={
+           <ProtectedRoute allowedRoles={['admin', 'employee']}>
+             <OperatorDashboard />
+           </ProtectedRoute>
+         } />
+         <Route path="production-analytics" element={
+           <ProtectedRoute allowedRoles={['admin']}>
+             <Analytics />
+           </ProtectedRoute>
+         } />
+       </Route>
 
 
       {/* Catch all - redirect to dashboard */}

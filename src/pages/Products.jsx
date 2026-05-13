@@ -17,38 +17,53 @@ import {
   TrendingUp,
   DollarSign
 } from 'lucide-react';
-import Barcode from 'react-barcode';
-import { productAPI } from '../api/api';
+import QRCode from 'qrcode';
+import { productAPI, brandModelAPI, qrCodeAPI } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { CheckCircle, MinusCircle, Tag } from 'lucide-react';
 import CategoryManager from '../components/CategoryManager';
 import ProductAnalyticsModal from './ProductAnalyticsModal';
 
-// Helper function to encode product details into barcode (table format)
-const encodeProductForBarcode = (product) => {
-  // Table format: PC:code|N:name
-  return `PC:${product.productCode}|N:${product.productName}`;
+const getQRCodeValue = (product) => {
+  return product?.productCode || product?.productName || product?._id || '';
 };
 
-// Helper function to decode product from barcode
-const decodeProductFromBarcode = (barcodeData) => {
-  try {
-    // Parse table format: PC:code|N:name
-    const parts = barcodeData.split('|');
-    const result = {};
-    parts.forEach(part => {
-      const [key, value] = part.split(':');
-      if (key === 'PC') result.productCode = value;
-      if (key === 'N') result.productName = value;
-    });
-    return result.productCode || result.productName ? result : null;
-  } catch (e) {
-    return null;
-  }
-};
+// QR Code Popup Modal Component
+const QRCodePopup = ({ product, onClose }) => {
+  const [qrDataUrl, setQrDataUrl] = useState(null);
 
-// Barcode Popup Modal Component
-const BarcodePopup =({ product, onClose }) => {
+  useEffect(() => {
+    let active = true;
+    const value = getQRCodeValue(product);
+
+    if (!value) {
+      setQrDataUrl(null);
+      return;
+    }
+
+    const generateQRCode = async () => {
+      try {
+        const url = await QRCode.toDataURL(value, {
+          width: 220,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#ffffff',
+          },
+        });
+        if (active) setQrDataUrl(url);
+      } catch (error) {
+        console.error('Failed to generate QR code:', error);
+      }
+    };
+
+    generateQRCode();
+
+    return () => {
+      active = false;
+    };
+  }, [product]);
+
   if (!product) return null;
 
   const formatCurrency = (value) => {
@@ -57,9 +72,6 @@ const BarcodePopup =({ product, onClose }) => {
       currency: 'INR',
     }).format(value || 0);
   };
-
-  // Generate barcode value with product details in table format
-  const barcodeValue = encodeProductForBarcode(product);
 
   return (
     <div className="fixed inset-0  flex items-center justify-center z-50 p-4 -mt-10" onClick={onClose}>
@@ -74,20 +86,18 @@ const BarcodePopup =({ product, onClose }) => {
           </button>
         </div>
 
-        {/* Barcode Display with table format */}
-        <div className="flex flex-col items-center mb-4  -mt-6 from-primary-600 to-primary-800 p-4 rounded-lg">
+        {/* QR Code Display */}
+        <div className="flex flex-col items-center mb-4 -mt-6 from-primary-600 to-primary-800 p-4 rounded-lg">
           <div className="bg-white rounded-xl p-2 flex flex-col items-center">
-                      <Barcode 
-                        value={barcodeValue} 
-                        format="CODE128"
-                        width={1}
-                        height={60}
-                        displayValue={false}
-                        background="#ffffff"
-                        lineColor="#000000"
-                      />
-                    </div>
-          <p className="text-white/60 text-xs mt-2 font-mono">{barcodeValue}</p>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="Product QR Code" className="h-40 w-40 object-contain" />
+            ) : (
+              <div className="h-40 w-40 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                QR unavailable
+              </div>
+            )}
+          </div>
+          <p className="text-white/60 text-xs mt-2 font-mono">{getQRCodeValue(product)}</p>
         </div>
 
         <div className="space-y-2">
@@ -104,28 +114,20 @@ const BarcodePopup =({ product, onClose }) => {
             <span className="font-medium text-sm text-slate-900 dark:text-white">{product.subcategory?.name || '-'}</span>
           </div>
           <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Base Price</span>
-            <span className="font-bold text-sm text-primary-600 dark:text-primary-400">{formatCurrency(product.basePrice)}</span>
-          </div>
-          {product.sellingPrice && product.sellingPrice > 0 && product.sellingPrice !== product.basePrice && (
-            <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span className="text-sm text-slate-500 dark:text-slate-400">Selling Price</span>
-              <span className="font-medium text-sm text-slate-900 dark:text-white line-through">{formatCurrency(product.sellingPrice)}</span>
-            </div>
-          )}
-          <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Stock</span>
-            <span className={`font-medium text-sm ${
-              product.stockQuantity <= product.minStockLevel
-                ? 'text-red-600 dark:text-red-400'
-                : 'text-slate-900 dark:text-white'
-            }`}>
-              {product.stockQuantity}
-            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">Brand</span>
+            <span className="font-medium text-sm text-slate-900 dark:text-white">{product.brandName || '-'}</span>
           </div>
           <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Min Stock Level</span>
-            <span className="font-medium text-sm text-slate-900 dark:text-white">{product.minStockLevel}</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">Model</span>
+            <span className="font-medium text-sm text-slate-900 dark:text-white">{product.model || '-'}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
+            <span className="text-sm text-slate-500 dark:text-slate-400">Category</span>
+            <span className="font-medium text-sm text-slate-900 dark:text-white">{product.category?.name || '-'}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
+            <span className="text-sm text-slate-500 dark:text-slate-400">Subcategory</span>
+            <span className="font-medium text-sm text-slate-900 dark:text-white">{product.subcategory?.name || '-'}</span>
           </div>
         </div>
 
@@ -151,7 +153,15 @@ const CategoryModal = ({ category, onClose, onSave }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onSave(formData);
+      const payload = {
+        ...formData,
+        brandName: undefined,
+        model: undefined,
+      };
+      // Backend expects brandId/modelId to resolve names
+      delete payload.brandName;
+      delete payload.model;
+      await onSave(payload);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to save category');
     } finally {
@@ -339,17 +349,35 @@ const SubcategoryModal = ({ subcategory, categories, onClose, onSave }) => {
 
 
 
-const ProductModal = ({ product, categories, subcategories, onClose, onSave, isAdmin }) => {
+const ProductModal = ({
+  product,
+  categories,
+  subcategories,
+  brands,
+  models,
+  allModels,
+  onClose,
+  onSave,
+  onBrandChange,
+  isAdmin,
+}) => {
   const [formData, setFormData] = useState({
     productName: product?.productName || '',
     productCode: product?.productCode || '',
+    stockQuantity: product?.stockQuantity ?? 0,
+
+    // Product stores brand/model as strings; ids are derived for dropdowns.
+    brandId: product?.brandId || '',
+    modelId: product?.modelId || '',
+
+    brandName: product?.brandName || '',
+    model: product?.model || '',
+
     category: product?.category?._id || product?.category || '',
     subcategory: product?.subcategory?._id || product?.subcategory || '',
-    stockQuantity: product?.stockQuantity || 0,
-    minStockLevel: product?.minStockLevel || 5,
-    basePrice: product?.basePrice || 0,
-    sellingPrice: product?.sellingPrice || 0,
   });
+
+  const [useQRCode, setUseQRCode] = useState(!product);
   const [loading, setLoading] = useState(false);
   const [filteredSubcategories, setFilteredSubcategories] = useState([]);
 
@@ -364,11 +392,35 @@ const ProductModal = ({ product, categories, subcategories, onClose, onSave, isA
     }
   }, [formData.category, subcategories]);
 
+  useEffect(() => {
+    // 1) Keep selected model valid for the chosen brand.
+    if (!formData.brandId) {
+      if (formData.modelId) setFormData((prev) => ({ ...prev, modelId: '' }));
+      return;
+    }
+
+    if (formData.modelId) {
+      const modelBelongsToBrand = models?.some((m) => String(m._id) === String(formData.modelId));
+      if (!modelBelongsToBrand) setFormData((prev) => ({ ...prev, modelId: '' }));
+    }
+
+    // 2) For edit mode: backend stores `model` as string (not modelId).
+    // If modelId is empty but we have brandId + model name + loaded models, derive modelId.
+    if (!formData.modelId && formData.model && Array.isArray(models) && models.length > 0) {
+      const target = String(formData.model).trim().toLowerCase();
+      const match = models.find((m) => String(m.name).trim().toLowerCase() === target);
+      if (match) {
+        setFormData((prev) => ({ ...prev, modelId: match._id }));
+      }
+    }
+  }, [formData.brandId, formData.modelId, formData.model, models]);
+
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onSave(formData);
+      await onSave(formData, { createQRCode: useQRCode });
     } catch (error) {
       console.error(error);
     } finally {
@@ -404,7 +456,7 @@ const ProductModal = ({ product, categories, subcategories, onClose, onSave, isA
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Product Code (Barcode)
+                Product Code / QR Payload
               </label>
               <input
                 type="text"
@@ -414,7 +466,52 @@ const ProductModal = ({ product, categories, subcategories, onClose, onSave, isA
                 className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
               />
             </div>
+            {!product && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                  QR Option
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="useQRCode"
+                      value="yes"
+                      checked={useQRCode}
+                      onChange={() => setUseQRCode(true)}
+                      className="h-4 w-4 text-primary-600 border-slate-300"
+                    />
+                    With QR
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="useQRCode"
+                      value="no"
+                      checked={!useQRCode}
+                      onChange={() => setUseQRCode(false)}
+                      className="h-4 w-4 text-primary-600 border-slate-300"
+                    />
+                    Without QR
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Stock Quantity
+              </label>
+              <input
+                type="text"
+                value={formData.stockQuantity}
+                onChange={(e) => setFormData({ ...formData, stockQuantity: Number(e.target.value) || 0 })}
+                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
+              />
+            </div>
+          </div> */}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -453,53 +550,52 @@ const ProductModal = ({ product, categories, subcategories, onClose, onSave, isA
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Selling Price *
+                Brand *
               </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.sellingPrice}
-                onChange={(e) => setFormData({ ...formData, sellingPrice: parseFloat(e.target.value) })}
+              <select
+                value={formData.brandId}
+                onChange={async (e) => {
+                  const brandId = e.target.value;
+                  setFormData(prev => ({ ...prev, brandId, modelId: '', model: '' }));
+                  if (onBrandChange) {
+                    await onBrandChange(brandId);
+                  }
+                }}
                 className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-                required
-              />
+              >
+                <option value="">Select Brand</option>
+                {brands.map(b => (
+                  <option key={b._id} value={b._id}>{b.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Base Price
+                Model *
               </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.basePrice}
-                onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                value={formData.stockQuantity}
-                onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Min Stock Level
-              </label>
-              <input
-                type="number"
-                value={formData.minStockLevel}
-                onChange={(e) => setFormData({ ...formData, minStockLevel: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-              />
+              <select
+                value={formData.modelId}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const selectedModel = (models || allModels).find((m) => String(m._id) === value);
+                  setFormData(prev => ({
+                    ...prev,
+                    modelId: value,
+                    brandId: prev.brandId || selectedModel?.brandId?._id || selectedModel?.brandId || prev.brandId,
+                    brandName: prev.brandName || selectedModel?.brandId?.name || prev.brandName,
+                    model: selectedModel?.name || prev.model,
+                  }));
+                }}
+                disabled={!((formData.brandId || allModels.length > 0))}
+                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none disabled:opacity-60"
+              >
+                <option value="">Select Model</option>
+                {(formData.brandId ? models : allModels).map(m => (
+                  <option key={m._id} value={m._id}>
+                    {m.name}{!formData.brandId && m.brandId?.name ? ` (${m.brandId.name})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -545,14 +641,21 @@ const Products = () => {
   const [subcategoriesList, setSubcategoriesList] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
+  const [loadingBrands, setLoadingBrands] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-const [showLowStock, setShowLowStock] = useState(false);
+  const [brands, setBrands] = useState([]);
+  const [models, setModels] = useState([]);
+  const [allModels, setAllModels] = useState([]);
+  const [showLowStock, setShowLowStock] = useState(false);
+
+
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
-  const [analyticsData, setAnalyticsData] = useState(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  // const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  // const [analyticsData, setAnalyticsData] = useState(null);
+  // const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // Initialize showLowStock from URL query parameter
   useEffect(() => {
@@ -604,11 +707,113 @@ const [showLowStock, setShowLowStock] = useState(false);
     }
   }, [categoryFilter, subcategories]);
 
+  const fetchAllModels = async () => {
+    try {
+      const response = await brandModelAPI.getAllModels();
+      const modelsData = response.data || [];
+      setAllModels(modelsData);
+      setModels(modelsData);
+      return modelsData;
+    } catch (e) {
+      console.error('Failed to fetch all models', e);
+      setAllModels([]);
+      setModels([]);
+      return [];
+    }
+  };
+
+  const loadBrands = async () => {
+    try {
+      const response = await brandModelAPI.getActiveBrands();
+      setBrands(response.data);
+    } catch (e) {
+      console.error('Failed to fetch brands', e);
+      setBrands([]);
+    }
+  };
+
+  useEffect(() => {
+    loadBrands();
+    fetchAllModels();
+  }, []);
+
+  const fetchModelsByBrand = async (brandId) => {
+    if (!brandId) {
+      setModels(allModels);
+      return;
+    }
+    try {
+      const response = await brandModelAPI.getModelsByBrand(brandId);
+      setModels(response.data || []);
+    } catch (e) {
+      console.error('Failed to fetch models for brand', e);
+      setModels([]);
+    }
+  };
+
+  const handleBrandChange = async (brandId) => {
+    setModels([]);
+    await fetchModelsByBrand(brandId);
+  };
+
+  const refreshBrands = async () => {
+    try {
+      const response = await brandModelAPI.getActiveBrands();
+      const data = response.data || [];
+      setBrands(data);
+      return data;
+    } catch (e) {
+      console.error('Failed to fetch brands', e);
+      setBrands([]);
+      return [];
+    }
+  };
+
+  // Fetch products when search/filter changes
   useEffect(() => {
     fetchProducts();
   }, [search, showLowStock, categoryFilter, subcategoryFilter]);
 
+  // Keep models in sync with the selected brand (same style as category -> subcategory).
+  // For edits: backend product stores brandName + model (not brandId/modelId).
+  useEffect(() => {
+    if (!showModal) return;
+
+    let active = true;
+    const timeoutId = setTimeout(async () => {
+      if (!active) return;
+
+      await refreshBrands();
+      await fetchAllModels();
+      if (!active) return;
+
+      const currentProduct = editingProduct;
+      const derivedBrandId =
+        currentProduct?.brandId ||
+        (currentProduct?.brandName
+          ? (brands || []).find((b) => b.name === currentProduct.brandName)?._id
+          : '');
+
+      if (!derivedBrandId) {
+        const freshModels = await fetchAllModels();
+        if (!active) return;
+        setModels(freshModels);
+        return;
+      }
+
+      await fetchModelsByBrand(derivedBrandId);
+    }, 500); // Add 500ms delay to prevent rapid API calls
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModal, editingProduct]);
+
+
   const fetchProducts = async () => {
+
     try {
       const params = { search };
       if (showLowStock) params.lowStock = 'true';
@@ -641,18 +846,35 @@ const [showLowStock, setShowLowStock] = useState(false);
     }
   };
 
-  const handleSave = async (formData) => {
+  const handleSave = async (formData, options = {}) => {
     try {
       const dataToSend = {
         ...formData,
         category: formData.category || null,
         subcategory: formData.subcategory || null,
       };
+
+      let createdProduct = null;
       if (editingProduct) {
         await productAPI.update(editingProduct._id, dataToSend);
       } else {
-        await productAPI.create(dataToSend);
+        const response = await productAPI.create(dataToSend);
+        createdProduct = response.data;
       }
+
+      if (!editingProduct && options.createQRCode === true && createdProduct) {
+        try {
+          await qrCodeAPI.create({
+            productName: createdProduct.productName,
+            barcodeNo: createdProduct.productCode,
+            quantity: 0,
+          });
+        } catch (qrError) {
+          console.error('Failed to create QR code for product:', qrError);
+          toast.error('Product saved, but QR code creation failed.');
+        }
+      }
+
       setShowModal(false);
       setEditingProduct(null);
       fetchProducts();
@@ -661,18 +883,18 @@ const [showLowStock, setShowLowStock] = useState(false);
     }
   };
 
-  const handleAnalyticsClick = async (product) => {
-    try {
-      setAnalyticsLoading(true);
-      const response = await productAPI.getProductAnalytics(product._id);
-      setAnalyticsData(response.data);
-      setShowAnalyticsModal(true);
-    } catch (error) {
-      toast.error('Failed to load analytics: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  };
+  // const handleAnalyticsClick = async (product) => {
+  //   try {
+  //     setAnalyticsLoading(true);
+  //     const response = await productAPI.getProductAnalytics(product._id);
+  //     setAnalyticsData(response.data);
+  //     setShowAnalyticsModal(true);
+  //   } catch (error) {
+  //     toast.error('Failed to load analytics: ' + (error.response?.data?.message || error.message));
+  //   } finally {
+  //     setAnalyticsLoading(false);
+  //   }
+  // };
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
@@ -799,7 +1021,7 @@ const [showLowStock, setShowLowStock] = useState(false);
               <option key={sub._id} value={sub._id}>{sub.name}</option>
             ))}
           </select>
-          <button
+          {/* <button
             onClick={() => setShowLowStock(!showLowStock)}
             className={`flex items-center gap-2 px-4 py-3 rounded-xl border ${
               showLowStock 
@@ -809,7 +1031,7 @@ const [showLowStock, setShowLowStock] = useState(false);
           >
             <AlertTriangle className="w-5 h-5" />
             Low Stock
-          </button>
+          </button> */}
         </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -831,36 +1053,45 @@ const [showLowStock, setShowLowStock] = useState(false);
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Code</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Category</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Subcategory</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Stock</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Price</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Brand</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Model</th>
+                  {/* <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Stock</th> */}
+                  {!isAdmin && (
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Price</th>
+                  )}
+
                   {isAdmin && <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-{products.map((product) => (
-                  <tr key={product._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer" onClick={() => handleAnalyticsClick(product)}>
+                    {products.map((product) => (
+                    <tr key={product._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
                           <Package className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                         </div>
             <span className="font-medium text-slate-900 dark:text-white">{product.productName}</span>
-                        <BarChart3 className="w-4 h-4 text-blue-600 ml-2" />
+                        {/* <BarChart3 className="w-4 h-4 text-blue-600 ml-2" /> */}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <button 
-                        onClick={() => setSelectedProduct(product)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProduct(product);
+                        }}
                         className="flex flex-col items-start gap-1 hover:opacity-80 transition-opacity cursor-pointer"
                       >
                         {product.productCode && (
                           <img 
-                            src={`https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(product.productCode)}&code=Code128&height=30&width=1&showsilent=true`}
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(product.productCode)}`}
                             alt={product.productCode}
-                            className="h-8 w-10 object-cover"
+                            className="h-16 w-16 object-cover rounded-lg"
                           />
                         )}
-                        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400" onMouseDown={(e) => e.preventDefault()}>
                           <ZoomIn className="w-3 h-3" />
                           {product.productCode}
                         </div>
@@ -872,7 +1103,7 @@ const [showLowStock, setShowLowStock] = useState(false);
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
                       {product.subcategory?.name || '-'}
                     </td>
-                    <td className="px-6 py-4">
+                    {/* <td className="px-6 py-4">
                       <span className={`font-medium ${
                         product.stockQuantity <= product.minStockLevel
                           ? 'text-red-600 dark:text-red-400'
@@ -880,40 +1111,88 @@ const [showLowStock, setShowLowStock] = useState(false);
                       }`}>
                         {product.stockQuantity}
                       </span>
+                    </td> */}
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                      {product.brandName || '-'}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-primary-600 dark:text-primary-400">
-                          {formatCurrency(product.basePrice)}
-                        </span>
-                        {product.sellingPrice && product.sellingPrice > 0 && product.sellingPrice !== product.basePrice && (
-                          <span className="text-xs text-slate-500 dark:text-slate-400 line-through">
-                            {formatCurrency(product.sellingPrice)}
-                          </span>
-                        )}
-                      </div>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                      {product.model || '-'}
                     </td>
-                    {isAdmin && (
+                  
+
+                    {/* Hide price for admins */}
+                    {!isAdmin && (
                       <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingProduct(product);
-                              setShowModal(true);
-                            }}
-                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(product._id)}
-                            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-primary-600 dark:text-primary-400">
+                            {formatCurrency(product.basePrice)}
+                          </span>
+                          {product.sellingPrice && product.sellingPrice > 0 && product.sellingPrice !== product.basePrice && (
+                            <span className="text-xs text-slate-500 dark:text-slate-400 line-through">
+                              {formatCurrency(product.sellingPrice)}
+                            </span>
+                          )}
                         </div>
                       </td>
                     )}
+
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Print icon: prints this product's QR code */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const code = product.productCode;
+                            const printWin = window.open('', '_blank', 'width=600,height=400');
+                            if (!printWin) {
+                              alert('Popup blocked. Please allow popups to print QR code.');
+                              return;
+                            }
+                            printWin.document.write(`<!doctype html><html><head><title>Print QR Code</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;">`);
+                            printWin.document.write(`
+                              <div style="text-align:center;font-family:Arial,sans-serif;">
+                                <div style="margin-bottom:12px;font-weight:600;">${product.productName}</div>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(code)}" alt="QR code" />
+                                <div style="margin-top:10px;font-size:12px;">${code}</div>
+                              </div>
+                            `);
+                            printWin.document.write(`</body></html>`);
+                            printWin.document.close();
+                            printWin.focus();
+                            printWin.print();
+                          }}
+                          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400"
+                          title="Print QR code"
+                        >
+                          <span className="text-sm">🖨️</span>
+                        </button>
+
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingProduct(product);
+                                setShowModal(true);
+                              }}
+                              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(product._id);
+                              }}
+                              className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -927,7 +1206,11 @@ const [showLowStock, setShowLowStock] = useState(false);
           product={editingProduct}
           categories={categories}
           subcategories={subcategories}
+          brands={brands}
+          models={models}
+          allModels={allModels}
           isAdmin={isAdmin}
+          onBrandChange={handleBrandChange}
           onClose={() => {
             setShowModal(false);
             setEditingProduct(null);
@@ -960,13 +1243,13 @@ const [showLowStock, setShowLowStock] = useState(false);
       )}
 
 {selectedProduct && (
-        <BarcodePopup 
+        <QRCodePopup 
           product={selectedProduct} 
           onClose={() => setSelectedProduct(null)} 
         />
       )}
 
-{showAnalyticsModal && analyticsData && (
+{/* {showAnalyticsModal && analyticsData && (
         <ProductAnalyticsModal 
           data={analyticsData} 
           onClose={() => {
@@ -974,7 +1257,7 @@ const [showLowStock, setShowLowStock] = useState(false);
             setAnalyticsData(null);
           }} 
         />
-      )}
+      )} */}
     </div>
   );
 }

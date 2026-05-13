@@ -47,8 +47,8 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, [token]);
 
-  // Unified login function - handles all roles (superadmin, admin, employee, customer)
-  const login = async (email, password) => {
+// Unified login function - handles all roles (superadmin, admin, employee, customer)
+   const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem('token', newToken);
@@ -66,6 +66,17 @@ export const AuthProvider = ({ children }) => {
       navigate('/app/billing');
     }
     
+    return userData;
+  };
+
+  // Super admin login - uses superadmin-specific endpoint
+  const superAdminLogin = async (email, password) => {
+    const response = await api.post('/superadmin/login', { email, password });
+    const { token: newToken, user: userData } = response.data;
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+    setUser(userData);
+    navigate('/superadmin/dashboard');
     return userData;
   };
 
@@ -105,6 +116,7 @@ export const AuthProvider = ({ children }) => {
       token, 
       loading, 
       login,
+      superAdminLogin,
       signup,
       logout, 
       isSuperAdmin,

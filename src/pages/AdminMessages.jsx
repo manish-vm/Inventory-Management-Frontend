@@ -137,7 +137,7 @@ const AdminMessages = () => {
             <Users className="w-4 h-4 mr-1 inline" />
             Employees
           </button>
-          <button
+          {/* <button
             onClick={() => setTab('customers')}
             className={`pb-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               tab === 'customers'
@@ -147,7 +147,7 @@ const AdminMessages = () => {
           >
             <Users className="w-4 h-4 mr-1 inline" />
             Customers
-          </button>
+          </button> */}
         </nav>
       </div>
 

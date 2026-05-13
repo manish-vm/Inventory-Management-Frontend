@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = "https://inventory-management-backend-k76m.onrender.com/api"; 
+const API_URL = "http://localhost:5000/api"; 
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -111,6 +111,19 @@ export const productAPI = {
   getProductAnalytics: (id) => api.get(`/products/${id}/analytics`),
 };
 
+// Brand & Model APIs
+export const brandModelAPI = {
+  getActiveBrands: () => api.get('/brands'),
+  getAllModels: () => api.get('/brands/models'),
+  getModelsByBrand: (brandId) => api.get(`/brands/${brandId}/models`),
+  createBrand: (data) => api.post('/brands', data),
+  updateBrand: (id, data) => api.put(`/brands/${id}`, data),
+  deleteBrand: (id) => api.delete(`/brands/${id}`),
+  createModel: (brandId, data) => api.post(`/brands/${brandId}/models`, data),
+  updateModel: (modelId, data) => api.put(`/brands/models/${modelId}`, data),
+  deleteModel: (modelId) => api.delete(`/brands/models/${modelId}`),
+};
+
 // Billing APIs
 export const billingAPI = {
   checkout: (data) => api.post('/billing/checkout', data),
@@ -176,9 +189,9 @@ export const employeeAPI = {
 export const notificationAPI = {
   getAll: () => api.get('/notifications'),
   getUnreadCount: () => api.get('/notifications/unread-count'),
-  markAsRead: (id) => api.put('/notifications/' + id + '/read'),
+  markAsRead: (id) => api.put(`/notifications/${id}/read`),
   markAllAsRead: () => api.put('/notifications/read-all'),
-  delete: (id) => api.delete('/notifications/' + id),
+  delete: (id) => api.delete(`/notifications/${id}`),
   getAllAdmins: () => api.get('/notifications/admins'),
   getUsers: (type) => api.get('/notifications/users', { params: { type } }),
   sendToAdmin: (data) => api.post('/notifications/to-admin', data),
@@ -186,10 +199,90 @@ export const notificationAPI = {
   broadcastToCustomers: (data) => api.post('/notifications/broadcast-customers', data),
 };
 
+
 // Chatbot APIs (Gemini AI)
 export const chatbotAPI = {
   sendMessage: (message) => api.post('/chatbot/chat', { message }),
   clearHistory: () => api.post('/chatbot/clear'),
+};
+
+// Product Master APIs (Helmet Production)
+export const productMasterAPI = {
+  getAll: (params) => api.get('/product-masters', { params }),
+  getById: (id) => api.get('/product-masters/' + id),
+  getByPartNo: (partNo) => api.get('/product-masters/part/' + partNo),
+  create: (data) => api.post('/product-masters', data),
+  upload: (data) => api.post('/product-masters/upload', data),
+  update: (id, data) => api.put('/product-masters/' + id, data),
+  delete: (id) => api.delete('/product-masters/' + id),
+  getTypes: () => api.get('/product-masters/types'),
+  getSubTypes: (params) => api.get('/product-masters/subtypes', { params }),
+};
+
+// QR Code APIs
+export const qrCodeAPI = {
+  getAll: (params) => api.get('/qr-codes', { params }),
+  getStats: () => api.get('/qr-codes/stats'),
+  getById: (id) => api.get('/qr-codes/' + id),
+  getByQRId: (qrId) => api.get('/qr-codes/qr/' + qrId),
+  create: (data) => api.post('/qr-codes', data),
+  bulkCreate: (data) => api.post('/qr-codes/bulk', data),
+  update: (id, data) => api.put('/qr-codes/' + id, data),
+  updateProgress: (id, data) => api.put('/qr-codes/' + id + '/progress', data),
+  delete: (id) => api.delete('/qr-codes/' + id),
+};
+
+// Manufacturing Config APIs
+export const manufacturingConfigAPI = {
+  getAll: (params) => api.get('/manufacturing-configs', { params }),
+  getById: (id) => api.get('/manufacturing-configs/' + id),
+  getByPartNo: (partNo) => api.get('/manufacturing-configs/part/' + partNo),
+  create: (data) => api.post('/manufacturing-configs', data),
+  validateStage: (data) => api.post('/manufacturing-configs/validate-stage', data),
+  update: (id, data) => api.put('/manufacturing-configs/' + id, data),
+  delete: (id) => api.delete('/manufacturing-configs/' + id),
+};
+
+// Raw Material APIs
+export const rawMaterialAPI = {
+  getAll: (params) => api.get('/raw-materials', { params }),
+  getStats: () => api.get('/raw-materials/stats'),
+  getById: (id) => api.get('/raw-materials/' + id),
+  create: (data) => api.post('/raw-materials', data),
+  update: (id, data) => api.put('/raw-materials/' + id, data),
+  validate: (id, data) => api.put('/raw-materials/' + id + '/validate', data),
+};
+
+// Production Log APIs
+export const productionLogAPI = {
+  getAll: (params) => api.get('/production-logs', { params }),
+  getStats: () => api.get('/production-logs/stats'),
+  getDaily: () => api.get('/production-logs/daily'),
+  getById: (id) => api.get('/production-logs/' + id),
+  create: (data) => api.post('/production-logs', data),
+  update: (id, data) => api.put('/production-logs/' + id, data),
+};
+
+// Processing Stage APIs
+export const processingStageAPI = {
+  getAll: (params) => api.get('/processing-stages', { params }),
+  getStats: () => api.get('/processing-stages/stats'),
+  getById: (id) => api.get('/processing-stages/' + id),
+  create: (data) => api.post('/processing-stages', data),
+  update: (id, data) => api.put('/processing-stages/' + id, data),
+  complete: (id) => api.put('/processing-stages/' + id + '/complete'),
+  validate: (id, data) => api.put('/processing-stages/' + id + '/validate', data),
+};
+
+// Assembly APIs
+export const assemblyAPI = {
+  getAll: (params) => api.get('/assemblies', { params }),
+  getStats: () => api.get('/assemblies/stats'),
+  getDaily: () => api.get('/assemblies/daily'),
+  getById: (id) => api.get('/assemblies/' + id),
+  create: (data) => api.post('/assemblies', data),
+  update: (id, data) => api.put('/assemblies/' + id, data),
+  finalize: (id) => api.put('/assemblies/' + id + '/finalize'),
 };
 
 export default api;
