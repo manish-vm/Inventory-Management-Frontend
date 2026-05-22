@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 
-const roles = ['customer', 'admin', 'employee', 'superadmin'];
+const roles = [ 'admin', 'employee', 'superadmin'];
 
 const formatRoleLabel = (role) => {
   if (role === 'superadmin') return 'SuperAdmin';
@@ -10,7 +10,7 @@ const formatRoleLabel = (role) => {
 const AuthTabs = ({ activeRole, onChange }) => {
   return (
     <div
-      className="grid grid-cols-2 gap-2 -mt-[40px] rounded-2xl border border-white/15 bg-white/8 p-2 shadow-inner shadow-black/10 sm:grid-cols-4"
+      className="grid grid-cols-2 gap-2 -mt-[40px] rounded-2xl border border-white/15 bg-white/8 p-2 shadow-inner shadow-black/10 sm:grid-cols-3"
       role="tablist"
       aria-label="Authentication roles"
     >

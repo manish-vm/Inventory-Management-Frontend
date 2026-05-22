@@ -108,6 +108,8 @@ const OperatorDashboard = () => {
         inputQuantity: scannedQR.quantity,
         operator
       });
+      const refreshedQR = await qrCodeAPI.getById(scannedQR._id);
+      setScannedQR(refreshedQR.data);
       
       toast.success('Processing stage started');
     } catch (error) {
@@ -168,6 +170,8 @@ const OperatorDashboard = () => {
         remarks: `Auto-assembled from stage ${stageNumber}`,
         assembledBy: operator
       });
+      const refreshedQR = await qrCodeAPI.getById(scannedQR._id);
+      setScannedQR(refreshedQR.data);
 
       toast.success('Stage output recorded and assembly created');
     } catch (error) {

@@ -90,6 +90,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     // { path: '/app/customers', icon: Users, label: 'Customers' },
     { path: '/app/admin-employees', icon: Users, label: 'Employees' },
     { path: '/app/role-management', icon: UserCheck, label: 'Role Management' },
+    { path: '/app/admin/responses', icon: FileText, label: 'Responses' },
     // { path: '/app/reports', icon: BarChart3, label: 'Reports' },
     // { path: '/app/settings', icon: Settings, label: 'Settings' },
     // Helmet Production System
@@ -119,11 +120,9 @@ const Sidebar = ({ isSuperAdmin }) => {
 
   // Employee gets profile with analytics, products (read-only), invoices, and production
   const employeeNavItems = [
-    { path: '/app/employee-profile', icon: User, label: 'My Profile' },
-    { path: '/app/products', icon: Package, label: 'Products' },
-    { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
-    { path: '/app/refund-requests', icon: RefreshCcw, label: 'My Refunds' },
-    { path: '/app/operator', icon: Scan, label: 'Operator Dashboard' },
+    { path: '/app/employee', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/app/employee/scanner', icon: Scan, label: 'QR Scanner' },
+    { path: '/app/employee/scan-logs', icon: FileText, label: 'Scan Logs' },
   ];
 
   let navItems;

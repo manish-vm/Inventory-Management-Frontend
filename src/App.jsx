@@ -29,6 +29,13 @@ import ManufacturingConfig from './pages/ManufacturingConfig';
 import OperatorDashboard from './pages/OperatorDashboard';
 import Analytics from './pages/Analytics';
 
+import ProductReviewConfig from './pages/ProductReviewConfig';
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+import QRScannerPage from './pages/employee/QRScannerPage';
+import ScanLogsPage from './pages/employee/ScanLogsPage';
+import ProductTraceabilityPage from './pages/employee/ProductTraceabilityPage';
+import AdminResponsesPage from './pages/admin/AdminResponsesPage';
+
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -154,6 +161,12 @@ function AppRoutes() {
       </Route>
 
       {/* Protected Routes */}
+      <Route path="/employee/scanner" element={
+        <ProtectedRoute allowedRoles={['employee', 'admin']}>
+          <QRScannerPage />
+        </ProtectedRoute>
+      } />
+
       <Route
         path="/app"
         element={
@@ -265,8 +278,50 @@ function AppRoutes() {
              <Analytics />
            </ProtectedRoute>
          } />
-       </Route>
+         <Route path="admin/responses" element={
+           <ProtectedRoute allowedRoles={['admin']}>
+             <AdminResponsesPage />
+           </ProtectedRoute>
+         } />
+         <Route path="admin/traceability/:id" element={
+           <ProtectedRoute allowedRoles={['admin']}>
+             <ProductTraceabilityPage admin />
+           </ProtectedRoute>
+         } />
+         <Route path="employee" element={
+           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+             <EmployeeDashboard />
+           </ProtectedRoute>
+         } />
+         <Route path="employee/scanner" element={
+           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+             <QRScannerPage />
+           </ProtectedRoute>
+         } />
+         <Route path="employee/scan-logs" element={
+           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+             <ScanLogsPage />
+           </ProtectedRoute>
+         } />
+         <Route path="employee/traceability/:id" element={
+           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+             <ProductTraceabilityPage />
+           </ProtectedRoute>
+         } />
+        {/* Product Review Config (admin) */}
+         <Route path="product-review-config/:stageId" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <ProductReviewConfig />
+          </ProtectedRoute>
+        } />
 
+        {/* Manufacturing stage -> product review (question preview/config) */}
+        <Route path="manufacturing-config/stages/:stageNumber/product-review" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <ProductReviewConfig />
+          </ProtectedRoute>
+        } />
+       </Route>
 
       {/* Catch all - redirect to dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -241,6 +241,10 @@ export const manufacturingConfigAPI = {
   validateStage: (data) => api.post('/manufacturing-configs/validate-stage', data),
   update: (id, data) => api.put('/manufacturing-configs/' + id, data),
   delete: (id) => api.delete('/manufacturing-configs/' + id),
+
+  // Admin: review form builder
+  getReviewForms: (id) => api.get(`/manufacturing-configs/${id}/review-forms`),
+  saveReviewForms: (id, data) => api.put(`/manufacturing-configs/${id}/review-forms`, data)
 };
 
 // Raw Material APIs
@@ -272,6 +276,29 @@ export const processingStageAPI = {
   update: (id, data) => api.put('/processing-stages/' + id, data),
   complete: (id) => api.put('/processing-stages/' + id + '/complete'),
   validate: (id, data) => api.put('/processing-stages/' + id + '/validate', data),
+
+  // Admin: stage-level review management
+  getStageReviewStats: (stageNumber, params) =>
+    api.get(`/processing-stages/review/stage/${stageNumber}/stats`, { params }),
+  getStageReviewItems: (stageNumber) =>
+    api.get(`/processing-stages/review/stage/${stageNumber}/items`),
+  updateStageReview: (id, data) => api.put(`/processing-stages/review/${id}`, data),
+};
+
+// Enterprise inspection portal APIs
+export const inspectionAPI = {
+  getDashboard: () => api.get('/inspection/employee/dashboard'),
+  scan: (qrId) => api.post('/inspection/employee/scan', { qrId }),
+  lookupProduct: (partNo) => api.get(`/employees/product/${encodeURIComponent(partNo)}`),
+  submitEmployeeResponse: (data) => api.post('/employees/inspection-response', data),
+  getProductHistory: (itemId) => api.get(`/employees/product-history/${encodeURIComponent(itemId)}`),
+  getFormsByStage: (stageId, params) => api.get(`/forms/stage/${encodeURIComponent(stageId)}`, { params }),
+  submit: (data) => api.post('/inspection/employee/submit', data),
+  getScanLogs: (params) => api.get('/inspection/employee/scan-logs', { params }),
+  getTraceability: (id) => api.get(`/inspection/employee/traceability/${id}`),
+  getAdminTraceability: (id) => api.get(`/inspection/admin/traceability/${id}`),
+  getAdminResponses: (params) => api.get('/inspection/admin/responses', { params }),
+  getAdminResponseById: (id) => api.get(`/inspection/admin/responses/${id}`)
 };
 
 // Assembly APIs

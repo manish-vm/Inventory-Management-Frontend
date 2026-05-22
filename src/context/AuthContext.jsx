@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
     } else if (userData.role === 'admin') {
       navigate('/app/dashboard');
     } else if (userData.role === 'employee') {
-      navigate('/app/billing');
+      navigate('/app/employee');
     } else if (userData.role === 'customer') {
       navigate('/app/billing');
     }
@@ -95,7 +95,7 @@ export const AuthProvider = ({ children }) => {
     } else if (userData.role === 'admin') {
       navigate('/app/dashboard');
     } else if (userData.role === 'employee') {
-      navigate('/app/billing');
+      navigate('/app/employee');
     } else {
       navigate('/app/billing');
     }
