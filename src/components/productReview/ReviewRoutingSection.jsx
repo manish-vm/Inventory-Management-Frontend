@@ -1,9 +1,8 @@
 import { CheckCircle2, RotateCcw, XCircle } from 'lucide-react';
 
-const ReviewRoutingSection = ({ config, setConfig, currentStage, stages = [], onCreateQuestionnaire }) => {
+const ReviewRoutingSection = ({ config, setConfig, currentStage, stages = [], onCreateQuestionnaire, onCreateReworkQuestionnaire }) => {
   const currentStageNumber = Number(currentStage?.stageNumber);
   const subsequentStages = stages.filter((stage) => Number(stage.stageNumber) > currentStageNumber);
-  const reworkStages = stages.filter((stage) => Number(stage.stageNumber) <= currentStageNumber);
 
   const update = (field, value) => setConfig({ ...config, [field]: value });
 
@@ -27,7 +26,7 @@ const ReviewRoutingSection = ({ config, setConfig, currentStage, stages = [], on
             value={config.acceptedRouteStage || ''}
             onChange={(e) => update('acceptedRouteStage', e.target.value)}
             className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-          >
+          >z
             <option value="">Select next stage</option>
             {subsequentStages.map((stage) => (
               <option key={stage.stageNumber} value={stage.stageNumber}>
@@ -45,24 +44,16 @@ const ReviewRoutingSection = ({ config, setConfig, currentStage, stages = [], on
           </div>
           <div>
             <h3 className="font-semibold text-slate-900 dark:text-white">Rework Track</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Route product back for correction.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Collect structured rework response details.</p>
           </div>
         </div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          On Rework, route product back to
-          <select
-            value={config.reworkRouteStage || ''}
-            onChange={(e) => update('reworkRouteStage', e.target.value)}
-            className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-          >
-            <option value="">Select rework stage</option>
-            {reworkStages.map((stage) => (
-              <option key={stage.stageNumber} value={stage.stageNumber}>
-                {stageLabel(stage)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <button
+          type="button"
+          onClick={onCreateReworkQuestionnaire}
+          className="inline-flex w-full items-center justify-center rounded-lg border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-900/20"
+        >
+          {config.reworkQuestionnaireEnabled ? 'Edit Rework Questionnaire' : '+ Create Rework Questionnaire'}
+        </button>
       </section>
 
       <section className="rounded-lg border border-red-200 bg-white p-5 shadow-sm dark:border-red-900 dark:bg-slate-800">

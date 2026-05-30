@@ -9,7 +9,6 @@ import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Billing from './pages/Billing';
 import Invoices from './pages/Invoices';
-import AdminCustomers from './pages/AdminCustomers';
 import RefundRequests from './pages/RefundRequests';
 import Reports from './pages/Reports';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
@@ -180,9 +179,9 @@ function AppRoutes() {
         {/* All authenticated users can access dashboard */}
         <Route path="dashboard" element={<Dashboard />} />
         
-        {/* Only Admin and Customer can access billing (employees cannot purchase) */}
+        {/* Billing */}
         <Route path="billing" element={
-          <ProtectedRoute allowedRoles={['admin', 'customer']}>
+          <ProtectedRoute allowedRoles={['admin']}>
             <Billing />
           </ProtectedRoute>
         } />
@@ -194,23 +193,23 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
         
-        {/* Admin and Customer/Employee can access products (read-only for customer/employee) */}
+        {/* Admin and Employee can access products */}
         <Route path="products" element={
-          <ProtectedRoute allowedRoles={['admin', 'customer', 'employee']}>
+          <ProtectedRoute allowedRoles={['admin', 'employee']}>
             <Products />
           </ProtectedRoute>
         } />
         
-        {/* Admin and Customer/Employee can access invoices */}
+        {/* Admin and Employee can access invoices */}
         <Route path="invoices" element={
-          <ProtectedRoute allowedRoles={['admin', 'customer', 'employee']}>
+          <ProtectedRoute allowedRoles={['admin', 'employee']}>
             <Invoices />
           </ProtectedRoute>
         } />
         
         {/* Refund Requests - accessible by all authenticated users */}
         <Route path="refund-requests" element={
-          <ProtectedRoute allowedRoles={['admin', 'customer', 'employee']}>
+          <ProtectedRoute allowedRoles={['admin', 'employee']}>
             <RefundRequests />
           </ProtectedRoute>
         } />
@@ -229,11 +228,6 @@ function AppRoutes() {
         <Route path="settings" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <PlaceholderPage title="Settings" />
-          </ProtectedRoute>
-        } />
-        <Route path="customers" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminCustomers />
           </ProtectedRoute>
         } />
         <Route path="messages" element={

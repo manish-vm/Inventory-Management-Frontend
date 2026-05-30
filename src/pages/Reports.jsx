@@ -6,13 +6,12 @@ import {
   DollarSign, 
   ShoppingCart, 
   Package, 
-  Users,
   RefreshCw,
   Calendar,
   PieChart,
   Loader2
 } from 'lucide-react';
-import { dashboardAPI, billingAPI, productAPI, customerAPI, refundRequestAPI } from '../api/api';
+import { dashboardAPI, billingAPI, productAPI, refundRequestAPI } from '../api/api';
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('en-IN', {
@@ -179,7 +178,6 @@ const Reports = () => {
   const [stats, setStats] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [refundStats, setRefundStats] = useState({ pending: 0, approved: 0, rejected: 0 });
-  const [customers, setCustomers] = useState([]);
 
   useEffect(() => {
     fetchAllData();
@@ -198,16 +196,14 @@ const Reports = () => {
         topProductsRes, 
         statsRes, 
         invoicesRes,
-        refundRes,
-        customersRes
+        refundRes
       ] = await Promise.all([
         dashboardAPI.getSalesChart(),
         dashboardAPI.getCategoryDistribution(),
         dashboardAPI.getTopProducts(days, 10),
         dashboardAPI.getStats(),
         billingAPI.getInvoices({}),
-        refundRequestAPI.getAll({}),
-        customerAPI.getAll()
+        refundRequestAPI.getAll({})
       ]);
       
       // Process sales data
@@ -232,9 +228,6 @@ const Reports = () => {
         approved: refunds.filter(r => r.status === 'approved').length,
         rejected: refunds.filter(r => r.status === 'rejected').length
       });
-      
-      // Set customers
-      setCustomers(customersRes.data);
       
     } catch (error) {
       console.error('Failed to fetch reports data:', error);
@@ -386,10 +379,10 @@ const Reports = () => {
           color="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
         />
         <StatCard
-          title="Total Customers"
-          value={customers.length}
-          subtitle="Registered users"
-          icon={Users}
+          title="Unique Buyers"
+          value={new Set(filteredInvoices.map((inv) => inv.customerName || 'Walk-in Customer')).size}
+          subtitle="From invoice names"
+          icon={ShoppingCart}
           color="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
         />
       </div>

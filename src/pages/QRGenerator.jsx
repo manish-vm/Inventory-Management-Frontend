@@ -175,7 +175,7 @@ const QRGenerator = () => {
                   <span className="font-medium">QR ID:</span> {generatedQR.qrId}
                 </p>
                 <p className="text-slate-600 dark:text-slate-300 mb-4">
-                  <span className="font-medium">Product Name:</span> {generatedQR.partNo}
+                  <span className="font-medium">Product Name:</span> {generatedQR.partNo?.productName ?? generatedQR.partNo}
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -203,6 +203,7 @@ const QRGenerator = () => {
                 <tr className="border-b border-slate-200 dark:border-slate-700">
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">QR ID</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Product Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">QR Code (variant)</th>
                   {/* <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Quantity</th> */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Current Stage</th>
@@ -213,17 +214,18 @@ const QRGenerator = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-4 text-center">Loading...</td>
+                    <td colSpan="7" className="px-6 py-4 text-center">Loading...</td>
                   </tr>
                 ) : qrCodes.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-4 text-center text-slate-500">No QR codes generated yet</td>
+                    <td colSpan="7" className="px-6 py-4 text-center text-slate-500">No QR codes generated yet</td>
                   </tr>
                 ) : (
                   qrCodes.map(qr => (
                     <tr key={qr._id} className="border-b border-slate-200 dark:border-slate-700">
                       <td className="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">{qr.qrId}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.partNo}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.partNo?.partNo ?? qr.partNo}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.partNo?.productName ?? '-'}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.batchNo || '-'}</td>
                       {/* <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.quantity}</td> */}
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
@@ -258,7 +260,7 @@ const QRGenerator = () => {
                               setGeneratedQR(qr);
                               setShowForm(true);
                               setFormData({
-                                productName: qr.partNo || '',
+                                productName: qr.partNo?.productName ?? qr.partNo ?? '',
                                 barcodeNo: qr.batchNo || '',
                                 quantity: qr.quantity || 0,
                                 count: 1

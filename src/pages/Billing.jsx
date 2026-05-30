@@ -222,15 +222,7 @@ const BarcodePopup = ({ product, onClose, onAddToCart }) => {
 };
 
 const Billing = () => {
-  const { user, isCustomer } = useAuth();
-  if (user?.role === 'admin') {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Billing / POS</h1>
-        <p className="text-slate-500 dark:text-slate-400">Access restricted for admins.</p>
-      </div>
-    );
-  }
+  const { user } = useAuth();
 
   const [cart, setCart] = useState([]);
   const [products, setProducts] = useState([]);
@@ -259,15 +251,6 @@ const Billing = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Set default customer name when checkout modal opens for customers
-  useEffect(() => {
-    if (showCheckout && isCustomer && user?.username) {
-      setCheckoutData(prev => ({
-        ...prev,
-        customerName: user.username
-      }));
-    }
-  }, [showCheckout, isCustomer, user]);
 
   // Auto-focus barcode input on mount and when not searching
   useEffect(() => {
@@ -407,12 +390,6 @@ const Billing = () => {
   const cartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleCheckout = async () => {
-  // For customers, ensure customer name is set
-  if (isCustomer && !checkoutData.customerName) {
-    setError('Please enter your name');
-    return;
-  }
-  
   if (!checkoutData.referredEmployee) {
     setError('Please select referred employee');
     return;

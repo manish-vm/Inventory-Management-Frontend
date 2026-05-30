@@ -11,9 +11,10 @@ import ReviewRoutingSection from '../components/productReview/ReviewRoutingSecti
 
 const defaultConfig = {
   acceptedRouteStage: '',
-  reworkRouteStage: '',
   rejectionQuestionnaireEnabled: false,
-  rejectionQuestions: []
+  rejectionQuestions: [],
+  reworkQuestionnaireEnabled: false,
+  reworkQuestions: []
 };
 
 const normalizeQuestions = (questions = []) =>
@@ -38,13 +39,18 @@ const ProductReviewConfig = () => {
     ? `${location.state.configId}-${currentStageNumber}`
     : `${location.state?.productName || location.state?.partNo || 'stage'}-${currentStageNumber}`;
   const partNo = location.state?.partNo || location.state?.productCode || '';
+  const productName = location.state?.productName || location.state?.productDescription || location.state?.partNo || 'Selected Product';
 
   const [config, setConfig] = useState(defaultConfig);
   const [analytics, setAnalytics] = useState(null);
   const [stages, setStages] = useState(location.state?.stages || []);
   const [previewAnswers, setPreviewAnswers] = useState({});
+  const [reworkPreviewAnswers, setReworkPreviewAnswers] = useState({});
+  const [showRejectionBuilder, setShowRejectionBuilder] = useState(false);
+  const [showReworkBuilder, setShowReworkBuilder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingQuestionnaire, setSavingQuestionnaire] = useState('');
 
   const currentStage = useMemo(
     () =>
@@ -56,7 +62,8 @@ const ProductReviewConfig = () => {
   useEffect(() => {
     const fetchPageData = async () => {
       setLoading(true);
-      await Promise.all([fetchConfig(), fetchAnalytics(), fetchStages()]);
+      await fetchConfig();
+      await Promise.all([fetchAnalytics(), fetchStages()]);
       setLoading(false);
     };
 
@@ -69,15 +76,21 @@ const ProductReviewConfig = () => {
       const response = await api.get(`/stage-review-config/${encodeURIComponent(productReviewKey)}`);
       const data = response.data?.data || response.data;
       if (data) {
-        setConfig({
+        setConfig((prev) => ({
           ...defaultConfig,
+          ...prev,
           ...data,
           rejectionQuestionnaireEnabled: Boolean(data.rejectionQuestionnaireEnabled || data.rejectionQuestions?.length),
-          rejectionQuestions: normalizeQuestions(data.rejectionQuestions || [])
-        });
+          rejectionQuestions: normalizeQuestions(data.rejectionQuestions || []),
+          reworkQuestionnaireEnabled: Boolean(data.reworkQuestionnaireEnabled || data.reworkQuestions?.length || prev.reworkQuestions?.length),
+          reworkQuestions: normalizeQuestions(data.reworkQuestions?.length ? data.reworkQuestions : prev.reworkQuestions || [])
+        }));
       }
     } catch (error) {
-      setConfig(defaultConfig);
+      setConfig((prev) => ({
+        ...defaultConfig,
+        ...prev
+      }));
     }
   };
 
@@ -117,11 +130,15 @@ const ProductReviewConfig = () => {
         setStages(matched.stages);
         const matchedStage = matched.stages.find((stage) => Number(stage.stageNumber) === currentStageNumber);
         const savedQuestions = matchedStage?.reviewForm?.questions || [];
-        if (savedQuestions.length > 0) {
+        const savedRejectionQuestions = matchedStage?.reviewForm?.rejectionForm?.questions || [];
+        const savedReworkQuestions = matchedStage?.reviewForm?.reworkForm?.questions || [];
+        if (savedQuestions.length > 0 || savedRejectionQuestions.length > 0 || savedReworkQuestions.length > 0) {
           setConfig((prev) => ({
             ...prev,
-            rejectionQuestionnaireEnabled: true,
-            rejectionQuestions: normalizeQuestions(savedQuestions)
+            rejectionQuestionnaireEnabled: Boolean(savedRejectionQuestions.length || savedQuestions.length),
+            rejectionQuestions: normalizeQuestions(savedRejectionQuestions.length ? savedRejectionQuestions : savedQuestions),
+            reworkQuestionnaireEnabled: Boolean(savedReworkQuestions.length),
+            reworkQuestions: normalizeQuestions(savedReworkQuestions)
           }));
         }
       }
@@ -135,8 +152,7 @@ const ProductReviewConfig = () => {
     }
   };
 
-  const saveConfig = async () => {
-    setSaving(true);
+  const persistConfig = async (successMessage = 'Product review configuration saved') => {
     try {
       await api.post(`/stage-review-config/${encodeURIComponent(productReviewKey)}`, config);
       if (location.state?.configId) {
@@ -147,7 +163,17 @@ const ProductReviewConfig = () => {
                 reviewForm: {
                   formId: `stage-${stage.stageNumber}-admin`,
                   formName: `${stage.stageName} Inspection Form`,
-                  questions: config.rejectionQuestions || []
+                  questions: stage.reviewForm?.questions || [],
+                  rejectionForm: {
+                    formId: `stage-${stage.stageNumber}-rejection-admin`,
+                    formName: `${stage.stageName} Rejection Analysis Form`,
+                    questions: config.rejectionQuestions || []
+                  },
+                  reworkForm: {
+                    formId: `stage-${stage.stageNumber}-rework-admin`,
+                    formName: `${stage.stageName} Rework Analysis Form`,
+                    questions: config.reworkQuestions || []
+                  }
                 }
               }
             : {
@@ -160,11 +186,28 @@ const ProductReviewConfig = () => {
           stages: nextStages
         });
       }
-      toast.success('Product review configuration saved');
+      toast.success(successMessage);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to save product review configuration');
+      throw error;
+    }
+  };
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      await persistConfig();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveQuestionnaire = async (type) => {
+    setSavingQuestionnaire(type);
+    try {
+      await persistConfig(type === 'rework' ? 'Rework questionnaire saved' : 'Rejection questionnaire saved');
+    } finally {
+      setSavingQuestionnaire('');
     }
   };
 
@@ -173,6 +216,15 @@ const ProductReviewConfig = () => {
       ...prev,
       rejectionQuestionnaireEnabled: true
     }));
+    setShowRejectionBuilder(true);
+  };
+
+  const enableReworkQuestionnaire = () => {
+    setConfig((prev) => ({
+      ...prev,
+      reworkQuestionnaireEnabled: true
+    }));
+    setShowReworkBuilder(true);
   };
 
   return (
@@ -188,9 +240,12 @@ const ProductReviewConfig = () => {
               <ArrowLeft className="h-4 w-4" />
               Back to Manufacturing Config
             </button>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Product Review Setup</h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              Configure outcomes, rejection dependencies, and analytics for {currentStage.stageName}.
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Product Review Setup</h1><br></br>
+            <p className="text-slate-600 font-bold  dark:text-slate-400">
+              {productName} - {currentStage.stageName}
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">
+              Configure inspection, rejection, and rework questionnaires for this product stage.
             </p>
           </div>
           <button
@@ -213,10 +268,11 @@ const ProductReviewConfig = () => {
             currentStage={currentStage}
             stages={stages}
             onCreateQuestionnaire={enableQuestionnaire}
+            onCreateReworkQuestionnaire={enableReworkQuestionnaire}
           />
 
           <RejectionQuestionBuilder
-            enabled={config.rejectionQuestionnaireEnabled}
+            enabled={showRejectionBuilder}
             onEnable={enableQuestionnaire}
             questions={config.rejectionQuestions}
             setQuestions={(questions) =>
@@ -226,12 +282,33 @@ const ProductReviewConfig = () => {
                 rejectionQuestions: questions
               }))
             }
+            onSave={() => saveQuestionnaire('rejection')}
+            saving={savingQuestionnaire === 'rejection'}
+            saveLabel="Save Rejection Questionnaire"
+          />
+
+          <RejectionQuestionBuilder
+            enabled={showReworkBuilder}
+            onEnable={enableReworkQuestionnaire}
+            questions={config.reworkQuestions}
+            setQuestions={(questions) =>
+              setConfig((prev) => ({
+                ...prev,
+                reworkQuestionnaireEnabled: true,
+                reworkQuestions: questions
+              }))
+            }
+            title="Rework Questionnaire Builder"
+            emptyMessage="No rework questions configured yet."
+            onSave={() => saveQuestionnaire('rework')}
+            saving={savingQuestionnaire === 'rework'}
+            saveLabel="Save Rework Questionnaire"
           />
 
           {config.rejectionQuestionnaireEnabled && config.rejectionQuestions.length > 0 && (
-            <section className="rounded-lg border border-slate-200 bg-slate-100 p-5 dark:border-slate-700 dark:bg-slate-950">
+            <section className="rounded-lg border border-red-200 bg-red-50/60 p-5 dark:border-red-900 dark:bg-red-900/10">
               <div className="mb-4">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Shop Floor Preview</h2>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Rejection Shop Floor Preview</h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Conditional sub-questions expand here as rejection answers are selected.
                 </p>
@@ -240,6 +317,22 @@ const ProductReviewConfig = () => {
                 questions={config.rejectionQuestions}
                 answers={previewAnswers}
                 setAnswers={setPreviewAnswers}
+              />
+            </section>
+          )}
+
+          {config.reworkQuestionnaireEnabled && config.reworkQuestions.length > 0 && (
+            <section className="rounded-lg border border-amber-200 bg-amber-50/60 p-5 dark:border-amber-900 dark:bg-amber-900/10">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Rework Shop Floor Preview</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Conditional sub-questions expand here as rework answers are selected.
+                </p>
+              </div>
+              <EmployeeReviewRenderer
+                questions={config.reworkQuestions}
+                answers={reworkPreviewAnswers}
+                setAnswers={setReworkPreviewAnswers}
               />
             </section>
           )}

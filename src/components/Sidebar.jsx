@@ -31,14 +31,16 @@ import { useSidebar } from '../context/SidebarContext';
 import { refundRequestAPI, productAPI } from '../api/api';
 import ThemeToggle from './ThemeToggle';
 import BrandModelManager from './BrandModelManager';
+import DefectDetailManager from './DefectDetailManager';
 
 const Sidebar = ({ isSuperAdmin }) => {
-  const { user, logout, isAdmin, isCustomer, isSuperAdmin: isSA, isEmployee } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin: isSA, isEmployee } = useAuth();
   const { theme } = useTheme();
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const { isCollapsed, setIsCollapsed } = useSidebar();
   const [brandModelOpen, setBrandModelOpen] = useState(false);
+  const [defectDetailOpen, setDefectDetailOpen] = useState(false);
 
   // Check if it's superadmin from prop or context
   const isSuperAdminView = isSuperAdmin || isSA;
@@ -80,14 +82,12 @@ const Sidebar = ({ isSuperAdmin }) => {
   {/* Admin gets full access */}
   const adminNavItems = [
     { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    // Billing/POS hidden for admins (customers only)
     { path: '/app/products', icon: Package, label: 'Products' },
     { path: '/app/manufacturing-config', icon: Workflow, label: 'Manufacturing Config' },
     { path: '/app/qr-generator', icon: QrCode, label: 'QR Generator' },
     // { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
     // { path: '/app/refund-requests', icon: RefreshCcw, label: 'Refund Requests', badge: pendingRefundCount },
     // { path: '/app/messages', icon: MessageSquare, label: 'Messages' },
-    // { path: '/app/customers', icon: Users, label: 'Customers' },
     { path: '/app/admin-employees', icon: Users, label: 'Employees' },
     { path: '/app/role-management', icon: UserCheck, label: 'Role Management' },
     { path: '/app/admin/responses', icon: FileText, label: 'Responses' },
@@ -95,7 +95,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     // { path: '/app/settings', icon: Settings, label: 'Settings' },
     // Helmet Production System
     // { path: '/app/product-master', icon: Package, label: 'Product Master' },
-    { path: '/app/operator', icon: Scan, label: 'Operator Dashboard' },
+    // { path: '/app/operator', icon: Scan, label: 'Operator Dashboard' },
     { path: '/app/production-analytics', icon: PieChart, label: 'Analytics' },
   ];
 
@@ -108,16 +108,6 @@ const Sidebar = ({ isSuperAdmin }) => {
     badge: lowStockCount,
     isAlert: true 
   };
-
-  // Customer gets billing, products (read-only), invoices
-  const customerNavItems = [
-    { path: '/app/dashboard', icon: User, label: 'My Profile' },
-    { path: '/app/billing', icon: ShoppingCart, label: 'Billing / POS' },
-    { path: '/app/products', icon: Package, label: 'Products' },
-    { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
-    { path: '/app/refund-requests', icon: RefreshCcw, label: 'My Refunds' },
-  ];
-
   // Employee gets profile with analytics, products (read-only), invoices, and production
   const employeeNavItems = [
     { path: '/app/employee', icon: LayoutDashboard, label: 'Dashboard' },
@@ -133,7 +123,7 @@ const Sidebar = ({ isSuperAdmin }) => {
   } else if (isEmployee) {
     navItems = employeeNavItems;
   } else {
-    navItems = customerNavItems;
+    navItems = [];
   }
 
   const getRoleBadgeColor = () => {
@@ -242,6 +232,14 @@ const Sidebar = ({ isSuperAdmin }) => {
                 <Package className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
                 <span className="font-medium text-sm">Manage Brand & Model</span>
               </button>
+
+              <button
+                onClick={() => setDefectDetailOpen(true)}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100 transition-all duration-200 cursor-pointer w-full group"
+              >
+                <AlertTriangle className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
+                <span className="font-medium text-sm">Manage Defect Details</span>
+              </button>
             </>
           )}
 
@@ -324,6 +322,10 @@ const Sidebar = ({ isSuperAdmin }) => {
       {/* Brand/Model Manager Modal */}
       {brandModelOpen && isAdmin && (
         <BrandModelManager onClose={() => setBrandModelOpen(false)} />
+      )}
+
+      {defectDetailOpen && isAdmin && (
+        <DefectDetailManager onClose={() => setDefectDetailOpen(false)} />
       )}
     </>
   );

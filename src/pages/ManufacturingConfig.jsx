@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Edit, Plus, PlusCircle, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { manufacturingConfigAPI, processingStageAPI, productMasterAPI } from '../api/api';
+import { manufacturingConfigAPI, processingStageAPI, productAPI } from '../api/api';
 
 import toast from 'react-hot-toast';
 
@@ -111,7 +111,7 @@ const ManufacturingConfig = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await productMasterAPI.getAll();
+      const response = await productAPI.getAll();
       setProducts(response.data);
     } catch (error) {
       toast.error('Failed to fetch products');
@@ -347,21 +347,21 @@ const ManufacturingConfig = () => {
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 text-sm">
-                        <span
-                          className={
-                            'px-2 py-1 text-xs rounded-full ' +
-                            (config.workflowType === '1-step'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-purple-100 text-purple-700')
-                          }
-                        >
-                          {getWorkflowType(config.stages)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm align-top">{renderStageFlow(config)}</td>
-                      {/* <td className="px-6 py-4 text-sm align-top">{renderStats(config)}</td> */}
-                      <td className="px-6 py-4">
+                       <td className="px-6 py-4 text-sm">
+                         <span
+                           className={
+                             'px-2 py-1 text-xs rounded-full ' +
+                             (config.workflowType === '1-step'
+                               ? 'bg-blue-100 text-blue-700'
+                               : 'bg-purple-100 text-purple-700')
+                           }
+                         >
+                           {getWorkflowType(config.stages)}
+                         </span>
+                       </td>
+                       <td className="px-6 py-4 text-sm align-top">{renderStageFlow(config)}</td>
+                       {/* <td className="px-6 py-4 text-sm align-top">{renderStats(config)}</td> */}
+                       <td className="px-6 py-4">
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleEdit(config)}

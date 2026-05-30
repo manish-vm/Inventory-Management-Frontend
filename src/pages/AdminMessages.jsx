@@ -12,14 +12,12 @@ import { useAuth } from '../context/AuthContext';
 
 const AdminMessages = () => {
   const [employees, setEmployees] = useState([]);
-  const [customers, setCustomers] = useState([]);
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [title, setTitle] = useState('');
   const [messageContent, setMessageContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
-  const [loadingCustomers, setLoadingCustomers] = useState(true);
-  const [tab, setTab] = useState('employees'); // 'employees' or 'customers'
+  const [tab, setTab] = useState('employees');
   const [success, setSuccess] = useState('');
 
   const { user } = useAuth();
@@ -27,11 +25,7 @@ const AdminMessages = () => {
 
   useEffect(() => {
     if (isAdmin) {
-      if (tab === 'employees') {
-        fetchEmployees();
-      } else {
-        fetchCustomers();
-      }
+      fetchEmployees();
     }
   }, [tab, isAdmin]);
 
@@ -53,24 +47,6 @@ const AdminMessages = () => {
     }
   };
 
-  const fetchCustomers = async () => {
-    try {
-      setLoadingCustomers(true);
-      const response = await api.get('/notifications/users', { params: { type: 'customers' } });
-
-
-      setCustomers(response.data.map(cust => ({
-        _id: cust._id,
-        name: cust.username || cust.name || 'Customer',
-        email: cust.email
-      })));
-    } catch (error) {
-      console.error('Failed to fetch customers:', error);
-    } finally {
-      setLoadingCustomers(false);
-    }
-  };
-
   const handleSendBroadcast = async (e) => {
     e.preventDefault();
     if (!messageContent.trim()) return;
@@ -84,15 +60,8 @@ const AdminMessages = () => {
         message: messageContent
       };
 
-      if (tab === 'employees') {
-        await api.post('/notifications/broadcast-employees', broadcastData);
-
-        setSuccess('Broadcast sent to all employees successfully!');
-      } else {
-        await api.post('/notifications/broadcast-customers', broadcastData);
-
-        setSuccess('Broadcast sent to all customers successfully!');
-      }
+      await api.post('/notifications/broadcast-employees', broadcastData);
+      setSuccess('Broadcast sent to all employees successfully!');
 
       // Reset form
       setTitle('');
@@ -119,7 +88,7 @@ const AdminMessages = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Broadcast Messages</h1>
-          <p className="text-slate-500 dark:text-slate-400">Send announcements to your employees or customers</p>
+          <p className="text-slate-500 dark:text-slate-400">Send announcements to your employees</p>
         </div>
       </div>
 
@@ -137,17 +106,6 @@ const AdminMessages = () => {
             <Users className="w-4 h-4 mr-1 inline" />
             Employees
           </button>
-          {/* <button
-            onClick={() => setTab('customers')}
-            className={`pb-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-              tab === 'customers'
-                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4 mr-1 inline" />
-            Customers
-          </button> */}
         </nav>
       </div>
 
@@ -166,7 +124,7 @@ const AdminMessages = () => {
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Broadcast to All {tab === 'employees' ? 'Employees' : 'Customers'}
+              Broadcast to All Employees
             </h3>
             
             <div className="text-center py-12">
@@ -175,16 +133,9 @@ const AdminMessages = () => {
                 Send to Entire Team
               </h4>
               <p className="text-slate-500 dark:text-slate-400">
-                {tab === 'employees' 
-                  ? 'This message will be sent to all employees under your dealer account'
-                  : 'This message will be sent to all customers under your dealer account'
-                }
+                This message will be sent to all employees under your dealer account
               </p>
-              {tab === 'employees' ? (
-                <p className="text-sm text-slate-400 mt-2">{employees.length} employees</p>
-              ) : (
-                <p className="text-sm text-slate-400 mt-2">{customers.length} customers</p>
-              )}
+              <p className="text-sm text-slate-400 mt-2">{employees.length} employees</p>
             </div>
           </div>
         </div>
@@ -193,7 +144,7 @@ const AdminMessages = () => {
         <div className="lg:col-span-2">
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">
-              {tab === 'employees' ? 'Employee Broadcast' : 'Customer Broadcast'}
+              Employee Broadcast
             </h3>
 
             <form onSubmit={handleSendBroadcast} className="space-y-4">

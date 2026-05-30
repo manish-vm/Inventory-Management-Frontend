@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, PieChart, TrendingUp, Package, QrCode, Workflow } from 'lucide-react';
-import { qrCodeAPI, productionLogAPI, assemblyAPI, processingStageAPI } from '../api/api';
+import { qrCodeAPI, productionLogAPI, assemblyAPI, processingStageAPI, inspectionAPI } from '../api/api';
 import toast from 'react-hot-toast';
 
 const Analytics = () => {
@@ -9,7 +9,8 @@ const Analytics = () => {
     productionStats: [],
     dailyProduction: [],
     assemblyStats: [],
-    stageStats: []
+    stageStats: [],
+    inspectionProduction: { totals: {}, stageWise: [], productWise: [], employeeWise: [] }
   });
   const [loading, setLoading] = useState(true);
 
@@ -33,12 +34,13 @@ const Analytics = () => {
   const fetchAllStats = async () => {
     setLoading(true);
     try {
-      const [qrRes, prodRes, dailyRes, asmRes, stageRes] = await Promise.all([
+      const [qrRes, prodRes, dailyRes, asmRes, stageRes, inspectionRes] = await Promise.all([
         qrCodeAPI.getStats(),
         productionLogAPI.getStats(),
         productionLogAPI.getDaily(),
         assemblyAPI.getStats(),
-        processingStageAPI.getStats()
+        processingStageAPI.getStats(),
+        inspectionAPI.getProductionAnalytics()
       ]);
 
       setStats({
@@ -46,7 +48,8 @@ const Analytics = () => {
         productionStats: prodRes.data,
         dailyProduction: dailyRes.data,
         assemblyStats: asmRes.data,
-        stageStats: stageRes.data
+        stageStats: stageRes.data,
+        inspectionProduction: inspectionRes.data
       });
     } catch (error) {
       toast.error('Failed to fetch analytics data');
@@ -220,6 +223,24 @@ const Analytics = () => {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+          <div className="rounded-3xl bg-emerald-50 dark:bg-emerald-900/20 p-6 shadow-sm">
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">Total Accepted Items</p>
+            <p className="mt-2 text-4xl font-semibold text-emerald-800 dark:text-emerald-200">{loading ? '-' : stats.inspectionProduction.totals.accepted || 0}</p>
+            <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">Acceptance {stats.inspectionProduction.totals.acceptancePercent || 0}%</p>
+          </div>
+          <div className="rounded-3xl bg-red-50 dark:bg-red-900/20 p-6 shadow-sm">
+            <p className="text-sm text-red-700 dark:text-red-300">Total Rejected Items</p>
+            <p className="mt-2 text-4xl font-semibold text-red-800 dark:text-red-200">{loading ? '-' : stats.inspectionProduction.totals.rejected || 0}</p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">Rejection {stats.inspectionProduction.totals.rejectionPercent || 0}%</p>
+          </div>
+          <div className="rounded-3xl bg-amber-50 dark:bg-amber-900/20 p-6 shadow-sm">
+            <p className="text-sm text-amber-700 dark:text-amber-300">Total Rework Items</p>
+            <p className="mt-2 text-4xl font-semibold text-amber-800 dark:text-amber-200">{loading ? '-' : stats.inspectionProduction.totals.rework || 0}</p>
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">Rework {stats.inspectionProduction.totals.reworkPercent || 0}%</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
           {loading ? (
             <div className="animate-pulse rounded-3xl bg-white dark:bg-slate-800 h-96" />
@@ -276,6 +297,12 @@ const Analytics = () => {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {renderBarChart((stats.inspectionProduction.stageWise || []).map((item) => ({ _id: item._id || 'Stage', count: (item.accepted || 0) + (item.rejected || 0) + (item.rework || 0) })), 'Stage-wise Production Summary', 'green')}
+          {renderBarChart((stats.inspectionProduction.productWise || []).map((item) => ({ _id: item._id || 'Product', count: (item.accepted || 0) + (item.rejected || 0) + (item.rework || 0) })), 'Product-wise Production Summary', 'blue')}
+          {renderBarChart((stats.inspectionProduction.employeeWise || []).map((item) => ({ _id: item._id || 'Employee', count: (item.accepted || 0) + (item.rejected || 0) + (item.rework || 0) })), 'Employee-wise Production Summary', 'yellow')}
         </div>
       </div>
     </div>

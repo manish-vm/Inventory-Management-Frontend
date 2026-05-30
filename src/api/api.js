@@ -97,6 +97,7 @@ export const productAPI = {
   getById: (id) => api.get(`/products/${id}`),
   getByCode: (code) => api.get('/products/code/' + code),
   create: (data) => api.post('/products', data),
+  bulkUpload: (products) => api.post('/products/bulk-upload', { products }),
   update: (id, data) => api.put('/products/' + id, data),
   delete: (id) => api.delete('/products/' + id),
   getLowStock: () => api.get('/products/low-stock/all'),
@@ -122,6 +123,14 @@ export const brandModelAPI = {
   createModel: (brandId, data) => api.post(`/brands/${brandId}/models`, data),
   updateModel: (modelId, data) => api.put(`/brands/models/${modelId}`, data),
   deleteModel: (modelId) => api.delete(`/brands/models/${modelId}`),
+};
+
+// Defect Detail APIs
+export const defectDetailAPI = {
+  getAll: (params) => api.get('/defect-details', { params }),
+  create: (data) => api.post('/defect-details', data),
+  update: (id, data) => api.put(`/defect-details/${id}`, data),
+  delete: (id) => api.delete(`/defect-details/${id}`),
 };
 
 // Billing APIs
@@ -163,16 +172,7 @@ export const refundRequestAPI = {
   getPendingCount: () => api.get('/refund-requests/pending/count')
 };
 
-// Customer APIs
-export const customerAPI = {
-  getAll: () => api.get('/customers'),
-  create: (data) => api.post('/customers', data),
-  update: (id, data) => api.put('/customers/' + id, data),
-  delete: (id) => api.delete('/customers/' + id),
-  toggleStatus: (id) => api.patch('/customers/status/' + id),
-};
-
-// Employee APIs (same as customer APIs)
+// Employee APIs
 export const employeeAPI = {
   createEmployee: (data) => api.post('/employees', data),
   getEmployees: () => api.get('/employees'),
@@ -196,7 +196,6 @@ export const notificationAPI = {
   getUsers: (type) => api.get('/notifications/users', { params: { type } }),
   sendToAdmin: (data) => api.post('/notifications/to-admin', data),
   broadcastToEmployees: (data) => api.post('/notifications/broadcast-employees', data),
-  broadcastToCustomers: (data) => api.post('/notifications/broadcast-customers', data),
 };
 
 
@@ -289,6 +288,8 @@ export const processingStageAPI = {
 export const inspectionAPI = {
   getDashboard: () => api.get('/inspection/employee/dashboard'),
   scan: (qrId) => api.post('/inspection/employee/scan', { qrId }),
+  searchProducts: (params) => api.get('/employees/products/search', { params }),
+  lookupBatchProduct: (key) => api.get(`/employees/batch-product/${encodeURIComponent(key)}`),
   lookupProduct: (partNo) => api.get(`/employees/product/${encodeURIComponent(partNo)}`),
   submitEmployeeResponse: (data) => api.post('/employees/inspection-response', data),
   getProductHistory: (itemId) => api.get(`/employees/product-history/${encodeURIComponent(itemId)}`),
@@ -298,6 +299,7 @@ export const inspectionAPI = {
   getTraceability: (id) => api.get(`/inspection/employee/traceability/${id}`),
   getAdminTraceability: (id) => api.get(`/inspection/admin/traceability/${id}`),
   getAdminResponses: (params) => api.get('/inspection/admin/responses', { params }),
+  getProductionAnalytics: () => api.get('/inspection/admin/production-analytics'),
   getAdminResponseById: (id) => api.get(`/inspection/admin/responses/${id}`)
 };
 

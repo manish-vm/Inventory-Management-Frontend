@@ -6,7 +6,7 @@ import AuthTabs from '../components/auth/AuthTabs';
 import '../index.css'; // Ensure styles loaded
 
 const Login = () => {
-  const [activeRole, setActiveRole] = useState('customer');
+  const [activeRole, setActiveRole] = useState('admin');
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
@@ -18,7 +18,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  const { user, login, signup, loading: authLoading } = useAuth();
+  const { user, login, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,11 +41,7 @@ const Login = () => {
     if (!validateForm()) return;
     setLoading(true);
     try {
-      if (isLogin) {
-        await login(formData.email, formData.password);
-      } else {
-        await signup(formData.name, formData.email, formData.password);
-      }
+      await login(formData.email, formData.password);
     } catch (error) {
       setErrors({ submit: error.response?.data?.message || 'Login failed. Please try again.' });
     } finally {
@@ -54,7 +50,6 @@ const Login = () => {
   };
 
   const roleConfig = {
-    customer: { title: 'Customer Portal', subtitle: 'Access your inventory & billing' },
     employee: { title: 'Employee Dashboard', subtitle: 'Manage daily operations' },
     admin: { title: 'Admin Panel', subtitle: 'Full system management' },
     superadmin: { title: 'SuperAdmin Console', subtitle: 'Complete platform control' }
@@ -220,22 +215,9 @@ const Login = () => {
               )}
             </button>
 
-            {activeRole === 'customer' && (
-              <div className="text-center pt-4 border-t border-white/20">
-                <button
-                  type="button"
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-slate-300 hover:text-white font-medium transition-colors text-sm"
-                >
-                  {isLogin ? 'New customer? Create Account' : 'Have account? Sign In'}
-                </button>
-              </div>
-            )}
-            {activeRole !== 'customer' && (
-              <div className="text-center pt-4 border-t border-white/20 text-slate-400 text-xs italic">
-                Contact admin for {config.title.toLowerCase()} access
-              </div>
-            )}
+            <div className="text-center pt-4 border-t border-white/20 text-slate-400 text-xs italic">
+              Contact admin for {config.title.toLowerCase()} access
+            </div>
           </form>
         </motion.div>
 

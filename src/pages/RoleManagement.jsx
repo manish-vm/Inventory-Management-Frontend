@@ -14,6 +14,21 @@ const RoleManagement = () => {
   const [selectedEmployees, setSelectedEmployees] = useState(new Set());
   const [updatingEmployees, setUpdatingEmployees] = useState(false);
 
+  const employeeHasStage = (employee, stageNumber) => {
+    if (Array.isArray(employee.assignedStages) && employee.assignedStages.length > 0) {
+      return employee.assignedStages.some((stage) => Number(stage.stageNumber || stage) === Number(stageNumber));
+    }
+    return Number(employee.manufacturingLevel) === Number(stageNumber);
+  };
+
+  const withoutStage = (employee, stageNumber) =>
+    (employee.assignedStages || []).filter((stage) => Number(stage.stageNumber || stage) !== Number(stageNumber));
+
+  const withStage = (employee, level) => {
+    const next = withoutStage(employee, level.stageNumber);
+    return [...next, { stageNumber: level.stageNumber, stageName: level.stageName }];
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -53,9 +68,7 @@ const RoleManagement = () => {
       if (config && Array.isArray(config.stages) && config.stages.length > 0) {
         levels = config.stages.map((stage) => {
           const stageNumber = Number(stage.stageNumber);
-          const assignedEmployees = employeesData.filter(
-            (emp) => Number(emp.manufacturingLevel) === stageNumber
-          );
+          const assignedEmployees = employeesData.filter((emp) => employeeHasStage(emp, stageNumber));
 
           return {
             stageNumber,
@@ -123,17 +136,27 @@ const RoleManagement = () => {
 
       const promises = [];
 
-      // Remove employees from this level
+      // Remove employees from this stage
       toRemove.forEach(employeeId => {
+        const employee = allEmployees.find((emp) => emp._id === employeeId);
+        const assignedStages = employee ? withoutStage(employee, editingLevel.stageNumber) : [];
         promises.push(
-          employeeAPI.updateEmployee(employeeId, { manufacturingLevel: null })
+          employeeAPI.updateEmployee(employeeId, {
+            assignedStages,
+            manufacturingLevel: assignedStages[0]?.stageNumber || null
+          })
         );
       });
 
-      // Add employees to this level
+      // Add employees to this stage
       toAdd.forEach(employeeId => {
+        const employee = allEmployees.find((emp) => emp._id === employeeId);
+        const assignedStages = employee ? withStage(employee, editingLevel) : [{ stageNumber: editingLevel.stageNumber, stageName: editingLevel.stageName }];
         promises.push(
-          employeeAPI.updateEmployee(employeeId, { manufacturingLevel: editingLevel.stageNumber })
+          employeeAPI.updateEmployee(employeeId, {
+            assignedStages,
+            manufacturingLevel: assignedStages[0]?.stageNumber || editingLevel.stageNumber
+          })
         );
       });
 

@@ -3,12 +3,12 @@ const ProductInfoCard = ({ product }) => {
 
   const fields = [
     ['Part Number', product.partNo],
-    ['Part Description', product.partDescription || product.description],
-    ['Batch Number', product.batchNo],
-    ['Item ID', product.itemId || product.qrId],
+    ['Part Name', product.partDescription || product.description],
+    //['Batch Number', product.batchNo],
+    // ['Item ID', product.itemId || product.qrId],
     ['Current Stage', product.currentStage],
-    ['Next Stage', product.nextStage],
-    ['Current Status', product.manufacturingStatus || product.status],
+    // ['Next Stage', product.nextStage],
+    // ['Current Status', product.manufacturingStatus || product.status],
     ['Total Ideal Items', product.totalIdealItems],
     ['Created Date', product.createdDate || product.generatedDate ? new Date(product.createdDate || product.generatedDate).toLocaleString() : '-']
   ];

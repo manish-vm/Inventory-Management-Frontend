@@ -31,6 +31,11 @@ const EmployeeModal = ({ employee, onClose, onSave, manufacturingLevels }) => {
     password: '',
     canLogin: employee?.canLogin || false,
     manufacturingLevel: employee?.manufacturingLevel || 1,
+    assignedStages: employee?.assignedStages?.length
+      ? employee.assignedStages
+      : employee?.manufacturingLevel
+        ? [{ stageNumber: employee.manufacturingLevel, stageName: '' }]
+        : [],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +59,10 @@ const EmployeeModal = ({ employee, onClose, onSave, manufacturingLevels }) => {
     }
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setError('Please enter a valid email address');
+      return;
+    }
+    if (formData.assignedStages.length === 0) {
+      setError('Select at least one manufacturing stage');
       return;
     }
     
@@ -158,24 +167,37 @@ const EmployeeModal = ({ employee, onClose, onSave, manufacturingLevels }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Manufacturing Level
+              Manufacturing Stages
             </label>
-            <select
-              value={formData.manufacturingLevel}
-              onChange={(e) => setFormData({ ...formData, manufacturingLevel: Number(e.target.value) })}
-              className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-            >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-slate-300 dark:border-slate-600 p-3">
               {manufacturingLevels && manufacturingLevels.length > 0 ? (
-                manufacturingLevels.map((level) => (
-                  <option key={`${level.stageNumber}-${level.stageName}`} value={level.stageNumber}>
-                    {level.stageName}
-                  </option>
-                ))
+                manufacturingLevels.map((level) => {
+                  const checked = formData.assignedStages.some((stage) => Number(stage.stageNumber) === Number(level.stageNumber));
+                  return (
+                    <label key={`${level.stageNumber}-${level.stageName}`} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const assignedStages = e.target.checked
+                            ? [...formData.assignedStages, { stageNumber: level.stageNumber, stageName: level.stageName }]
+                            : formData.assignedStages.filter((stage) => Number(stage.stageNumber) !== Number(level.stageNumber));
+                          setFormData({
+                            ...formData,
+                            assignedStages,
+                            manufacturingLevel: assignedStages[0]?.stageNumber || 1
+                          });
+                        }}
+                      />
+                      {level.stageName}
+                    </label>
+                  );
+                })
               ) : (
-                <option value={1}>Level 1</option>
+                <span className="text-sm text-slate-500">No stages configured</span>
               )}
-            </select>
-            <p className="text-xs text-slate-500 mt-1">Assign the level at which this employee works in manufacturing</p>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Assign every manufacturing stage this employee can process.</p>
             {manufacturingLevels.length === 0 && (
               <p className="text-xs text-amber-500 mt-1">No manufacturing levels configured yet. Create a manufacturing config first.</p>
             )}
@@ -498,7 +520,7 @@ const AdminEmployees = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Phone</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Email</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Address</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Manufacturing Level</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Manufacturing Stages</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Status</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">Actions</th>
                 </tr>
@@ -536,7 +558,9 @@ const AdminEmployees = () => {
                     </td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
                       <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                        {manufacturingLevels.find((level) => level.stageNumber === employee.manufacturingLevel)?.stageName || `Level ${employee.manufacturingLevel || 1}`}
+                        {employee.assignedStages?.length
+                          ? employee.assignedStages.map((stage) => stage.stageName || `Stage ${stage.stageNumber}`).join(', ')
+                          : manufacturingLevels.find((level) => level.stageNumber === employee.manufacturingLevel)?.stageName || `Level ${employee.manufacturingLevel || 1}`}
                       </span>
                     </td>
                     <td className="px-6 py-4">

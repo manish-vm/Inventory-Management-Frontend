@@ -23,7 +23,6 @@ export const AuthProvider = ({ children }) => {
   const isSuperAdmin = useMemo(() => user?.role === 'superadmin', [user]);
   const isAdmin = useMemo(() => user?.role === 'admin', [user]);
   const isEmployee = useMemo(() => user?.role === 'employee', [user]);
-  const isCustomer = useMemo(() => user?.role === 'customer', [user]);
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -47,7 +46,7 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, [token]);
 
-// Unified login function - handles all roles (superadmin, admin, employee, customer)
+// Unified login function - handles all roles (superadmin, admin, employee)
    const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
     const { token: newToken, user: userData } = response.data;
@@ -62,8 +61,6 @@ export const AuthProvider = ({ children }) => {
       navigate('/app/dashboard');
     } else if (userData.role === 'employee') {
       navigate('/app/employee');
-    } else if (userData.role === 'customer') {
-      navigate('/app/billing');
     }
     
     return userData;
@@ -77,29 +74,6 @@ export const AuthProvider = ({ children }) => {
     setToken(newToken);
     setUser(userData);
     navigate('/superadmin/dashboard');
-    return userData;
-  };
-
-  // Customer signup - backend assigns role="customer"
-  const signup = async (name, email, password) => {
-    const response = await api.post('/auth/signup', { name, email, password });
-    // Backend returns token/user - set session
-    const { token: newToken, user: userData } = response.data;
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-    setUser(userData);
-    
-    // Role-based redirect
-    if (userData.role === 'superadmin') {
-      navigate('/superadmin/dashboard');
-    } else if (userData.role === 'admin') {
-      navigate('/app/dashboard');
-    } else if (userData.role === 'employee') {
-      navigate('/app/employee');
-    } else {
-      navigate('/app/billing');
-    }
-    
     return userData;
   };
 
@@ -117,12 +91,10 @@ export const AuthProvider = ({ children }) => {
       loading, 
       login,
       superAdminLogin,
-      signup,
       logout, 
       isSuperAdmin,
       isAdmin, 
       isEmployee,
-      isCustomer,
       setUser 
     }}>
       {children}
