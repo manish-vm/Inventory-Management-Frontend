@@ -175,7 +175,7 @@ const QRGenerator = () => {
                   <span className="font-medium">QR ID:</span> {generatedQR.qrId}
                 </p>
                 <p className="text-slate-600 dark:text-slate-300 mb-4">
-                  <span className="font-medium">Product Name:</span> {generatedQR.partNo?.productName ?? generatedQR.partNo}
+                  <span className="font-medium">Product Name:</span> {generatedQR.productName ?? generatedQR.partNo?.productName ?? '-'}
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -202,8 +202,10 @@ const QRGenerator = () => {
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700">
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">QR ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Part No</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Product Name</th>
+
+
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">QR Code (variant)</th>
                   {/* <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Quantity</th> */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Current Stage</th>
@@ -225,10 +227,13 @@ const QRGenerator = () => {
                     <tr key={qr._id} className="border-b border-slate-200 dark:border-slate-700">
                       <td className="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">{qr.qrId}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.partNo?.partNo ?? qr.partNo}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.partNo?.productName ?? '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.productName || '-'}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.batchNo || '-'}</td>
+
                       {/* <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.quantity}</td> */}
+
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+
                         {getCurrentStageLabel(qr)}
                       </td>
                       <td className="px-6 py-4">

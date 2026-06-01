@@ -301,9 +301,18 @@ const AdminResponsesPage = () => {
                     <td className="px-4 py-3 text-sm">{r.stage || '-'}</td>
                     <td className="px-4 py-3 text-sm">{r.acceptedCount}</td>
                     <td className="px-4 py-3 text-sm text-red-700">{r.rejectedCount}</td>
-                    <td className="px-4 py-3 text-sm">{r.rejectedReason || '-'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="max-w-[260px] whitespace-normal break-words leading-snug">
+                        {r.rejectedReason || '-'}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-amber-700">{r.reworkCount}</td>
-                    <td className="px-4 py-3 text-sm">{r.reworkReason || '-'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="max-w-[260px] whitespace-normal break-words leading-snug">
+                        {r.reworkReason || '-'}
+                      </div>
+                    </td>
+
                     <td className="px-4 py-3 text-sm font-semibold">{r.overallCount}</td>
                     <td className="px-4 py-3 text-sm">{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}</td>
                     <td className="px-4 py-3 text-sm">

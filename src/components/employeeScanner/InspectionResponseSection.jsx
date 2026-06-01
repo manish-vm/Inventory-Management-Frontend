@@ -253,8 +253,10 @@ const InspectionResponseSection = ({
 
       <button
         type="button"
-        onClick={onSubmit}
-        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-sky-700 px-5 py-2.5 font-medium text-white hover:bg-sky-800 disabled:opacity-60"
+        onClick={() => {
+          if (!submitting) onSubmit();
+        }}
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-sky-700 px-5 py-2.5 font-medium text-white hover:bg-sky-800 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <Send className="h-4 w-4" />
         {submitting ? 'Submitting...' : 'Submit Inspection'}

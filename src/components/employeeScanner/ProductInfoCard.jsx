@@ -6,7 +6,7 @@ const ProductInfoCard = ({ product }) => {
     ['Part Name', product.partDescription || product.description],
     //['Batch Number', product.batchNo],
     // ['Item ID', product.itemId || product.qrId],
-    ['Current Stage', product.currentStage],
+    ['Current Stage', product.currentStage || (product.currentStageName ? product.currentStageName : product.currentStageNumber ? `Stage ${product.currentStageNumber}` : '')],
     // ['Next Stage', product.nextStage],
     // ['Current Status', product.manufacturingStatus || product.status],
     ['Total Ideal Items', product.totalIdealItems],

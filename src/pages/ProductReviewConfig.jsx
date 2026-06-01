@@ -38,7 +38,10 @@ const ProductReviewConfig = () => {
   const productReviewKey = location.state?.configId
     ? `${location.state.configId}-${currentStageNumber}`
     : `${location.state?.productName || location.state?.partNo || 'stage'}-${currentStageNumber}`;
-  const partNo = location.state?.partNo || location.state?.productCode || '';
+  // Backend analytics is keyed by `partNo` query param.
+  // Some screens store it under `partNo` already; others may only have `productCode`.
+  // We prefer `partNo` if available.
+  const partNo = location.state?.partNo || location.state?.productCode || location.state?.productId || '';
   const productName = location.state?.productName || location.state?.productDescription || location.state?.partNo || 'Selected Product';
 
   const [config, setConfig] = useState(defaultConfig);
@@ -99,6 +102,9 @@ const ProductReviewConfig = () => {
       const response = await api.get(`/stage-review-config/analytics/${encodeURIComponent(productReviewKey)}`, {
         params: partNo ? { partNo } : undefined
       });
+      // Expected payload from backend: { accepted, rejected, rework, pending, totalItems }
+      // If partNo is missing/wrong, backend will return zeros.
+
       setAnalytics(response.data?.data || response.data);
     } catch (error) {
       setAnalytics({ accepted: 0, rejected: 0, rework: 0 });

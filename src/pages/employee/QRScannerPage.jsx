@@ -98,7 +98,6 @@ const QRScannerPage = () => {
     fetchDefectDetails();
   }, []);
 
-
   useEffect(() => {
     const q = search.trim();
 
@@ -152,9 +151,20 @@ const QRScannerPage = () => {
       const response = await inspectionAPI.lookupBatchProduct(key);
       setLookupData(response.data);
 
-      const firstSelectable = response.data.stages?.find((stage) => stage.selectable);
+      const backendCurrentStageNumber =
+        response.data.stage?.stageNumber ||
+        response.data.product?.currentStageNumber;
+      const currentSelectable = response.data.stages?.find(
+        (stage) =>
+          Number(stage.stageNumber) === Number(backendCurrentStageNumber) &&
+          stage.selectable
+      );
+      const firstSelectable =
+        currentSelectable ||
+        response.data.stages?.find((stage) => stage.selectable && Number(stage.availableCount || 0) > 0) ||
+        response.data.stages?.find((stage) => stage.selectable);
       setSelectedStageNumber(
-        firstSelectable?.stageNumber || response.data.stage?.stageNumber || ''
+        firstSelectable?.stageNumber || backendCurrentStageNumber || ''
       );
 
       setInspectionValues({});
@@ -189,8 +199,9 @@ const QRScannerPage = () => {
         ...current,
         product: {
           ...current?.product,
-          currentStage: stageForUi.stageName,
-          currentStageNumber: stageForUi.stageNumber
+          availableCount: Number(stageForUi.availableCount || 0) > 0
+            ? Number(stageForUi.availableCount || 0)
+            : current?.product?.availableCount
         }
       }));
     }
@@ -489,7 +500,17 @@ const QRScannerPage = () => {
 
         {product && (
           <>
-            <ProductInfoCard product={{ ...product, totalIdealItems: availableCount, currentStage: product.currentStage }} />
+            <ProductInfoCard
+              product={{
+                ...product,
+                totalIdealItems: availableCount,
+                currentStage: lookupData?.stage?.stageName || product?.currentStage || '',
+                currentStageNumber:
+                  lookupData?.stage?.stageNumber || product?.currentStageNumber,
+                currentStageName:
+                  lookupData?.stage?.stageName || product?.currentStage
+              }}
+            />
 
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
@@ -510,6 +531,11 @@ const QRScannerPage = () => {
                   >
                     <span className="block text-xs uppercase text-slate-500">Stage {stage.stageNumber}</span>
                     <span className="font-semibold">{stage.stageName}</span>
+                    {stage.availableCount !== undefined && (
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {Number(stage.availableCount || 0)} available
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
