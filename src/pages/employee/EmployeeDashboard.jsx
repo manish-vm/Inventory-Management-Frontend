@@ -67,7 +67,7 @@ const EmployeeDashboard = () => {
                   {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-900 dark:text-white">{item.partNo}</p>
+                  <p className="font-semibold text-slate-900 dark:text-white">{item.code}</p>
                   <p className="text-sm text-slate-600 dark:text-slate-400">{item.actionTaken}</p>
                 </div>
               </div>
@@ -80,3 +80,5 @@ const EmployeeDashboard = () => {
 };
 
 export default EmployeeDashboard;
+
+

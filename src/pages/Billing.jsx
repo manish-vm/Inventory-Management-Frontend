@@ -30,7 +30,7 @@ import { useAuth } from '../context/AuthContext';
 // Helper function to encode product details into barcode (table format)
 const encodeProductForBarcode = (product) => {
   // Table format: PC:code|N:name|Q:quantity
-  return `PC:${product.productCode}|N:${product.productName}`;
+  return `PC:${product.code}|N:${product.productName}`;
 };
 
 // Helper function to decode product from barcode
@@ -41,10 +41,10 @@ const decodeProductFromBarcode = (barcodeData) => {
     const result = {};
     parts.forEach(part => {
       const [key, value] = part.split(':');
-      if (key === 'PC') result.productCode = value;
+      if (key === 'PC') result.code = value;
       if (key === 'N') result.productName = value;
     });
-    return result.productCode || result.productName ? result : null;
+    return result.code || result.productName ? result : null;
   } catch (e) {
     return null;
   }
@@ -182,8 +182,8 @@ const BarcodePopup = ({ product, onClose, onAddToCart }) => {
           {/* Additional Info */}
           <div className="space-y-2 text-sm">
             <div className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span className="text-slate-500 dark:text-slate-400">Product Code</span>
-              <span className="font-mono font-medium text-slate-900 dark:text-white">{product.productCode}</span>
+              <span className="text-slate-500 dark:text-slate-400">Code</span>
+              <span className="font-mono font-medium text-slate-900 dark:text-white">{product.code}</span>
             </div>
             {product.description && (
               <div className="py-2">
@@ -283,8 +283,8 @@ const Billing = () => {
           // Search by product name
           const matchesName = product.productName?.toLowerCase().includes(searchLower);
           
-          // Search by product code
-          const matchesCode = product.productCode?.toLowerCase().includes(searchLower);
+          // Search by Code
+          const matchesCode = product.code?.toLowerCase().includes(searchLower);
           
           // Search by price (exact or partial match)
           const productPrice = product.sellingPrice?.toString();
@@ -350,7 +350,7 @@ const Billing = () => {
       setCart([...cart, {
         productId: product._id,
         productName: product.productName,
-        productCode: product.productCode,
+        code: product.code,
         sellingPrice: product.sellingPrice,
         quantity: 1,
         total: product.sellingPrice,
@@ -478,7 +478,7 @@ const Billing = () => {
       addToCart({
         _id: decodedProduct.productName, // Use name as fallback ID
         productName: decodedProduct.productName,
-        productCode: decodedProduct.productCode,
+        code: decodedProduct.code,
         sellingPrice: decodedProduct.sellingPrice,
         basePrice: decodedProduct.basePrice,
         stockQuantity: decodedProduct.stockQuantity,
@@ -570,7 +570,7 @@ const Billing = () => {
                     <div className="flex items-center gap-4">
                       <div className="text-left">
                         <p className="font-semibold text-slate-900 dark:text-white">{product.productName}</p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Code: {product.productCode}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Code: {product.code}</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -629,7 +629,7 @@ const Billing = () => {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded inline-block">
-                            {product.productCode}
+                            {product.code}
                           </span>
                         </td>
                         <td className="px-4 py-3">
@@ -999,7 +999,7 @@ const Billing = () => {
                     type="text"
                     value={scannedCode}
                     onChange={(e) => setScannedCode(e.target.value)}
-                    placeholder="Enter product code..."
+                    placeholder="Enter Code..."
                     className="flex-1 px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && scannedCode) {
@@ -1025,5 +1025,7 @@ const Billing = () => {
 };
 
 export default Billing;
+
+
 
 

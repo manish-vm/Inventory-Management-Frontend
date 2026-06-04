@@ -2,7 +2,7 @@ const ProductInfoCard = ({ product }) => {
   if (!product) return null;
 
   const fields = [
-    ['Part Number', product.partNo],
+    ['Code', product.code || product.code],
     ['Part Name', product.partDescription || product.description],
     //['Batch Number', product.batchNo],
     // ['Item ID', product.itemId || product.qrId],
@@ -37,3 +37,6 @@ const ProductInfoCard = ({ product }) => {
 };
 
 export default ProductInfoCard;
+
+
+

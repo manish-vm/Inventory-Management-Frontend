@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = "https://inventory-management-backend-k76m.onrender.com/api"; 
+const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -209,7 +209,7 @@ export const chatbotAPI = {
 export const productMasterAPI = {
   getAll: (params) => api.get('/product-masters', { params }),
   getById: (id) => api.get('/product-masters/' + id),
-  getByPartNo: (partNo) => api.get('/product-masters/part/' + partNo),
+  getByCode: (code) => api.get('/product-masters/code/' + code),
   create: (data) => api.post('/product-masters', data),
   upload: (data) => api.post('/product-masters/upload', data),
   update: (id, data) => api.put('/product-masters/' + id, data),
@@ -235,7 +235,7 @@ export const qrCodeAPI = {
 export const manufacturingConfigAPI = {
   getAll: (params) => api.get('/manufacturing-configs', { params }),
   getById: (id) => api.get('/manufacturing-configs/' + id),
-  getByPartNo: (partNo) => api.get('/manufacturing-configs/part/' + partNo),
+  getByCode: (code) => api.get('/manufacturing-configs/code/' + code),
   create: (data) => api.post('/manufacturing-configs', data),
   validateStage: (data) => api.post('/manufacturing-configs/validate-stage', data),
   update: (id, data) => api.put('/manufacturing-configs/' + id, data),
@@ -290,7 +290,7 @@ export const inspectionAPI = {
   scan: (qrId) => api.post('/inspection/employee/scan', { qrId }),
   searchProducts: (params) => api.get('/employees/products/search', { params }),
   lookupBatchProduct: (key) => api.get(`/employees/batch-product/${encodeURIComponent(key)}`),
-  lookupProduct: (partNo) => api.get(`/employees/product/${encodeURIComponent(partNo)}`),
+  lookupProduct: (code) => api.get(`/employees/product/${encodeURIComponent(code)}`),
   submitEmployeeResponse: (data) => api.post('/employees/inspection-response', data),
   getProductHistory: (itemId) => api.get(`/employees/product-history/${encodeURIComponent(itemId)}`),
   getFormsByStage: (stageId, params) => api.get(`/forms/stage/${encodeURIComponent(stageId)}`, { params }),
@@ -315,4 +315,7 @@ export const assemblyAPI = {
 };
 
 export default api;
+
+
+
 

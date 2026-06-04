@@ -40,7 +40,7 @@ const ProductTraceabilityPage = ({ admin = false }) => {
         <section className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
           <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-white">Product Information</h2>
           <div className="space-y-2 text-sm">
-            <p><span className="font-medium">Part Number:</span> {product.partNo || primaryQR.partNo || id}</p>
+            <p><span className="font-medium">Code:</span> {product.code || primaryQR.code || id}</p>
             <p><span className="font-medium">Product:</span> {product.productName || '-'}</p>
             <p><span className="font-medium">Description:</span> {product.description || '-'}</p>
           </div>
@@ -99,3 +99,6 @@ const ProductTraceabilityPage = ({ admin = false }) => {
 };
 
 export default ProductTraceabilityPage;
+
+
+

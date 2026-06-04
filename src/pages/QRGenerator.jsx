@@ -54,7 +54,7 @@ const QRGenerator = () => {
   const fetchProducts = async () => {
     try {
       const response = await productMasterAPI.getAll();
-      // productMaster entries look like { productName, productCode, partNo ... }
+      // productMaster entries look like { productName, code, code ... }
       setProducts(response.data.filter(p => p.productName));
     } catch (error) {
       toast.error('Failed to fetch products');
@@ -73,10 +73,10 @@ const QRGenerator = () => {
   const getCurrentStageLabel = (qr) => {
     const stageNumber = Number(qr.currentStage || 1);
     const product = products.find((item) =>
-      [item.partNo, item.productCode, item.productName].includes(qr.partNo)
+      [item.code, item.code, item.productName].includes(qr.code)
     );
     const config = manufacturingConfigs.find((item) =>
-      item.productName === product?.productName || item.productName === qr.partNo
+      item.productName === product?.productName || item.productName === qr.code
     );
     const stage = config?.stages?.find((item) => Number(item.stageNumber) === stageNumber);
 
@@ -175,7 +175,7 @@ const QRGenerator = () => {
                   <span className="font-medium">QR ID:</span> {generatedQR.qrId}
                 </p>
                 <p className="text-slate-600 dark:text-slate-300 mb-4">
-                  <span className="font-medium">Product Name:</span> {generatedQR.productName ?? generatedQR.partNo?.productName ?? '-'}
+                  <span className="font-medium">Product Name:</span> {generatedQR.productName ?? generatedQR.code?.productName ?? '-'}
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -202,7 +202,7 @@ const QRGenerator = () => {
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700">
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">QR ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Part No</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Code</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Product Name</th>
 
 
@@ -226,7 +226,7 @@ const QRGenerator = () => {
                   qrCodes.map(qr => (
                     <tr key={qr._id} className="border-b border-slate-200 dark:border-slate-700">
                       <td className="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">{qr.qrId}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.partNo?.partNo ?? qr.partNo}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.code?.code ?? qr.code}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.productName || '-'}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{qr.batchNo || '-'}</td>
 
@@ -265,7 +265,7 @@ const QRGenerator = () => {
                               setGeneratedQR(qr);
                               setShowForm(true);
                               setFormData({
-                                productName: qr.partNo?.productName ?? qr.partNo ?? '',
+                                productName: qr.code?.productName ?? qr.code ?? '',
                                 barcodeNo: qr.batchNo || '',
                                 quantity: qr.quantity || 0,
                                 count: 1
@@ -315,20 +315,20 @@ const QRGenerator = () => {
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Part No *</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Code *</label>
 <select
                      value={formData.productName}
                      onChange={e => setFormData({
                        ...formData,
                        productName: e.target.value,
-                       barcodeNo: (products.find(p => p.productName === e.target.value)?.partNo) || (products.find(p => p.productName === e.target.value)?.productCode) || ''
+                       barcodeNo: (products.find(p => p.productName === e.target.value)?.code) || (products.find(p => p.productName === e.target.value)?.code) || ''
                      })}
                      required
                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"
                    >
                      <option value="">Select Product</option>
                      {products.map(p => (
-                       <option key={p._id} value={p.productName}>{p.productName} - {p.partNo || p.productCode}</option>
+                       <option key={p._id} value={p.productName}>{p.productName} - {p.code || p.code}</option>
                      ))}
                    </select>
                 </div>
@@ -386,3 +386,6 @@ const QRGenerator = () => {
 };
 
 export default QRGenerator;
+
+
+

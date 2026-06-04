@@ -23,7 +23,7 @@ const OperatorDashboard = () => {
 
       try {
         // Config can be missing; barcode/QR flow should still work.
-        const configResponse = await manufacturingConfigAPI.getByPartNo(response.data.partNo);
+        const configResponse = await manufacturingConfigAPI.getByCode(response.data.code);
         setConfig(configResponse.data);
       } catch (configError) {
         setConfig(null);
@@ -48,7 +48,7 @@ const OperatorDashboard = () => {
       
       const response = await rawMaterialAPI.create({
         qrId: scannedQR._id,
-        partNo: scannedQR.partNo,
+        code: scannedQR.code,
         batchNo: scannedQR.batchNo || 'AUTO',
         totalWeight,
         unitWeight,
@@ -68,7 +68,7 @@ const OperatorDashboard = () => {
     try {
       const response = await productionLogAPI.create({
         qrId: scannedQR._id,
-        partNo: scannedQR.partNo,
+        code: scannedQR.code,
         quantity: parseInt(quantity),
         stage: config?.currentStage || 1,
         stageType: actionType,
@@ -102,7 +102,7 @@ const OperatorDashboard = () => {
       
       const response = await processingStageAPI.create({
         qrId: scannedQR._id,
-        partNo: scannedQR.partNo,
+        code: scannedQR.code,
         stageNumber,
         stageName: 'Secondary Processing',
         inputQuantity: scannedQR.quantity,
@@ -162,7 +162,7 @@ const OperatorDashboard = () => {
         components: [
           {
             qrId: scannedQR._id,
-            partNo: scannedQR.partNo,
+            code: scannedQR.code,
             quantityUsed: outputQuantity,
             stage: stageNumber
           }
@@ -234,7 +234,7 @@ const OperatorDashboard = () => {
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Product Info</h3>
                 <div className="space-y-2">
                   <p><span className="font-medium">QR ID:</span> {scannedQR.qrId}</p>
-                  <p><span className="font-medium">Part No:</span> {scannedQR.partNo}</p>
+                  <p><span className="font-medium">Code:</span> {scannedQR.code}</p>
                   <p><span className="font-medium">Current Quantity:</span> {scannedQR.quantity}</p>
                   <p><span className="font-medium">Status:</span> 
                     <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
@@ -362,3 +362,7 @@ const OperatorDashboard = () => {
 };
 
 export default OperatorDashboard;
+
+
+
+

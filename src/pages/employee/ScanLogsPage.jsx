@@ -36,7 +36,7 @@ const ScanLogsPage = () => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Scan Logs</h1>
-          <p className="text-slate-600 dark:text-slate-400">Audit-friendly product inspection summary by part number.</p>
+          <p className="text-slate-600 dark:text-slate-400">Audit-friendly product inspection summary by Code.</p>
         </div>
         <div className="flex gap-2">
           <input
@@ -61,7 +61,7 @@ const ScanLogsPage = () => {
             <thead className="bg-slate-50 dark:bg-slate-900/60">
               <tr>
                 {[
-                  'Part Number',
+                  'Code',
                   'Part Name',
                   'Part Description',
                   'Current Stage',
@@ -85,9 +85,9 @@ const ScanLogsPage = () => {
 
             <tbody>
               {rows.map((row) => (
-                <tr key={row.partNo} className="border-t border-slate-200 dark:border-slate-700">
-                  <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">{row.partNo}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.productName || row.partNo}</td>
+                <tr key={row.code} className="border-t border-slate-200 dark:border-slate-700">
+                  <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">{row.code}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.productName || row.code}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.partDescription || '-'}</td>
 
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.currentStage || '-'}</td>
@@ -102,19 +102,19 @@ const ScanLogsPage = () => {
                     <div className="flex flex-wrap gap-2">
                       <Link
                         className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                        to={`/app/employee/traceability/${row.partNo}`}
+                        to={`/app/employee/traceability/${row.code}`}
                       >
                         History
                       </Link>
                       <Link
                         className="rounded-lg bg-primary-100 px-3 py-1 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
-                        to={`/app/employee/traceability/${row.partNo}`}
+                        to={`/app/employee/traceability/${row.code}`}
                       >
                         Responses
                       </Link>
                       <Link
                         className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                        to={`/app/employee/traceability/${row.partNo}`}
+                        to={`/app/employee/traceability/${row.code}`}
                       >
                         Timeline
                       </Link>
@@ -139,4 +139,7 @@ const ScanLogsPage = () => {
 };
 
 export default ScanLogsPage;
+
+
+
 

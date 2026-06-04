@@ -95,7 +95,7 @@ const InvoiceDetailModal = ({ invoice, onClose, onRefund, onDownloadPDF }) => {
                     <tr key={index}>
                       <td className="px-4 py-3">
                         <p className="font-medium text-slate-900 dark:text-white">{item.productName}</p>
-                        <p className="text-sm text-slate-500">{item.productCode}</p>
+                        <p className="text-sm text-slate-500">{item.code}</p>
                       </td>
                       <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-400">{item.quantity}</td>
                       <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">
@@ -352,4 +352,6 @@ const Invoices = () => {
 };
 
 export default Invoices;
+
+
 

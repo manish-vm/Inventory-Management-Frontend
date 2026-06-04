@@ -80,8 +80,8 @@ const RoleManagement = () => {
 
       return {
         _id: product._id,
-        productName: product.productName || product.partNo || 'Unknown product',
-        productCode: product.productCode || product.partNo || '-',
+        productName: product.productName || product.code || 'Unknown product',
+        code: product.code || product.code || '-',
         levels,
       };
     });
@@ -188,7 +188,7 @@ const RoleManagement = () => {
   const filteredProducts = productHierarchy.filter((product) => {
     if (!search.trim()) return true;
     const lower = search.toLowerCase();
-    const productMatch = product.productName.toLowerCase().includes(lower) || product.productCode.toLowerCase().includes(lower);
+    const productMatch = product.productName.toLowerCase().includes(lower) || product.code.toLowerCase().includes(lower);
     const levelMatch = product.levels.some((level) => level.stageName.toLowerCase().includes(lower));
     const employeeMatch = product.levels.some((level) => level.employees.some((emp) => emp.name?.toLowerCase().includes(lower) || emp.email?.toLowerCase().includes(lower)));
 
@@ -243,7 +243,7 @@ const RoleManagement = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900 dark:text-white">{product.productName}</p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{product.productCode}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{product.code}</p>
                     </div>
                     <div className="flex-shrink-0 text-slate-500 dark:text-slate-400 text-sm">
                       {product.levels.length} level{product.levels.length !== 1 ? 's' : ''}
@@ -433,3 +433,5 @@ const RoleManagement = () => {
 
 
 export default RoleManagement;
+
+

@@ -75,9 +75,9 @@ const ManufacturingConfig = () => {
     }
   };
 
-  const resolveProductPartNo = (productName) => {
+  const resolveCode = (productName) => {
     const product = products.find((item) => item.productName === productName);
-    return product?.partNo || product?.productCode || productName;
+    return product?.code || product?.code || productName;
   };
 
   const fetchReviewStats = async (nextConfigs = configs, nextProducts = products) => {
@@ -85,11 +85,11 @@ const ManufacturingConfig = () => {
     const entries = await Promise.all(
       (nextConfigs || []).map(async (config) => {
         const product = productLookup.get(config.productName);
-        const partNo = product?.partNo || product?.productCode || config.productName;
+        const code = product?.code || product?.code || config.productName;
         const stageNumber = config.stages?.[0]?.stageNumber || 1;
 
         try {
-          const response = await processingStageAPI.getStageReviewStats(stageNumber, { partNo });
+          const response = await processingStageAPI.getStageReviewStats(stageNumber, { code });
           return [config._id, response.data];
         } catch (error) {
           return [
@@ -214,7 +214,7 @@ const ManufacturingConfig = () => {
       state: {
         configId: config?._id,
         productName: config?.productName,
-        partNo: resolveProductPartNo(config?.productName),
+        code: resolveCode(config?.productName),
         workflowType: config?.workflowType,
         stage,
         stages: config?.stages || []
@@ -525,3 +525,6 @@ const ManufacturingConfig = () => {
 };
 
 export default ManufacturingConfig;
+
+
+

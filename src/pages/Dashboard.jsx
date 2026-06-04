@@ -439,7 +439,7 @@ const UserDashboard = ({ user }) => {
                         <tr key={index}>
                           <td className="px-4 py-3">
                             <p className="font-medium text-slate-900 dark:text-white">{item.productName}</p>
-                            <p className="text-xs text-slate-500">{item.productCode}</p>
+                            <p className="text-xs text-slate-500">{item.code}</p>
                           </td>
                           <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-400">{item.quantity}</td>
                           <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">
@@ -844,7 +844,7 @@ const AdminDashboard = () => {
                 <div key={item._id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
                   <div>
                     <p className="font-medium text-slate-900 dark:text-white text-sm">{item.productName}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{item.productCode}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{item.code}</p>
                   </div>
                   <span className="text-red-600 dark:text-red-400 font-semibold">{item.stockQuantity}</span>
                 </div>
@@ -1053,4 +1053,6 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
+
 

@@ -94,7 +94,7 @@ const ProductAnalyticsModal = ({ data, onClose }) => {
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{product?.productName} Analytics</h2>
-            <p className="text-sm text-slate-500">{product?.productCode}</p>
+            <p className="text-sm text-slate-500">{product?.code}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
             <X className="w-6 h-6" />
@@ -201,4 +201,6 @@ const ProductAnalyticsModal = ({ data, onClose }) => {
 };
 
 export default ProductAnalyticsModal;
+
+
 

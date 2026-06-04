@@ -209,17 +209,17 @@ const QRScannerPage = () => {
     try {
       const [inspectionRes, rejectionRes, reworkRes] = await Promise.all([
         inspectionAPI.getFormsByStage(stageNumber, {
-          partNo: product.partNo,
+          code: product.code,
           productName: product.productName,
           formType: 'inspection'
         }),
         inspectionAPI.getFormsByStage(stageNumber, {
-          partNo: product.partNo,
+          code: product.code,
           productName: product.productName,
           formType: 'rejection'
         }),
         inspectionAPI.getFormsByStage(stageNumber, {
-          partNo: product.partNo,
+          code: product.code,
           productName: product.productName,
           formType: 'rework'
         })
@@ -291,7 +291,7 @@ const QRScannerPage = () => {
     try {
       await inspectionAPI.submitEmployeeResponse({
         productId: product.productId,
-        partNo: product.partNo,
+        code: product.code,
         batchNo: product.batchNo,
         productName: product.productName,
         stageId: selectedStage.stageNumber,
@@ -445,7 +445,7 @@ const QRScannerPage = () => {
 
                   return (
                     <button
-                      key={`${item.partNo}-${item.batchNo}`}
+                      key={`${item.code}-${item.batchNo}`}
                       type="button"
                       onClick={() => {
                         setSearch(item.productName);
@@ -458,7 +458,7 @@ const QRScannerPage = () => {
                         {item.productName}
                       </span>
                       <span className="text-sm text-slate-500">
-                        {item.partNo ? `Part ${item.partNo}` : 'Product'}
+                        {item.code ? `Code ${item.code}` : 'Product'}
                         {item.availableCount ? ` | ${item.availableCount} items` : ''}
                       </span>
                     </button>
@@ -578,3 +578,5 @@ const QRScannerPage = () => {
 };
 
 export default QRScannerPage;
+
+

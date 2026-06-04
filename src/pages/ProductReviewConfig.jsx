@@ -37,12 +37,9 @@ const ProductReviewConfig = () => {
   const currentStageNumber = Number(params.stageNumber || location.state?.stage?.stageNumber || stageKey || 1);
   const productReviewKey = location.state?.configId
     ? `${location.state.configId}-${currentStageNumber}`
-    : `${location.state?.productName || location.state?.partNo || 'stage'}-${currentStageNumber}`;
-  // Backend analytics is keyed by `partNo` query param.
-  // Some screens store it under `partNo` already; others may only have `productCode`.
-  // We prefer `partNo` if available.
-  const partNo = location.state?.partNo || location.state?.productCode || location.state?.productId || '';
-  const productName = location.state?.productName || location.state?.productDescription || location.state?.partNo || 'Selected Product';
+    : `${location.state?.productName || location.state?.code || location.state?.code || 'stage'}-${currentStageNumber}`;
+  const code = location.state?.code || location.state?.code || location.state?.productId || '';
+  const productName = location.state?.productName || location.state?.productDescription || location.state?.code || location.state?.code || 'Selected Product';
 
   const [config, setConfig] = useState(defaultConfig);
   const [analytics, setAnalytics] = useState(null);
@@ -100,10 +97,10 @@ const ProductReviewConfig = () => {
   const fetchAnalytics = async () => {
     try {
       const response = await api.get(`/stage-review-config/analytics/${encodeURIComponent(productReviewKey)}`, {
-        params: partNo ? { partNo } : undefined
+        params: code ? { code: code } : undefined
       });
       // Expected payload from backend: { accepted, rejected, rework, pending, totalItems }
-      // If partNo is missing/wrong, backend will return zeros.
+      // Backend parameter is still named code for compatibility, but the value is Code.
 
       setAnalytics(response.data?.data || response.data);
     } catch (error) {
@@ -349,3 +346,5 @@ const ProductReviewConfig = () => {
 };
 
 export default ProductReviewConfig;
+
+

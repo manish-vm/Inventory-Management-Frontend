@@ -59,9 +59,9 @@ const AdminResponsesPage = () => {
       const reworkReason = computeReasonString(item.reworkFormResponses);
 
       return {
-        partNo: item.partNo,
+        code: item.code,
         partDescription: item.partDescription,
-        productName: item.productName || item.partNo,
+        productName: item.productName || item.code,
         employeeName: item.employeeName,
         stage: item.currentStageName || item.stageName,
         acceptedCount,
@@ -79,7 +79,7 @@ const AdminResponsesPage = () => {
 
   const exportCsvTable1 = () => {
     const headers = [
-      'Part Number',
+      'Code',
       'Description',
       'Employee',
       'Stage',
@@ -93,7 +93,7 @@ const AdminResponsesPage = () => {
     ];
 
     const body = table1Rows.map((r) => [
-      r.partNo,
+      r.code,
       r.partDescription,
       r.employeeName,
       r.stage,
@@ -121,7 +121,7 @@ const AdminResponsesPage = () => {
 
   const exportCsvTable2 = () => {
     const headers = [
-      'Part number',
+      'Code',
       'Product name',
       'Employee',
       'Stage',
@@ -137,7 +137,7 @@ const AdminResponsesPage = () => {
       // accepted: reason should be Null
       if (r.acceptedCount > 0) {
         rows.push([
-          r.partNo,
+          r.code,
           r.productName,
           r.employeeName,
           r.stage,
@@ -150,7 +150,7 @@ const AdminResponsesPage = () => {
 
       if (r.rejectedCount > 0) {
         rows.push([
-          r.partNo,
+          r.code,
           r.productName,
           r.employeeName,
           r.stage,
@@ -163,7 +163,7 @@ const AdminResponsesPage = () => {
 
       if (r.reworkCount > 0) {
         rows.push([
-          r.partNo,
+          r.code,
           r.productName,
           r.employeeName,
           r.stage,
@@ -270,7 +270,7 @@ const AdminResponsesPage = () => {
               <thead className="bg-slate-50 dark:bg-slate-900/60">
                 <tr>
                   {[
-                    'Part Number',
+                    'Code',
                     'Part Description',
                     'Employee Name',
                     'Current Stage',
@@ -294,8 +294,8 @@ const AdminResponsesPage = () => {
               </thead>
               <tbody>
                 {table1Rows.map((r) => (
-                  <tr key={r.raw?._id || `${r.partNo}-${r.submittedAt}`} className="border-t border-slate-200 dark:border-slate-700">
-                    <td className="px-4 py-3 text-sm font-semibold">{r.partNo}</td>
+                  <tr key={r.raw?._id || `${r.code}-${r.submittedAt}`} className="border-t border-slate-200 dark:border-slate-700">
+                    <td className="px-4 py-3 text-sm font-semibold">{r.code}</td>
                     <td className="px-4 py-3 text-sm">{r.partDescription || '-'}</td>
                     <td className="px-4 py-3 text-sm">{r.employeeName || '-'}</td>
                     <td className="px-4 py-3 text-sm">{r.stage || '-'}</td>
@@ -340,7 +340,7 @@ const AdminResponsesPage = () => {
               <thead className="bg-slate-50 dark:bg-slate-900/60">
                 <tr>
                   {[
-                    'Part number',
+                    'Code',
                     'Product name',
                     'Employee',
                     'Stage',
@@ -364,8 +364,8 @@ const AdminResponsesPage = () => {
                   for (const r of table1Rows) {
                     if (r.acceptedCount > 0) {
                       rows.push({
-                        key: `acc-${r.partNo}-${r.submittedAt}`,
-                        partNo: r.partNo,
+                        key: `acc-${r.code}-${r.submittedAt}`,
+                        code: r.code,
                         productName: r.productName,
                         employeeName: r.employeeName,
                         stage: r.stage,
@@ -378,8 +378,8 @@ const AdminResponsesPage = () => {
                     }
                     if (r.rejectedCount > 0) {
                       rows.push({
-                        key: `rej-${r.partNo}-${r.submittedAt}`,
-                        partNo: r.partNo,
+                        key: `rej-${r.code}-${r.submittedAt}`,
+                        code: r.code,
                         productName: r.productName,
                         employeeName: r.employeeName,
                         stage: r.stage,
@@ -392,8 +392,8 @@ const AdminResponsesPage = () => {
                     }
                     if (r.reworkCount > 0) {
                       rows.push({
-                        key: `rw-${r.partNo}-${r.submittedAt}`,
-                        partNo: r.partNo,
+                        key: `rw-${r.code}-${r.submittedAt}`,
+                        code: r.code,
                         productName: r.productName,
                         employeeName: r.employeeName,
                         stage: r.stage,
@@ -413,7 +413,7 @@ const AdminResponsesPage = () => {
                       style={{ cursor: 'pointer' }}
                       title="Click to view detailed responses"
                     >
-                      <td className="px-4 py-3 text-sm font-semibold">{row.partNo}</td>
+                      <td className="px-4 py-3 text-sm font-semibold">{row.code}</td>
                       <td className="px-4 py-3 text-sm">{row.productName || '-'}</td>
                       <td className="px-4 py-3 text-sm">{row.employeeName || '-'}</td>
                       <td className="px-4 py-3 text-sm">{row.stage || '-'}</td>
@@ -449,7 +449,7 @@ const AdminResponsesPage = () => {
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Response Details</h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {selected.partNo} - {selected.formName}
+                  {selected.code} - {selected.formName}
                 </p>
               </div>
               <button
@@ -471,7 +471,7 @@ const AdminResponsesPage = () => {
               </div>
               <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
                 <p className="text-xs uppercase text-slate-500">Product</p>
-                <p className="font-medium">{selected.productName || selected.partNo}</p>
+                <p className="font-medium">{selected.productName || selected.code}</p>
               </div>
             </div>
 
@@ -555,4 +555,7 @@ const AdminResponsesPage = () => {
 };
 
 export default AdminResponsesPage;
+
+
+
 

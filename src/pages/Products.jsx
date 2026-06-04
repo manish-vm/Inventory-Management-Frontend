@@ -16,7 +16,8 @@ import {
   Users,
   TrendingUp,
   DollarSign,
-  Upload
+  Upload,
+  Download
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
@@ -28,7 +29,7 @@ import ProductAnalyticsModal from './ProductAnalyticsModal';
 
 const getQRCodeValue = (product) => {
   if (!product?.withQRCode) return '';
-  return product?.partNo || product?.productCode || product?.productName || product?._id || '';
+  return product?.code || product?.code || product?.productName || product?._id || '';
 };
 
 // QR Code Popup Modal Component
@@ -366,8 +367,7 @@ const ProductModal = ({
 }) => {
   const [formData, setFormData] = useState({
     productName: product?.productName || '',
-    productCode: product?.productCode || '',
-    partNo: product?.partNo || '',
+    code: product?.code || product?.code || '',
     stockQuantity: product?.stockQuantity ?? 0,
 
     // Product stores brand/model as strings; ids are derived for dropdowns.
@@ -461,26 +461,14 @@ const ProductModal = ({
                 required
               />
             </div>
-            {/* <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Product Code
-              </label>
-              <input
-                type="text"
-                value={formData.productCode}
-                onChange={(e) => setFormData({ ...formData, productCode: e.target.value })}
-                placeholder="Auto-generated if empty"
-                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-            </div> */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Part Number
+                Code
               </label>
               <input
                 type="text"
-                value={formData.partNo}
-                onChange={(e) => setFormData({ ...formData, partNo: e.target.value })}
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 placeholder="Auto-generated if empty"
                 className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
               />
@@ -706,15 +694,27 @@ const Products = () => {
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
 
+  const normalizeCellValue = (value) => {
+    if (value === null || value === undefined) return '';
+    return typeof value === 'string' ? value.trim() : value;
+  };
+
   const productColumnMap = {
     productname: 'productName',
+    producname: 'productName',
     name: 'productName',
     description: 'description',
-    productcode: 'productCode',
-    code: 'productCode',
-    partno: 'partNo',
-    partnumber: 'partNo',
-    rootpartno: 'rootPartNo',
+    code: 'code',
+    productcode: 'code',
+    partno: 'code',
+    partnumber: 'code',
+    rootcode: 'code',
+    categre: 'categoryName',
+    category: 'categoryName',
+    subcat: 'subcategoryName',
+    subcatego: 'subcategoryName',
+    subcategoryname: 'subcategoryName',
+    subcategory: 'subcategoryName',
     brand: 'brandName',
     brandname: 'brandName',
     model: 'model',
@@ -733,6 +733,49 @@ const Products = () => {
     reworkdefectdetails: 'reworkDefects'
   };
 
+  const parseWorkflowTemplateRows = (sheet) => {
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const headers = rows[0] || [];
+    const stageColumnIndexes = headers
+      .map((header, index) => ({ header: normalizeHeader(header), index }))
+      .filter(({ header }) => /^stage\d+$/.test(header));
+
+    return rows.slice(1).map((row) => {
+      const parsedRow = {};
+
+      headers.forEach((header, index) => {
+        const mappedKey = productColumnMap[normalizeHeader(header)];
+        if (mappedKey) parsedRow[mappedKey] = normalizeCellValue(row[index]);
+      });
+
+      parsedRow.workflowStages = stageColumnIndexes
+        .map(({ header, index }) => {
+          const stageNumber = Number(header.replace('stage', ''));
+          return {
+            stageNumber,
+            stageName: normalizeCellValue(row[index]),
+            enabled: normalizeCellValue(row[index]),
+            accepted: normalizeCellValue(row[index + 1]),
+            rejectionQuestion: normalizeCellValue(row[index + 2]),
+            rejectionOptionType: normalizeCellValue(row[index + 3]),
+            rejectionOptions: normalizeCellValue(row[index + 4]),
+            reworkQuestion: normalizeCellValue(row[index + 5]),
+            reworkOptionType: normalizeCellValue(row[index + 6]),
+            reworkOptions: normalizeCellValue(row[index + 7])
+          };
+        })
+        .filter((stage) =>
+          [stage.enabled, stage.accepted, stage.rejectionQuestion, stage.rejectionOptionType, stage.rejectionOptions, stage.reworkQuestion, stage.reworkOptionType, stage.reworkOptions]
+            .some((value) => String(value || '').trim())
+        );
+
+      return parsedRow;
+    }).filter((row) =>
+      Object.entries(row).some(([key, value]) => key !== 'workflowStages' && String(value || '').trim()) ||
+      row.workflowStages?.length
+    );
+  };
+
   const handleProductExcelUpload = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -742,26 +785,67 @@ const Products = () => {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      const productsToUpload = rawRows.map((row) =>
-        Object.entries(row).reduce((acc, [key, value]) => {
-          const mappedKey = productColumnMap[normalizeHeader(key)];
-          if (mappedKey) acc[mappedKey] = value;
-          return acc;
-        }, {})
-      );
+      const productsToUpload = parseWorkflowTemplateRows(sheet);
 
       const response = await productAPI.bulkUpload(productsToUpload);
-      const { created = 0, updated = 0, qrCreated = 0, errors = [] } = response.data || {};
-      toast.success(`Imported ${created} new and ${updated} updated products. QR created: ${qrCreated}.`);
+      const { created = 0, updated = 0, qrCreated = 0, workflowCreated = 0, workflowUpdated = 0, errors = [] } = response.data || {};
+      toast.success(`Imported ${created} new and ${updated} updated products. Workflows: ${workflowCreated} new, ${workflowUpdated} updated. QR created: ${qrCreated}.`);
       if (errors.length) toast.error(`${errors.length} row(s) failed. Check console for details.`);
       if (errors.length) console.table(errors);
-      await Promise.all([fetchProducts(), loadBrands(), fetchAllModels()]);
+      await Promise.all([
+        fetchProducts(),
+        fetchCategoriesList(),
+        fetchSubcategoriesList(),
+        loadBrands(),
+        fetchAllModels()
+      ]);
     } catch (error) {
       toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to import products');
     } finally {
       setUploadingProducts(false);
     }
+  };
+
+  const handleDownloadWorkflowTemplate = () => {
+    const templateRows = [
+      [ 'Product Name', 
+        'Code',
+        'Category',
+        'Subcategory',
+        'Brand', 
+        'Model',
+        'Stage 1', 
+        'Accepted',
+        'Question for rejected',
+        'Rejected Option Type',
+        'Options (separate with ,)',
+        'Question for Rework',
+        'Rework Option Type', 
+        'Options (separate with ,)', 
+        'Stage 2', 
+        'Accepted',
+        'Question for rejected',
+        'Rejected Option Type', 
+        'Options (separate with ,)', 
+        'Question for Rework',
+        'Rework Option Type',
+        'Options (separate with ,)',
+        'Stage 3',
+        'Accepted', 
+        'Question for rejected',
+        'Rejected Option Type', 
+        'Options (separate with ,)',
+        'Question for Rework',
+        'Rework Option Type', 
+        'Options (separate with ,)'
+      ]
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
+    worksheet['!cols'] = [{ wch: 22 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    XLSX.writeFile(workbook, 'workflow-template.xlsx');
   };
 
   const fetchCategoriesList = async () => {
@@ -1064,6 +1148,14 @@ const Products = () => {
         </div>
         {isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadWorkflowTemplate}
+              className="flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+            >
+              <Download className="w-5 h-5" />
+              Download Template
+            </button>
             <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
               {uploadingProducts ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
               Upload Excel
@@ -1183,16 +1275,16 @@ const Products = () => {
                         }}
                         className="flex flex-col items-start gap-1 hover:opacity-80 transition-opacity cursor-pointer"
                       >
-                        {product.withQRCode && (product.partNo || product.productCode) && (
+                        {product.withQRCode && (product.code || product.code) && (
                           <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(product.partNo || product.productCode)}`}
-                            alt={product.partNo || product.productCode}
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(product.code || product.code)}`}
+                            alt={product.code || product.code}
                             className="h-16 w-16 object-cover rounded-lg"
                           />
                         )}
                         <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400" onMouseDown={(e) => e.preventDefault()}>
                           {product.withQRCode && <ZoomIn className="w-3 h-3" />}
-                          {product.partNo || product.productCode}
+                          {product.code || product.code}
                         </div>
                       </button>
                     </td>
@@ -1242,7 +1334,7 @@ const Products = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const code = product.partNo || product.productCode;
+                            const code = product.code || product.code;
                             if (!product.withQRCode) {
                               alert('This product was created without QR code generation.');
                               return;
@@ -1366,3 +1458,5 @@ const Products = () => {
 }
 
 export default Products;
+
+

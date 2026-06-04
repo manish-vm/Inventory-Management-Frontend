@@ -258,7 +258,7 @@ const Analytics = () => {
           {loading ? (
             <div className="animate-pulse rounded-3xl bg-white dark:bg-slate-800 h-64" />
           ) : (
-            renderBarChart(stats.productionStats, 'Production by Part No', 'blue')
+            renderBarChart(stats.productionStats, 'Production by Code', 'blue')
           )}
           {loading ? (
             <div className="animate-pulse rounded-3xl bg-white dark:bg-slate-800 h-64" />
@@ -310,3 +310,6 @@ const Analytics = () => {
 };
 
 export default Analytics;
+
+
+

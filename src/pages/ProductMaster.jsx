@@ -48,7 +48,7 @@ const ProductMaster = () => {
   const [manufacturingStages, setManufacturingStages] = useState([]);
 
   const [formData, setFormData] = useState({
-    partNo: '',
+    code: '',
     description: '',
     type: '',
     subType: '',
@@ -135,7 +135,7 @@ const ProductMaster = () => {
       setShowForm(false);
       setEditingProduct(null);
       setFormData({
-        partNo: '',
+        code: '',
         description: '',
         type: '',
         subType: '',
@@ -153,7 +153,7 @@ const ProductMaster = () => {
   const handleEdit = (product) => {
     setEditingProduct(product);
     setFormData({
-      partNo: product.partNo,
+      code: product.code,
       description: product.description,
       type: product.type || '',
       subType: product.subType || '',
@@ -182,11 +182,11 @@ const ProductMaster = () => {
 
     for (let i = 1; i < lines.length; i++) {
       if (lines[i].trim()) {
-        const [partNo, description, type, subType] = lines[i]
+        const [code, description, type, subType] = lines[i]
           .split(',')
           .map((s) => s.trim());
 
-        products.push({ partNo, description, type, subType });
+        products.push({ code, description, type, subType });
       }
     }
 
@@ -223,7 +223,7 @@ const ProductMaster = () => {
     const headerRow = (rows[0] || []).map((h) => String(h).trim());
 
     const requiredColumns = {
-      partNo: headerRow.indexOf('partNo'),
+      code: headerRow.indexOf('code'),
       description: headerRow.indexOf('description'),
       type: headerRow.indexOf('type'),
       subType: headerRow.indexOf('subType')
@@ -242,14 +242,14 @@ const ProductMaster = () => {
       const row = rows[i];
       if (!row) continue;
 
-      const partNo = String(row[requiredColumns.partNo] ?? '').trim();
+      const code = String(row[requiredColumns.code] ?? '').trim();
       const description = String(row[requiredColumns.description] ?? '').trim();
       const type = String(row[requiredColumns.type] ?? '').trim();
       const subType = String(row[requiredColumns.subType] ?? '').trim();
 
-      if (!partNo && !description && !type && !subType) continue;
+      if (!code && !description && !type && !subType) continue;
 
-      products.push({ partNo, description, type, subType });
+      products.push({ code, description, type, subType });
     }
 
     return products;
@@ -292,7 +292,7 @@ const ProductMaster = () => {
 
   const downloadTemplate = () => {
     const csvContent =
-      'partNo,description,type,subType\nMASK-GLASS-001,Anti-glare Mask Glass,Mask,X001\nVISOR-001,UV Coated Visor,Visor,X002';
+      'code,description,type,subType\nMASK-GLASS-001,Anti-glare Mask Glass,Mask,X001\nVISOR-001,UV Coated Visor,Visor,X002';
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -385,7 +385,7 @@ const ProductMaster = () => {
                 setShowForm(true);
                 setEditingProduct(null);
                 setFormData({
-                  partNo: '',
+                  code: '',
                   description: '',
                   type: '',
                   subType: '',
@@ -433,7 +433,7 @@ const ProductMaster = () => {
 
                 <input
                   type="text"
-                  placeholder="Search by Part No or Description..."
+                  placeholder="Search by Code or Description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="
@@ -488,7 +488,7 @@ const ProductMaster = () => {
                 dark:border-slate-700
               "
               >
-                <th className="px-6 py-3 text-left">Part No</th>
+                <th className="px-6 py-3 text-left">Code</th>
                 <th className="px-6 py-3 text-left">Description</th>
                 <th className="px-6 py-3 text-left">Type</th>
                 <th className="px-6 py-3 text-left">Sub-Type</th>
@@ -506,7 +506,7 @@ const ProductMaster = () => {
                     dark:border-slate-700
                   "
                 >
-                  <td className="px-6 py-4">{product.partNo}</td>
+                  <td className="px-6 py-4">{product.code}</td>
                   <td className="px-6 py-4">{product.description}</td>
                   <td className="px-6 py-4">{product.type || '-'}</td>
                   <td className="px-6 py-4">{product.subType || '-'}</td>
@@ -641,3 +641,6 @@ const ProductMaster = () => {
 };
 
 export default ProductMaster;
+
+
+
