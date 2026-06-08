@@ -1,196 +1,180 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { inspectionAPI } from '../../api/api';
+import { inspectionAPI, productAPI } from '../../api/api';
 import InspectionStatCard from '../../components/inspection/InspectionStatCard';
 
-const AdminResponsesPage = () => {
-  const [responses, setResponses] = useState([]);
-  const [analytics, setAnalytics] = useState({});
-  const [selected, setSelected] = useState(null);
-  const [filters, setFilters] = useState({ search: '', result: '' });
-  const [tableMode, setTableMode] = useState('summary'); // summary | detailed
+const RESULT_TABS = [
+  { key: 'ACCEPTED', label: 'Accepted' },
+  { key: 'REJECTED', label: 'Rejected' },
+  { key: 'REWORK', label: 'Rework' }
+];
 
-  const load = async () => {
-    try {
-      const response = await inspectionAPI.getAdminResponses(filters);
-      setResponses(response.data.responses || []);
-      setAnalytics(response.data.analytics || {});
-    } catch (error) {
-      toast.error('Failed to load inspection responses');
-    }
-  };
+const formatAnswerValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value);
+};
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+const computeReasonString = (items) => {
+  if (!Array.isArray(items) || items.length === 0) return '';
 
-  const formatAnswerValue = (value) => {
-    if (value === null || value === undefined) return '';
-    if (Array.isArray(value)) return value.join(', ');
-    return String(value);
-  };
+  return items
+    .map((it) => {
+      const q = it?.questionText || it?.question || it?.questionId;
+      const val = formatAnswerValue(it?.answer);
+      return q ? `${q}: ${val}` : val;
+    })
+    .filter(Boolean)
+    .join(' | ');
+};
 
-  const computeReasonString = (items) => {
-    if (!Array.isArray(items) || items.length === 0) return '';
+const downloadCsv = (headers, rows, filename) => {
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
-    // items usually shaped like { questionText/question/questionId, answer }
-    return items
-      .map((it) => {
-        const q = it?.questionText || it?.question || it?.questionId;
-        const a = it?.answer;
-        const val = formatAnswerValue(a);
-        if (!q) return val;
-        return `${q}: ${val}`;
-      })
-      .filter(Boolean)
-      .join(' | ');
-  };
+const normalizeKey = (value) => String(value || '').trim().toLowerCase();
 
-  const table1Rows = useMemo(() => {
-    return responses.map((item) => {
-      const acceptedCount = Number(item.acceptedCount || 0);
-      const rejectedCount = Number(item.rejectedCount || 0);
-      const reworkCount = Number(item.reworkCount || 0);
-      const overallCount = acceptedCount + rejectedCount + reworkCount;
+const normalizeRows = (responses, productCategoryMap = {}) =>
+  responses.map((item) => {
+    const acceptedCount = Number(item.acceptedCount || 0);
+    const rejectedCount = Number(item.rejectedCount || 0);
+    const reworkCount = Number(item.reworkCount || 0);
+    const rejectedReason = computeReasonString(item.rejectionFormResponses);
+    const reworkReason = computeReasonString(item.reworkFormResponses);
+    const productCategory =
+      productCategoryMap[normalizeKey(item.code)] ||
+      productCategoryMap[normalizeKey(item.productName)];
+    const categoryId = item.categoryId || productCategory?.id || item.categoryName || item.productType || '';
+    const categoryName = item.categoryName || productCategory?.name || item.productType || 'Uncategorized';
 
-      const rejectedReason = computeReasonString(item.rejectionFormResponses);
-      const reworkReason = computeReasonString(item.reworkFormResponses);
+    return {
+      code: item.code,
+      partDescription: item.partDescription,
+      productName: item.productName || item.code,
+      employeeName: item.employeeName,
+      stage: item.currentStageName || item.stageName,
+      categoryId,
+      categoryName,
+      acceptedCount,
+      rejectedCount,
+      rejectedResponses: rejectedCount > 0 ? item.rejectionFormResponses || [] : [],
+      rejectedReason: rejectedCount > 0 ? rejectedReason : '',
+      reworkCount,
+      reworkResponses: reworkCount > 0 ? item.reworkFormResponses || [] : [],
+      reworkReason: reworkCount > 0 ? reworkReason : '',
+      overallCount: acceptedCount + rejectedCount + reworkCount,
+      submittedAt: item.submittedAt,
+      raw: item
+    };
+  });
 
-      return {
-        code: item.code,
-        partDescription: item.partDescription,
-        productName: item.productName || item.code,
-        employeeName: item.employeeName,
-        stage: item.currentStageName || item.stageName,
-        acceptedCount,
-        rejectedCount,
-        rejectedReason: rejectedCount > 0 ? rejectedReason : '',
-        reworkCount,
-        reworkReason: reworkCount > 0 ? reworkReason : '',
-        overallCount,
-        submittedAt: item.submittedAt,
-        // preserve for details modal
-        raw: item
-      };
-    });
-  }, [responses]);
+const getStatusCount = (row, status) => {
+  if (status === 'ACCEPTED') return row.acceptedCount;
+  if (status === 'REJECTED') return row.rejectedCount;
+  return row.reworkCount;
+};
 
-  const exportCsvTable1 = () => {
-    const headers = [
-      'Code',
-      'Description',
-      'Employee',
-      'Stage',
-      'Accepted Count',
-      'Rejected Count',
-      'Rejected Reason',
-      'Rework Count',
-      'Rework Reason',
-      'Overall Count',
-      'Submitted Date'
-    ];
+const getStatusReason = (row, status) => {
+  if (status === 'REJECTED') return row.rejectedReason;
+  if (status === 'REWORK') return row.reworkReason;
+  return '';
+};
 
-    const body = table1Rows.map((r) => [
-      r.code,
-      r.partDescription,
-      r.employeeName,
-      r.stage,
-      r.acceptedCount,
-      r.rejectedCount,
-      r.rejectedReason,
-      r.reworkCount,
-      r.reworkReason,
-      r.overallCount,
-      r.submittedAt
-    ]);
+const getStatusResponses = (row, status) => {
+  if (status === 'REJECTED') return row.rejectedResponses;
+  if (status === 'REWORK') return row.reworkResponses;
+  return [];
+};
 
-    const csv = [headers, ...body]
-      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+const TabButton = ({ active, children, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+      active
+        ? 'border-primary-500 bg-primary-50 text-primary-700'
+        : 'border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
+    }`}
+  >
+    {children}
+  </button>
+);
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'inspection-responses-table-1.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+const QuestionnaireResponseList = ({ items = [], emptyText = '-', tone = 'slate' }) => {
+  const visibleItems = Array.isArray(items)
+    ? items.filter((item) => item?.answer !== undefined && item?.answer !== null && item?.answer !== '')
+    : [];
+  const toneClass =
+    tone === 'red'
+      ? 'border-red-200 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20'
+      : tone === 'amber'
+        ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20'
+        : 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/40';
 
-  const exportCsvTable2 = () => {
-    const headers = [
-      'Code',
-      'Product name',
-      'Employee',
-      'Stage',
-      'Reason (both rework and reject separately in a single column)',
-      'Status',
-      'Count',
-      'Submitted date and time (timestamp)'
-    ];
+  if (!visibleItems.length) {
+    return <span className="text-slate-500 dark:text-slate-400">{emptyText}</span>;
+  }
 
-    const rows = [];
+  return (
+    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+      {visibleItems.map((item, index) => {
+        const question = item?.questionText || item?.question || item?.questionId || `Response ${index + 1}`;
+        return (
+          <div key={`${question}-${index}`} className={`rounded-md border p-3 ${toneClass}`}>
+            <p className="mb-1 text-xs font-semibold uppercase leading-snug text-slate-500 dark:text-slate-400">
+              {question}
+            </p>
+            <p className="whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-slate-900 dark:text-slate-100">
+              {formatAnswerValue(item.answer) || '-'}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
-    for (const r of table1Rows) {
-      // accepted: reason should be Null
-      if (r.acceptedCount > 0) {
-        rows.push([
-          r.code,
-          r.productName,
-          r.employeeName,
-          r.stage,
-          '',
-          'ACCEPTED',
-          r.acceptedCount,
-          r.submittedAt
-        ]);
-      }
-
-      if (r.rejectedCount > 0) {
-        rows.push([
-          r.code,
-          r.productName,
-          r.employeeName,
-          r.stage,
-          r.rejectedReason,
-          'REJECTED',
-          r.rejectedCount,
-          r.submittedAt
-        ]);
-      }
-
-      if (r.reworkCount > 0) {
-        rows.push([
-          r.code,
-          r.productName,
-          r.employeeName,
-          r.stage,
-          r.reworkReason,
-          'REWORK',
-          r.reworkCount,
-          r.submittedAt
-        ]);
-      }
-    }
-
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'inspection-responses-table-2.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const onExport = () => {
-    if (tableMode === 'summary') exportCsvTable1();
-    else exportCsvTable2();
+const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selected, setSelected }) => {
+  const exportRows = () => {
+    downloadCsv(
+      [
+        'Code',
+        'Description',
+        'Employee',
+        'Stage',
+        'Accepted Count',
+        'Rejected Count',
+        'Rejected Reason',
+        'Rework Count',
+        'Rework Reason',
+        'Overall Count',
+        'Submitted Date'
+      ],
+      rows.map((r) => [
+        r.code,
+        r.partDescription,
+        r.employeeName,
+        r.stage,
+        r.acceptedCount,
+        r.rejectedCount,
+        r.rejectedReason,
+        r.reworkCount,
+        r.reworkReason,
+        r.overallCount,
+        r.submittedAt
+      ]),
+      'inspection-responses.csv'
+    );
   };
 
   return (
@@ -201,7 +185,7 @@ const AdminResponsesPage = () => {
           <p className="text-slate-600 dark:text-slate-400">Review employee form submissions and quality outcomes.</p>
         </div>
         <button
-          onClick={onExport}
+          onClick={exportRows}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200"
         >
           <FileDown className="h-4 w-4" />
@@ -230,332 +214,444 @@ const AdminResponsesPage = () => {
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
           >
             <option value="">All results</option>
-            <option value="ACCEPTED">Accepted</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="REWORK">Rework</option>
+            {RESULT_TABS.map((tab) => (
+              <option key={tab.key} value={tab.key}>
+                {tab.label}
+              </option>
+            ))}
           </select>
           <button onClick={load} className="rounded-lg bg-primary-600 px-4 py-2 font-medium text-white">
             Apply
           </button>
         </div>
-
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setTableMode('summary')}
-            className={`rounded-lg border px-4 py-2 text-sm font-medium ${
-              tableMode === 'summary'
-                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                : 'border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
-            }`}
-          >
-            Table 1 - Summary
-          </button>
-          <button
-            type="button"
-            onClick={() => setTableMode('detailed')}
-            className={`rounded-lg border px-4 py-2 text-sm font-medium ${
-              tableMode === 'detailed'
-                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                : 'border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
-            }`}
-          >
-            Table 2 - Detailed
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          {tableMode === 'summary' ? (
-            <table className="w-full min-w-[1100px]">
-              <thead className="bg-slate-50 dark:bg-slate-900/60">
-                <tr>
-                  {[
-                    'Code',
-                    'Part Description',
-                    'Employee Name',
-                    'Current Stage',
-                    'Accepted Count',
-                    'Rejected Count',
-                    'Rejected Reason',
-                    'Rework Count',
-                    'Rework Reason',
-                    'Overall Count',
-                    'Submitted Date',
-                    'Actions'
-                  ].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400"
-                    >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {table1Rows.map((r) => (
-                  <tr key={r.raw?._id || `${r.code}-${r.submittedAt}`} className="border-t border-slate-200 dark:border-slate-700">
-                    <td className="px-4 py-3 text-sm font-semibold">{r.code}</td>
-                    <td className="px-4 py-3 text-sm">{r.partDescription || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{r.employeeName || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{r.stage || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{r.acceptedCount}</td>
-                    <td className="px-4 py-3 text-sm text-red-700">{r.rejectedCount}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="max-w-[260px] whitespace-normal break-words leading-snug">
-                        {r.rejectedReason || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-amber-700">{r.reworkCount}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="max-w-[260px] whitespace-normal break-words leading-snug">
-                        {r.reworkReason || '-'}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3 text-sm font-semibold">{r.overallCount}</td>
-                    <td className="px-4 py-3 text-sm">{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <button
-                        onClick={() => setSelected(r.raw)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-primary-100 px-3 py-1 text-xs font-medium text-primary-700"
-                      >
-                        <Eye className="h-3 w-3" />
-                        View Responses
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {table1Rows.length === 0 && (
-                  <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
-                      No inspection responses found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full min-w-[1150px]">
-              <thead className="bg-slate-50 dark:bg-slate-900/60">
-                <tr>
-                  {[
-                    'Code',
-                    'Product name',
-                    'Employee',
-                    'Stage',
-                    'Reason (rework/reject)',
-                    'Status',
-                    'Count',
-                    'Submitted date and time'
-                  ].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400"
-                    >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const rows = [];
-                  for (const r of table1Rows) {
-                    if (r.acceptedCount > 0) {
-                      rows.push({
-                        key: `acc-${r.code}-${r.submittedAt}`,
-                        code: r.code,
-                        productName: r.productName,
-                        employeeName: r.employeeName,
-                        stage: r.stage,
-                        reason: '',
-                        status: 'ACCEPTED',
-                        count: r.acceptedCount,
-                        submittedAt: r.submittedAt,
-                        raw: r.raw
-                      });
-                    }
-                    if (r.rejectedCount > 0) {
-                      rows.push({
-                        key: `rej-${r.code}-${r.submittedAt}`,
-                        code: r.code,
-                        productName: r.productName,
-                        employeeName: r.employeeName,
-                        stage: r.stage,
-                        reason: r.rejectedReason,
-                        status: 'REJECTED',
-                        count: r.rejectedCount,
-                        submittedAt: r.submittedAt,
-                        raw: r.raw
-                      });
-                    }
-                    if (r.reworkCount > 0) {
-                      rows.push({
-                        key: `rw-${r.code}-${r.submittedAt}`,
-                        code: r.code,
-                        productName: r.productName,
-                        employeeName: r.employeeName,
-                        stage: r.stage,
-                        reason: r.reworkReason,
-                        status: 'REWORK',
-                        count: r.reworkCount,
-                        submittedAt: r.submittedAt,
-                        raw: r.raw
-                      });
-                    }
-                  }
-                  return rows.map((row) => (
-                    <tr
-                      key={row.key}
-                      className="border-t border-slate-200 dark:border-slate-700"
-                      onClick={() => setSelected(row.raw)}
-                      style={{ cursor: 'pointer' }}
-                      title="Click to view detailed responses"
-                    >
-                      <td className="px-4 py-3 text-sm font-semibold">{row.code}</td>
-                      <td className="px-4 py-3 text-sm">{row.productName || '-'}</td>
-                      <td className="px-4 py-3 text-sm">{row.employeeName || '-'}</td>
-                      <td className="px-4 py-3 text-sm">{row.stage || '-'}</td>
-                      <td className="px-4 py-3 text-sm">{row.reason || 'Null'}</td>
-                      <td className="px-4 py-3 text-sm font-semibold">
-                        <span
-                          className={
-                            row.status === 'ACCEPTED'
-                              ? 'text-emerald-700'
-                              : row.status === 'REJECTED'
-                                ? 'text-red-700'
-                                : 'text-amber-700'
-                          }
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">{row.count}</td>
-                      <td className="px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
-                    </tr>
-                  ));
-                })()}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <SummaryTable rows={rows} setSelected={setSelected} />
       </section>
 
-      {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 dark:bg-slate-800">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Response Details</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {selected.code} - {selected.formName}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelected(null)}
-                className="rounded-lg bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700"
-              >
-                Close
-              </button>
-            </div>
+      <ResponseDetailsModal selected={selected} setSelected={setSelected} />
+    </div>
+  );
+};
 
-            <div className="mb-5 grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
-                <p className="text-xs uppercase text-slate-500">Employee</p>
-                <p className="font-medium">{selected.employeeName}</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
-                <p className="text-xs uppercase text-slate-500">Stage</p>
-                <p className="font-medium">{selected.currentStageName || selected.stageName}</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
-                <p className="text-xs uppercase text-slate-500">Product</p>
-                <p className="font-medium">{selected.productName || selected.code}</p>
-              </div>
-            </div>
+const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
+  const [categoryId, setCategoryId] = useState('');
+  const [status, setStatus] = useState('ACCEPTED');
 
-            <div className="mb-5 grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg bg-emerald-50 p-4 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-                <p className="text-xs uppercase">Accepted Items</p>
-                <p className="text-2xl font-bold">{selected.acceptedCount || 0}</p>
-              </div>
-              <div className="rounded-lg bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-300">
-                <p className="text-xs uppercase">Rejected Items</p>
-                <p className="text-2xl font-bold">{selected.rejectedCount || 0}</p>
-              </div>
-              <div className="rounded-lg bg-amber-50 p-4 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-                <p className="text-xs uppercase">Rework Items</p>
-                <p className="text-2xl font-bold">{selected.reworkCount || 0}</p>
-              </div>
-            </div>
+  const categories = useMemo(() => {
+    const map = new Map();
+    rows.forEach((row) => map.set(row.categoryId || '__uncategorized__', row.categoryName || 'Uncategorized'));
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [rows]);
 
-            <div className="space-y-3">
-              <h3 className="font-semibold text-slate-900 dark:text-white">Inspection Form Responses</h3>
-              {(selected.responses || []).map((answer) => (
-                <div
-                  key={answer.questionId || answer.question}
-                  className="rounded-lg border border-slate-200 p-4 dark:border-slate-700"
-                >
-                  <p className="font-medium text-slate-900 dark:text-white">{answer.question}</p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-300">
-                    {Array.isArray(answer.answer)
-                      ? answer.answer.join(', ')
-                      : answer.answer || '-'}
-                  </p>
-                </div>
-              ))}
+  const reportRows = useMemo(() => {
+    return rows.filter((row) => {
+      const rowCategory = row.categoryId || '__uncategorized__';
+      const matchesCategory = !categoryId || rowCategory === categoryId;
+      return matchesCategory && getStatusCount(row, status) > 0;
+    });
+  }, [categoryId, rows, status]);
 
-              {(selected.rejectionFormResponses || []).length > 0 && (
-                <h3 className="pt-3 font-semibold text-slate-900 dark:text-white">Rejection Analysis</h3>
-              )}
-              {(selected.rejectionFormResponses || []).map((answer) => (
-                <div
-                  key={`rej-${answer.questionId || answer.question}`}
-                  className="rounded-lg border border-red-200 p-4 dark:border-red-900"
-                >
-                  <p className="font-medium text-slate-900 dark:text-white">{answer.question}</p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-300">
-                    {Array.isArray(answer.answer)
-                      ? answer.answer.join(', ')
-                      : answer.answer || '-'}
-                  </p>
-                </div>
-              ))}
+  const categoryTotals = useMemo(() => {
+    return reportRows.reduce(
+      (acc, row) => {
+        acc.overall += row.overallCount;
+        acc.accepted += row.acceptedCount;
+        acc.rejected += row.rejectedCount;
+        acc.rework += row.reworkCount;
+        return acc;
+      },
+      { overall: 0, accepted: 0, rejected: 0, rework: 0 }
+    );
+  }, [reportRows]);
 
-              {(selected.reworkFormResponses || []).length > 0 && (
-                <h3 className="pt-3 font-semibold text-slate-900 dark:text-white">Rework Analysis</h3>
-              )}
-              {(selected.reworkFormResponses || []).map((answer) => (
-                <div
-                  key={`rw-${answer.questionId || answer.question}`}
-                  className="rounded-lg border border-amber-200 p-4 dark:border-amber-900"
-                >
-                  <p className="font-medium text-slate-900 dark:text-white">{answer.question}</p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-300">
-                    {Array.isArray(answer.answer)
-                      ? answer.answer.join(', ')
-                      : answer.answer || '-'}
-                  </p>
-                </div>
-              ))}
+  const exportReport = () => {
+    const categoryLabel = categories.find((item) => item.id === categoryId)?.name || 'all-categories';
+    downloadCsv(
+      ['Category', 'Code', 'Product name', 'Description', 'Employee', 'Stage', 'Reason', 'Status', 'Count', 'Overall Count', 'Submitted date and time'],
+      reportRows.map((row) => [
+        row.categoryName,
+        row.code,
+        row.productName,
+        row.partDescription,
+        row.employeeName,
+        row.stage,
+        getStatusReason(row, status),
+        status,
+        getStatusCount(row, status),
+        row.overallCount,
+        row.submittedAt
+      ]),
+      `report-management-${categoryLabel}-${status.toLowerCase()}.csv`
+    );
+  };
 
-              {selected.remarks && (
-                <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-900/60">
-                  <p className="text-xs uppercase text-slate-500">Remarks</p>
-                  <p>{selected.remarks}</p>
-                </div>
-              )}
-            </div>
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Report Management</h1>
+          <p className="text-slate-600 dark:text-slate-400">Filter category-level product results by inspection outcome.</p>
+        </div>
+        <button
+          onClick={exportReport}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200"
+        >
+          <FileDown className="h-4 w-4" />
+          Export Excel
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <InspectionStatCard label="Total Responses" value={analytics.totalResponses} />
+        <InspectionStatCard label="Accepted Items" value={analytics.acceptedItems} tone="emerald" />
+        <InspectionStatCard label="Rejected Items" value={analytics.rejectedItems} tone="red" />
+        <InspectionStatCard label="Rework Items" value={analytics.reworkItems} tone="amber" />
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900 lg:max-w-xs"
+          >
+            <option value="">All categories</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex flex-wrap gap-2">
+            {RESULT_TABS.map((tab) => (
+              <TabButton key={tab.key} active={status === tab.key} onClick={() => setStatus(tab.key)}>
+                {tab.label}
+              </TabButton>
+            ))}
           </div>
         </div>
+
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <InspectionStatCard label="Category Overall" value={categoryTotals.overall} />
+          <InspectionStatCard label="Accepted" value={categoryTotals.accepted} tone="emerald" />
+          <InspectionStatCard label="Rejected" value={categoryTotals.rejected} tone="red" />
+          <InspectionStatCard label="Rework" value={categoryTotals.rework} tone="amber" />
+        </div>
+
+        <DetailedStatusTable rows={reportRows} status={status} setSelected={setSelected} />
+      </section>
+
+      <ResponseDetailsModal selected={selected} setSelected={setSelected} />
+    </div>
+  );
+};
+
+const SummaryTable = ({ rows, setSelected }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full min-w-[1450px] table-fixed">
+      <colgroup>
+        <col className="w-[130px]" />
+        <col className="w-[150px]" />
+        <col className="w-[190px]" />
+        <col className="w-[160px]" />
+        <col className="w-[150px]" />
+        <col className="w-[110px]" />
+        <col className="w-[110px]" />
+        <col className="w-[280px]" />
+        <col className="w-[110px]" />
+        <col className="w-[280px]" />
+        <col className="w-[110px]" />
+        <col className="w-[180px]" />
+        <col className="w-[130px]" />
+      </colgroup>
+      <thead className="bg-slate-50 dark:bg-slate-900/60">
+        <tr>
+          {[
+            'Code',
+            'Category',
+            'Part Description',
+            'Employee Name',
+            'Current Stage',
+            'Accepted Count',
+            'Rejected Count',
+            'Rejected Reason',
+            'Rework Count',
+            'Rework Reason',
+            'Overall Count',
+            'Submitted Date',
+            'Actions'
+          ].map((head) => (
+            <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+              {head}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.raw?._id || `${r.code}-${r.submittedAt}`} className="border-t border-slate-200 dark:border-slate-700">
+            <td className="px-4 py-3 text-sm font-semibold">{r.code}</td>
+            <td className="px-4 py-3 text-sm">{r.categoryName}</td>
+            <td className="px-4 py-3 text-sm">{r.partDescription || '-'}</td>
+            <td className="px-4 py-3 text-sm">{r.employeeName || '-'}</td>
+            <td className="px-4 py-3 text-sm">{r.stage || '-'}</td>
+            <td className="px-4 py-3 text-sm">{r.acceptedCount}</td>
+            <td className="px-4 py-3 text-sm text-red-700">{r.rejectedCount}</td>
+            <td className="px-4 py-3 align-top text-sm">
+              <QuestionnaireResponseList items={r.rejectedResponses} emptyText="-" tone="red" />
+            </td>
+            <td className="px-4 py-3 text-sm text-amber-700">{r.reworkCount}</td>
+            <td className="px-4 py-3 align-top text-sm">
+              <QuestionnaireResponseList items={r.reworkResponses} emptyText="-" tone="amber" />
+            </td>
+            <td className="px-4 py-3 text-sm font-semibold">{r.overallCount}</td>
+            <td className="px-4 py-3 text-sm">{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}</td>
+            <td className="px-4 py-3 text-sm">
+              <button
+                onClick={() => setSelected(r.raw)}
+                className="inline-flex items-center gap-1 rounded-lg bg-primary-100 px-3 py-1 text-xs font-medium text-primary-700"
+              >
+                <Eye className="h-3 w-3" />
+                View Responses
+              </button>
+            </td>
+          </tr>
+        ))}
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={13} className="px-4 py-8 text-center text-slate-500">
+              No inspection responses found.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+);
+
+const DetailedStatusTable = ({ rows, status, setSelected }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full min-w-[1350px] table-fixed">
+      <colgroup>
+        <col className="w-[150px]" />
+        <col className="w-[130px]" />
+        <col className="w-[180px]" />
+        <col className="w-[190px]" />
+        <col className="w-[150px]" />
+        <col className="w-[140px]" />
+        <col className="w-[340px]" />
+        <col className="w-[110px]" />
+        <col className="w-[90px]" />
+        <col className="w-[120px]" />
+        <col className="w-[180px]" />
+      </colgroup>
+      <thead className="bg-slate-50 dark:bg-slate-900/60">
+        <tr>
+          {['Category', 'Code', 'Product name', 'Description', 'Employee', 'Stage', 'Reason', 'Status', 'Count', 'Overall Count', 'Submitted date and time'].map((head) => (
+            <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+              {head}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr
+            key={`${status}-${row.raw?._id || row.code}-${row.submittedAt}`}
+            className="cursor-pointer border-t border-slate-200 dark:border-slate-700"
+            onClick={() => setSelected(row.raw)}
+            title="Click to view detailed responses"
+          >
+            <td className="px-4 py-3 text-sm">{row.categoryName}</td>
+            <td className="px-4 py-3 text-sm font-semibold">{row.code}</td>
+            <td className="px-4 py-3 text-sm">{row.productName || '-'}</td>
+            <td className="px-4 py-3 text-sm">{row.partDescription || '-'}</td>
+            <td className="px-4 py-3 text-sm">{row.employeeName || '-'}</td>
+            <td className="px-4 py-3 text-sm">{row.stage || '-'}</td>
+            <td className="px-4 py-3 align-top text-sm">
+              <QuestionnaireResponseList
+                items={getStatusResponses(row, status)}
+                emptyText={status === 'ACCEPTED' ? 'Null' : 'No questionnaire responses'}
+                tone={status === 'REJECTED' ? 'red' : status === 'REWORK' ? 'amber' : 'slate'}
+              />
+            </td>
+            <td className="px-4 py-3 text-sm font-semibold">
+              <span className={status === 'ACCEPTED' ? 'text-emerald-700' : status === 'REJECTED' ? 'text-red-700' : 'text-amber-700'}>
+                {status}
+              </span>
+            </td>
+            <td className="px-4 py-3 text-sm">{getStatusCount(row, status)}</td>
+            <td className="px-4 py-3 text-sm">{row.overallCount}</td>
+            <td className="px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
+          </tr>
+        ))}
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
+              No report data found for this filter.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+);
+
+const ResponseDetailsModal = ({ selected, setSelected }) => {
+  if (!selected) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 dark:bg-slate-800">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Response Details</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {selected.code} - {selected.formName}
+            </p>
+          </div>
+          <button onClick={() => setSelected(null)} className="rounded-lg bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700">
+            Close
+          </button>
+        </div>
+
+        <div className="mb-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
+            <p className="text-xs uppercase text-slate-500">Employee</p>
+            <p className="font-medium">{selected.employeeName}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
+            <p className="text-xs uppercase text-slate-500">Stage</p>
+            <p className="font-medium">{selected.currentStageName || selected.stageName}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
+            <p className="text-xs uppercase text-slate-500">Product</p>
+            <p className="font-medium">{selected.productName || selected.code}</p>
+          </div>
+        </div>
+
+        <div className="mb-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg bg-emerald-50 p-4 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+            <p className="text-xs uppercase">Accepted Items</p>
+            <p className="text-2xl font-bold">{selected.acceptedCount || 0}</p>
+          </div>
+          <div className="rounded-lg bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-300">
+            <p className="text-xs uppercase">Rejected Items</p>
+            <p className="text-2xl font-bold">{selected.rejectedCount || 0}</p>
+          </div>
+          <div className="rounded-lg bg-amber-50 p-4 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+            <p className="text-xs uppercase">Rework Items</p>
+            <p className="text-2xl font-bold">{selected.reworkCount || 0}</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-semibold text-slate-900 dark:text-white">Inspection Form Responses</h3>
+          {(selected.responses || []).map((answer) => (
+            <AnswerBlock key={answer.questionId || answer.question} answer={answer} />
+          ))}
+
+          {(selected.rejectionFormResponses || []).length > 0 && (
+            <h3 className="pt-3 font-semibold text-slate-900 dark:text-white">Rejection Analysis</h3>
+          )}
+          {(selected.rejectionFormResponses || []).map((answer) => (
+            <AnswerBlock key={`rej-${answer.questionId || answer.question}`} answer={answer} tone="red" />
+          ))}
+
+          {(selected.reworkFormResponses || []).length > 0 && (
+            <h3 className="pt-3 font-semibold text-slate-900 dark:text-white">Rework Analysis</h3>
+          )}
+          {(selected.reworkFormResponses || []).map((answer) => (
+            <AnswerBlock key={`rw-${answer.questionId || answer.question}`} answer={answer} tone="amber" />
+          ))}
+
+          {selected.remarks && (
+            <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-900/60">
+              <p className="text-xs uppercase text-slate-500">Remarks</p>
+              <p>{selected.remarks}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AnswerBlock = ({ answer, tone = 'slate' }) => {
+  const borderClass = tone === 'red' ? 'border-red-200 dark:border-red-900' : tone === 'amber' ? 'border-amber-200 dark:border-amber-900' : 'border-slate-200 dark:border-slate-700';
+  return (
+    <div className={`rounded-lg border p-4 ${borderClass}`}>
+      <p className="font-medium text-slate-900 dark:text-white">{answer.question}</p>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">{formatAnswerValue(answer.answer) || '-'}</p>
+    </div>
+  );
+};
+
+const AdminResponsesPage = () => {
+  const [responses, setResponses] = useState([]);
+  const [analytics, setAnalytics] = useState({});
+  const [productCategoryMap, setProductCategoryMap] = useState({});
+  const [selected, setSelected] = useState(null);
+  const [filters, setFilters] = useState({ search: '', result: '' });
+  const [activeTab, setActiveTab] = useState('inspection');
+
+  const load = async () => {
+    try {
+      const [response, productsResponse] = await Promise.all([
+        inspectionAPI.getAdminResponses(filters),
+        productAPI.getAll()
+      ]);
+      setResponses(response.data.responses || []);
+      setAnalytics(response.data.analytics || {});
+      const nextCategoryMap = {};
+      (productsResponse.data || []).forEach((product) => {
+        const category = product.category;
+        const categoryInfo = category?.name
+          ? { id: category._id || category.name, name: category.name }
+          : null;
+        if (!categoryInfo) return;
+        if (product.code) nextCategoryMap[normalizeKey(product.code)] = categoryInfo;
+        if (product.productName) nextCategoryMap[normalizeKey(product.productName)] = categoryInfo;
+      });
+      setProductCategoryMap(nextCategoryMap);
+    } catch (error) {
+      toast.error('Failed to load inspection responses');
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rows = useMemo(() => normalizeRows(responses, productCategoryMap), [productCategoryMap, responses]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
+        <TabButton active={activeTab === 'inspection'} onClick={() => setActiveTab('inspection')}>
+          Inspection Responses
+        </TabButton>
+        <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
+          Report Management
+        </TabButton>
+      </div>
+
+      {activeTab === 'inspection' ? (
+        <InspectionResponses
+          analytics={analytics}
+          rows={rows}
+          filters={filters}
+          setFilters={setFilters}
+          load={load}
+          selected={selected}
+          setSelected={setSelected}
+        />
+      ) : (
+        <ReportManagement rows={rows} analytics={analytics} selected={selected} setSelected={setSelected} />
       )}
     </div>
   );
 };
 
 export default AdminResponsesPage;
-
-
-
-
