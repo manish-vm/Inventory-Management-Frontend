@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { inspectionAPI } from '../../api/api';
 
 const ScanLogsPage = () => {
   const [rows, setRows] = useState([]);
+  const [details, setDetails] = useState([]);
+  const [activeTab, setActiveTab] = useState('summary');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,8 +18,10 @@ const ScanLogsPage = () => {
       // backend may return either { rows } or { logs } depending on version
       const next = response?.data?.logs || response?.data?.rows || [];
       setRows(Array.isArray(next) ? next : []);
+      setDetails(Array.isArray(response?.data?.details) ? response.data.details : []);
     } catch (err) {
       setRows([]);
+      setDetails([]);
       setError('Failed to load scan logs');
       toast.error('Failed to load scan logs');
     } finally {
@@ -51,19 +54,39 @@ const ScanLogsPage = () => {
         </div>
       </div>
 
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
+        {[
+          { key: 'summary', label: 'Summary' },
+          { key: 'details', label: 'Details' }
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`border-b-2 px-4 py-2 text-sm font-semibold transition ${
+              activeTab === tab.key
+                ? 'border-primary-600 text-primary-700 dark:text-primary-300'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
         {loading ? (
           <div className="px-4 py-10 text-center text-slate-500">Loading scan logs...</div>
         ) : error ? (
           <div className="px-4 py-10 text-center text-red-600">{error}</div>
-        ) : (
+        ) : activeTab === 'summary' ? (
           <table className="w-full min-w-[1100px]">
             <thead className="bg-slate-50 dark:bg-slate-900/60">
               <tr>
                 {[
                   'Code',
-                  'Part Name',
-                  'Part Description',
+                  'Product Name',
+                  'Product Description',
                   'Current Stage',
                   'Total Ideal Product Count',
                   'Accepted Count',
@@ -88,7 +111,7 @@ const ScanLogsPage = () => {
                 <tr key={row.code} className="border-t border-slate-200 dark:border-slate-700">
                   <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">{row.code}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.productName || row.code}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.partDescription || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.productDescription || '-'}</td>
 
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.currentStage || '-'}</td>
                   <td className="px-4 py-3 text-sm">{row.totalIdealProductCount}</td>
@@ -132,6 +155,50 @@ const ScanLogsPage = () => {
               )}
             </tbody>
           </table>
+        ) : (
+          <table className="w-full min-w-[1200px]">
+            <thead className="bg-slate-50 dark:bg-slate-900/60">
+              <tr>
+                {['Date & Time', 'Code', 'Product Name', 'Stage', 'Previous Accepted', 'Accepted', 'Total Accepted', 'Rejected', 'Rework', 'Result', 'Remarks'].map((head) => (
+                  <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+                    {head}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {details.map((row) => (
+                <tr key={row._id} className="border-t border-slate-200 dark:border-slate-700">
+                  <td className="px-4 py-3 text-sm">{new Date(row.submittedAt || row.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">{row.code}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.productName || row.code}</td>
+                  <td className="px-4 py-3 text-sm">{row.stageName || `Stage ${row.stageNumber}`}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-blue-700">{Number(row.previousAcceptedCount || 0)}</td>
+                  <td className="px-4 py-3 text-sm text-emerald-700">{Number(row.acceptedCount || 0)}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-emerald-700">
+                    {Number(row.previousAcceptedCount || 0) + Number(row.acceptedCount || 0)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-red-700">{Number(row.rejectedCount || 0)}</td>
+                  <td className="px-4 py-3 text-sm text-amber-700">{Number(row.reworkCount || 0)}</td>
+                  <td className={`px-4 py-3 text-sm font-semibold ${
+                    row.inspectionResult === 'ACCEPTED'
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : row.inspectionResult === 'REJECTED'
+                        ? 'text-red-700 dark:text-red-400'
+                        : row.inspectionResult === 'REWORK'
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : 'text-slate-600 dark:text-slate-300'
+                  }`}>{row.inspectionResult || '-'}</td>
+                  <td className="max-w-sm px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.remarks || '-'}</td>
+                </tr>
+              ))}
+              {details.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-slate-500">No detailed inspection logs found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
@@ -139,7 +206,3 @@ const ScanLogsPage = () => {
 };
 
 export default ScanLogsPage;
-
-
-
-

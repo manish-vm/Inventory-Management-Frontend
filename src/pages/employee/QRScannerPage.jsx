@@ -1,15 +1,60 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ChevronDown, PackageSearch } from 'lucide-react';
 import { defectDetailAPI, inspectionAPI } from '../../api/api';
 import QRScanner from '../../components/employeeScanner/QRScanner';
 import InspectionResponseSection from '../../components/employeeScanner/InspectionResponseSection';
-import QuestionCountGrid from '../../components/employeeScanner/QuestionCountGrid';
 import ProductInfoCard from '../../components/employeeScanner/ProductInfoCard';
 
-const DEFECT_DETAIL_KEY = '__defect_detail__';
+const missingDefectDetailForCount = (values = {}) =>
+  Object.values(values).some((item) => {
+    if (item?.type !== 'count') return false;
+    const count = Number(item.answer || 0);
+    if (count <= 0 || String(item.defectDetail || '').trim()) return false;
+    const optionKey = String(item.optionKey || '');
+    if (optionKey === '__response__') return true;
+    const questionId = String(item.questionId || item.question || '');
+    return Object.values(values).some((candidate) => (
+      candidate?.type !== 'count' &&
+      String(candidate?.questionId || candidate?.question || '') === questionId &&
+      answerValues(candidate.answer).includes(optionKey)
+    ));
+  });
 
-const valuesWrapperHasDefect = (values = {}) => Boolean(values?.[DEFECT_DETAIL_KEY]?.answer);
+function answerValues(value) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value === null || value === undefined) return [];
+  const text = String(value).trim();
+  return text ? [text] : [];
+}
+
+const deriveSelectedCounts = (values = {}) => {
+  const selectedByQuestion = {};
+  let freeFormTotal = 0;
+  let optionTotal = 0;
+
+  Object.values(values).forEach((item) => {
+    if (item?.type === 'count') return;
+    const questionId = String(item?.questionId || item?.question || '');
+    if (!questionId) return;
+    selectedByQuestion[questionId] = new Set(answerValues(item.answer));
+  });
+
+  Object.values(values).forEach((item) => {
+    if (item?.type !== 'count') return;
+    const count = Number(item.answer || 0);
+    if (!Number.isFinite(count) || count <= 0) return;
+    const questionId = String(item?.questionId || item?.question || '');
+    const optionKey = String(item?.optionKey || '');
+    if (optionKey === '__response__') {
+      freeFormTotal += count;
+      return;
+    }
+    if (selectedByQuestion[questionId]?.has(optionKey)) optionTotal += count;
+  });
+
+  return optionTotal + freeFormTotal;
+};
 
 const QRScannerPage = () => {
   const [search, setSearch] = useState('');
@@ -29,6 +74,7 @@ const QRScannerPage = () => {
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const productDetailsRef = useRef(null);
 
   const product = lookupData?.product;
   const availableCount = Number(product?.availableCount || 0);
@@ -40,30 +86,14 @@ const QRScannerPage = () => {
       ),
     [lookupData, selectedStageNumber]
   );
+  const isOpenIntakeStage = Number(selectedStageNumber) === 1;
 
   const totalRejectedDerived = useMemo(() => {
-    // Sum all per-option count inputs created by QuestionCountGrid
-    const keys = Object.keys(rejectionValues || {});
-    let sum = 0;
-    for (const k of keys) {
-      if (k.includes('::__count__::')) {
-        const ans = Number(rejectionValues?.[k]?.answer);
-        if (Number.isFinite(ans)) sum += ans;
-      }
-    }
-    return sum;
+    return deriveSelectedCounts(rejectionValues);
   }, [rejectionValues]);
 
   const totalReworkDerived = useMemo(() => {
-    const keys = Object.keys(reworkValues || {});
-    let sum = 0;
-    for (const k of keys) {
-      if (k.includes('::__count__::')) {
-        const ans = Number(reworkValues?.[k]?.answer);
-        if (Number.isFinite(ans)) sum += ans;
-      }
-    }
-    return sum;
+    return deriveSelectedCounts(reworkValues);
   }, [reworkValues]);
 
   const totalEntered =
@@ -73,10 +103,10 @@ const QRScannerPage = () => {
 
 
   const quantityError =
-    totalEntered > availableCount
-      ? `Accepted + Rejected + Rework counts must equal the available quantity.`
-      : totalEntered < availableCount
-        ? `Accepted + Rejected + Rework counts must equal the available quantity.`
+    !isOpenIntakeStage && totalEntered > availableCount
+      ? `Accepted + Rejected + Rework counts cannot exceed the available quantity.`
+      : totalEntered < 0
+        ? `Accepted + Rejected + Rework counts must be zero or more.`
         : '';
 
   useEffect(() => {
@@ -101,33 +131,7 @@ const QRScannerPage = () => {
   useEffect(() => {
     const q = search.trim();
 
-    // Stage mode: after product is loaded, search/filter stages locally.
-    if (product) {
-      if (!q && !dropdownOpen) {
-        setSuggestions([]);
-        return;
-      }
-
-      const stageSuggestions = (lookupData?.stages || [])
-        .filter((s) => {
-          const stageNumber = String(s.stageNumber ?? '');
-          const stageName = String(s.stageName ?? '');
-          return (
-            stageNumber.toLowerCase().includes(q.toLowerCase()) ||
-            stageName.toLowerCase().includes(q.toLowerCase())
-          );
-        })
-        .map((s) => ({
-          _type: 'stage',
-          stageNumber: s.stageNumber,
-          stageName: s.stageName
-        }));
-
-      setSuggestions(stageSuggestions);
-      return;
-    }
-
-    // Product mode: before product is loaded, API-backed product suggestions.
+    // The search input always remains product-only, including after a product is loaded.
     const handle = setTimeout(async () => {
       if (!q && !dropdownOpen) {
         setSuggestions([]);
@@ -142,9 +146,21 @@ const QRScannerPage = () => {
     }, 250);
 
     return () => clearTimeout(handle);
-  }, [search, product, lookupData, dropdownOpen]);
+  }, [search, dropdownOpen]);
 
-  const loadProduct = async (key) => {
+  useEffect(() => {
+    if (!product) return;
+    const scrollHandle = window.setTimeout(() => {
+      productDetailsRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }, 100);
+
+    return () => window.clearTimeout(scrollHandle);
+  }, [product?.productId, product?.code, product?.productName]);
+
+  const loadProduct = async (key, { showToast = true } = {}) => {
     if (!key) return;
     setLoading(true);
     try {
@@ -174,7 +190,7 @@ const QRScannerPage = () => {
       setRemarks('');
       setSuggestions([]);
       setDropdownOpen(false);
-      toast.success('Product batch loaded');
+      if (showToast) toast.success('Product batch loaded');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Product lookup failed');
     } finally {
@@ -187,6 +203,9 @@ const QRScannerPage = () => {
     setInspectionValues({});
     setRejectionValues({});
     setReworkValues({});
+    setCounts({ accepted: 0, rejected: 0, rework: 0 });
+    setRemarks('');
+    setSelectedInspectionType(null);
 
     if (!product || !stageNumber) return;
 
@@ -199,9 +218,7 @@ const QRScannerPage = () => {
         ...current,
         product: {
           ...current?.product,
-          availableCount: Number(stageForUi.availableCount || 0) > 0
-            ? Number(stageForUi.availableCount || 0)
-            : current?.product?.availableCount
+          availableCount: Number(stageForUi.availableCount || 0)
         }
       }));
     }
@@ -264,25 +281,19 @@ const QRScannerPage = () => {
       return;
     }
 
-    // Enforce strict equality for submission
-    if (totalEntered !== availableCount) {
-      toast.error('Accepted + Rejected + Rework counts must equal the available quantity.');
+    if (!isOpenIntakeStage && totalEntered > availableCount) {
+      toast.error('Accepted + Rejected + Rework counts cannot exceed the available quantity.');
       return;
     }
 
 
-    if ((totalRejectedDerived > 0 || totalReworkDerived > 0) && !remarks.trim()) {
-      toast.error('Remarks are required for rejected or rework items');
+    if (totalRejectedDerived > 0 && missingDefectDetailForCount(rejectionValues)) {
+      toast.error('Select a reject defect type for every counted option');
       return;
     }
 
-    if (totalRejectedDerived > 0 && !valuesWrapperHasDefect(rejectionValues)) {
-      toast.error('Select a reject defect detail');
-      return;
-    }
-
-    if (totalReworkDerived > 0 && !valuesWrapperHasDefect(reworkValues)) {
-      toast.error('Select a rework defect detail');
+    if (totalReworkDerived > 0 && missingDefectDetailForCount(reworkValues)) {
+      toast.error('Select a rework defect type for every counted option');
       return;
     }
 
@@ -311,8 +322,13 @@ const QRScannerPage = () => {
       });
 
       toast.success('Batch inspection submitted');
-      setLookupData(null);
-      setSearch('');
+      setInspectionValues({});
+      setRejectionValues({});
+      setReworkValues({});
+      setCounts({ accepted: 0, rejected: 0, rework: 0 });
+      setRemarks('');
+      setSelectedInspectionType(null);
+      await loadProduct(product.productName || product.code, { showToast: false });
     } catch (error) {
       toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to submit inspection');
     } finally {
@@ -328,26 +344,8 @@ const QRScannerPage = () => {
     loadProduct(key);
   };
 
-  // Arrow click: show dropdown immediately.
-  // - Product mode: if search is empty, trigger an API search for current text (empty won't return anything)
-  //   so we set a light default to force suggestions.
-  // - Stage mode: show stage dropdown by using current search text; if empty, show all stages.
   const handleDropdownOpen = () => {
     setDropdownOpen(true);
-    if (!product) {
-      return;
-    }
-
-    // Stage mode: if empty, show all stages.
-    if (!search.trim()) {
-      setSuggestions(
-        (lookupData?.stages || []).map((s) => ({
-          _type: 'stage',
-          stageNumber: s.stageNumber,
-          stageName: s.stageName
-        }))
-      );
-    }
   };
 
   return (
@@ -375,7 +373,16 @@ const QRScannerPage = () => {
             <input
               value={search}
               onChange={(e) => {
-                setSearch(e.target.value);
+                const value = e.target.value;
+                setSearch(value);
+                if (!value.trim() && product) {
+                  setLookupData(null);
+                  setSelectedStageNumber('');
+                  setInspectionValues({});
+                  setRejectionValues({});
+                  setReworkValues({});
+                  setCounts({ accepted: 0, rejected: 0, rework: 0 });
+                }
                 setDropdownOpen(true);
               }}
               onFocus={() => {
@@ -388,26 +395,9 @@ const QRScannerPage = () => {
                 const q = search.trim();
                 if (!q) return;
 
-                // Product mode
-                if (!product) {
-                  loadProduct(q);
-                  return;
-                }
-
-                // Stage mode
-                const match = (lookupData?.stages || []).find((s) => {
-                  const stageNumber = String(s.stageNumber ?? '');
-                  const stageName = String(s.stageName ?? '');
-                  return (
-                    stageNumber.toLowerCase() === q.toLowerCase() ||
-                    stageNumber.toLowerCase().includes(q.toLowerCase()) ||
-                    stageName.toLowerCase().includes(q.toLowerCase())
-                  );
-                });
-
-                if (match) loadStageForms(match.stageNumber);
+                loadProduct(q);
               }}
-              placeholder={product ? 'Search stage (number / name)' : 'Search or select product'}
+              placeholder="Search or select product"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 dark:border-slate-600 dark:bg-slate-900"
             />
 
@@ -422,28 +412,7 @@ const QRScannerPage = () => {
 
             {dropdownOpen && suggestions.length > 0 && (
               <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                {suggestions.map((item) => {
-                  if (item?._type === 'stage') {
-                    return (
-                      <button
-                        key={`stage-${item.stageNumber}-${item.stageName}`}
-                        type="button"
-                        onClick={() => {
-                          setSearch(`${item.stageName} ${item.stageNumber}`.trim());
-                          setDropdownOpen(false);
-                          loadStageForms(item.stageNumber);
-                        }}
-                        className="block w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
-                      >
-                        <span className="block font-semibold text-slate-900 dark:text-white">
-                          Stage {item.stageNumber}
-                        </span>
-                        <span className="text-sm text-slate-500">{item.stageName}</span>
-                      </button>
-                    );
-                  }
-
-                  return (
+                {suggestions.map((item) => (
                     <button
                       key={`${item.code}-${item.batchNo}`}
                       type="button"
@@ -459,11 +428,9 @@ const QRScannerPage = () => {
                       </span>
                       <span className="text-sm text-slate-500">
                         {item.code ? `Code ${item.code}` : 'Product'}
-                        {item.availableCount ? ` | ${item.availableCount} items` : ''}
                       </span>
                     </button>
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>
@@ -473,23 +440,7 @@ const QRScannerPage = () => {
               const q = search.trim();
               if (!q) return;
 
-              if (!product) {
-                loadProduct(q);
-                return;
-              }
-
-              // Stage mode: also driven by same search bar
-              const match = (lookupData?.stages || []).find((s) => {
-                const stageNumber = String(s.stageNumber ?? '');
-                const stageName = String(s.stageName ?? '');
-                return (
-                  stageNumber.toLowerCase() === q.toLowerCase() ||
-                  stageNumber.toLowerCase().includes(q.toLowerCase()) ||
-                  stageName.toLowerCase().includes(q.toLowerCase())
-                );
-              });
-
-              if (match) loadStageForms(match.stageNumber);
+              loadProduct(q);
             }}
             disabled={loading}
             className="mt-3 rounded-lg bg-sky-700 px-5 py-2 font-medium text-white hover:bg-sky-800 disabled:opacity-60"
@@ -500,44 +451,50 @@ const QRScannerPage = () => {
 
         {product && (
           <>
-            <ProductInfoCard
-              product={{
-                ...product,
-                totalIdealItems: availableCount,
-                currentStage: lookupData?.stage?.stageName || product?.currentStage || '',
-                currentStageNumber:
-                  lookupData?.stage?.stageNumber || product?.currentStageNumber,
-                currentStageName:
-                  lookupData?.stage?.stageName || product?.currentStage
-              }}
-            />
+            <div ref={productDetailsRef} className="scroll-mt-4">
+              <ProductInfoCard
+                product={{
+                  ...product,
+                  currentStage: selectedStage?.stageName || product?.currentStage || '',
+                  currentStageNumber: selectedStage?.stageNumber || product?.currentStageNumber,
+                  currentStageName: selectedStage?.stageName || product?.currentStage
+                }}
+              />
+            </div>
 
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
                 Current Working Stage
               </h2>
               <div className="grid gap-3 md:grid-cols-5">
-                {(lookupData.stages || []).map((stage) => (
-                  <button
+                {(lookupData.stages || []).map((stage) => {
+                  const isSelected = Number(stage.stageNumber) === Number(selectedStageNumber);
+
+                  return <button
                     key={stage.stageNumber}
                     type="button"
                     disabled={!stage.selectable}
                     onClick={() => loadStageForms(stage.stageNumber)}
+                    aria-pressed={isSelected}
                     className={`rounded-lg border p-3 text-left text-sm transition ${
-                      Number(selectedStageNumber) === Number(stage.stageNumber)
-                        ? 'border-sky-500 bg-sky-50 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
-                    } disabled:cursor-not-allowed disabled:opacity-45`}
+                      isSelected
+                        ? 'border-sky-700 bg-sky-700 text-white shadow-md ring-2 ring-sky-300 ring-offset-2 dark:border-sky-400 dark:bg-sky-600 dark:ring-sky-700 dark:ring-offset-slate-800'
+                        : stage.selectable
+                          ? 'border-slate-300 bg-white text-slate-800 hover:border-sky-500 hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-sky-500 dark:hover:bg-sky-900/20'
+                        : 'border-slate-200 bg-slate-100 text-slate-400 opacity-45 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-500'
+                    } disabled:cursor-not-allowed`}
                   >
-                    <span className="block text-xs uppercase text-slate-500">Stage {stage.stageNumber}</span>
+                    <span className={`block text-xs uppercase ${isSelected ? 'text-sky-100' : 'text-slate-500'}`}>
+                      Stage {stage.stageNumber}{isSelected ? ' - Selected' : ''}
+                    </span>
                     <span className="font-semibold">{stage.stageName}</span>
-                    {stage.availableCount !== undefined && (
-                      <span className="mt-1 block text-xs text-slate-500">
+                    {Number(stage.stageNumber) > 1 && stage.availableCount !== undefined && (
+                      <span className={`mt-1 block text-xs ${isSelected ? 'text-sky-100' : 'text-slate-500'}`}>
                         {Number(stage.availableCount || 0)} available
                       </span>
                     )}
                   </button>
-                ))}
+                })}
               </div>
             </section>
 
@@ -546,6 +503,7 @@ const QRScannerPage = () => {
               setCounts={setCounts}
               derivedTotals={{ rejected: totalRejectedDerived, rework: totalReworkDerived }}
               availableCount={availableCount}
+              unlimitedQuantity={isOpenIntakeStage}
               totalEntered={totalEntered}
               quantityError={quantityError}
               remarks={remarks}
@@ -578,5 +536,3 @@ const QRScannerPage = () => {
 };
 
 export default QRScannerPage;
-
-

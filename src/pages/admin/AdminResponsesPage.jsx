@@ -16,13 +16,103 @@ const formatAnswerValue = (value) => {
   return String(value);
 };
 
-const computeReasonString = (items) => {
-  if (!Array.isArray(items) || items.length === 0) return '';
+const formatResponseValue = (item) => {
+  if (item?.type === 'optionDetail') {
+    const parts = [];
+    if (item.selectedAnswer) parts.push(`Answer selection: ${item.selectedAnswer}`);
+    if (item.optionKey && item.optionKey !== '__response__' && item.optionKey !== item.selectedAnswer) parts.push(`Option: ${item.optionKey}`);
+    if (item.defectDetail) parts.push(`Defect type: ${item.defectDetail}`);
+    parts.push(`Count: ${formatAnswerValue(item.count) || '0'}`);
+    return parts.join(' | ');
+  }
+  if (item?.type === 'count') {
+    const parts = [];
+    if (item.optionKey && item.optionKey !== '__response__') parts.push(`Option: ${item.optionKey}`);
+    if (item.defectDetail) parts.push(`Defect type: ${item.defectDetail}`);
+    parts.push(`Count: ${formatAnswerValue(item.answer) || '0'}`);
+    return parts.join(' | ');
+  }
+  return formatAnswerValue(item?.answer);
+};
 
-  return items
+const getResponseDisplayFields = (item) => {
+  const question = item?.questionText || item?.question || item?.questionId || '-';
+  const isCountResponse = item?.type === 'optionDetail' || item?.type === 'count';
+  const rowOption = item?.optionKey && item.optionKey !== '__response__' ? item.optionKey : '';
+  const option =
+    rowOption ||
+    item?.selectedAnswer ||
+    (isCountResponse ? '' : formatAnswerValue(item?.answer));
+  const defectType = item?.defectDetail || item?.defectType || item?.defectName || item?.defect || '';
+  const count = item?.type === 'optionDetail'
+    ? item.count
+    : item?.type === 'count'
+      ? item.answer
+      : '';
+
+  return {
+    question,
+    option: option || '-',
+    defectType: defectType || '-',
+    count: formatAnswerValue(count) || (isCountResponse ? '0' : '-')
+  };
+};
+
+const normalizeQuestionnaireReasonItems = (items = []) => {
+  if (!Array.isArray(items)) return [];
+
+  const selectedAnswerByQuestion = {};
+  const globalDefectDetail = items.find((item) => item?.questionId === '__defect_detail__')?.answer || '';
+
+  items.forEach((item) => {
+    if (!item || item.type === 'count' || item.questionId === '__defect_detail__') return;
+    const questionKey = String(item.questionId || item.question || '');
+    if (!questionKey) return;
+    const answers = Array.isArray(item.answer)
+      ? item.answer.map(String).filter(Boolean)
+      : String(item.answer || '').trim()
+        ? [String(item.answer).trim()]
+        : [];
+    if (answers.length) selectedAnswerByQuestion[questionKey] = answers;
+  });
+
+  const fallbackOptionIndexByQuestion = {};
+  const countItems = items
+    .filter((item) => item?.type === 'count' && Number(item?.answer || 0) > 0)
+    .map((item) => {
+      const questionKey = String(item.questionId || item.question || '');
+      const selectedAnswers = selectedAnswerByQuestion[questionKey] || [];
+      const hasRowOption = item.optionKey && item.optionKey !== '__response__';
+      const fallbackIndex = fallbackOptionIndexByQuestion[questionKey] || 0;
+      const selectedAnswer = hasRowOption
+        ? item.optionKey
+        : selectedAnswers[fallbackIndex] || selectedAnswers.join(', ');
+
+      if (!hasRowOption) fallbackOptionIndexByQuestion[questionKey] = fallbackIndex + 1;
+
+      return {
+        ...item,
+        type: 'optionDetail',
+        count: Number(item.answer || 0),
+        selectedAnswer,
+        defectDetail: item.defectDetail || globalDefectDetail,
+        question: item.questionText || item.question || item.questionId || 'Questionnaire response'
+      };
+    });
+
+  if (countItems.length) return countItems;
+
+  return items.filter((item) => item?.answer !== undefined && item?.answer !== null && item?.answer !== '');
+};
+
+const computeReasonString = (items) => {
+  const displayItems = normalizeQuestionnaireReasonItems(items);
+  if (displayItems.length === 0) return '';
+
+  return displayItems
     .map((it) => {
       const q = it?.questionText || it?.question || it?.questionId;
-      const val = formatAnswerValue(it?.answer);
+      const val = formatResponseValue(it);
       return q ? `${q}: ${val}` : val;
     })
     .filter(Boolean)
@@ -111,32 +201,29 @@ const TabButton = ({ active, children, onClick }) => (
 );
 
 const QuestionnaireResponseList = ({ items = [], emptyText = '-', tone = 'slate' }) => {
-  const visibleItems = Array.isArray(items)
-    ? items.filter((item) => item?.answer !== undefined && item?.answer !== null && item?.answer !== '')
-    : [];
-  const toneClass =
+  const visibleItems = normalizeQuestionnaireReasonItems(items);
+  const rowClass =
     tone === 'red'
-      ? 'border-red-200 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20'
+      ? 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'
       : tone === 'amber'
-        ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20'
-        : 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/40';
+        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+        : 'bg-slate-50 text-slate-600 dark:bg-slate-900/60 dark:text-slate-300';
 
   if (!visibleItems.length) {
     return <span className="text-slate-500 dark:text-slate-400">{emptyText}</span>;
   }
 
   return (
-    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+    <div className="max-h-72 space-y-2 overflow-y-auto">
       {visibleItems.map((item, index) => {
-        const question = item?.questionText || item?.question || item?.questionId || `Response ${index + 1}`;
+        const fields = getResponseDisplayFields(item);
         return (
-          <div key={`${question}-${index}`} className={`rounded-md border p-3 ${toneClass}`}>
-            <p className="mb-1 text-xs font-semibold uppercase leading-snug text-slate-500 dark:text-slate-400">
-              {question}
-            </p>
-            <p className="whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-slate-900 dark:text-slate-100">
-              {formatAnswerValue(item.answer) || '-'}
-            </p>
+          <div key={`${fields.option}-${fields.defectType}-${index}`} className={`rounded-md px-3 py-2 text-xs ${rowClass}`}>
+            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
+              <span><span className="font-semibold">Option:</span> {fields.option}</span>
+              <span><span className="font-semibold">Defect Type:</span> {fields.defectType}</span>
+              <span className="font-semibold">Count: {fields.count}</span>
+            </div>
           </div>
         );
       })}
@@ -145,6 +232,7 @@ const QuestionnaireResponseList = ({ items = [], emptyText = '-', tone = 'slate'
 };
 
 const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selected, setSelected }) => {
+  const [tableView, setTableView] = useState('summary');
   const exportRows = () => {
     downloadCsv(
       [
@@ -224,7 +312,15 @@ const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selec
             Apply
           </button>
         </div>
-        <SummaryTable rows={rows} setSelected={setSelected} />
+        <div className="mb-4 flex gap-2">
+          <TabButton active={tableView === 'summary'} onClick={() => setTableView('summary')}>Summary Table</TabButton>
+          <TabButton active={tableView === 'details'} onClick={() => setTableView('details')}>Details Table</TabButton>
+        </div>
+        {tableView === 'summary' ? (
+          <SummaryTable rows={rows} setSelected={setSelected} />
+        ) : (
+          <OptionDetailsTable rows={rows} setSelected={setSelected} />
+        )}
       </section>
 
       <ResponseDetailsModal selected={selected} setSelected={setSelected} />
@@ -235,6 +331,7 @@ const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selec
 const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState('ACCEPTED');
+  const [tableView, setTableView] = useState('summary');
 
   const categories = useMemo(() => {
     const map = new Map();
@@ -243,17 +340,33 @@ const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
   }, [rows]);
 
   const reportRows = useMemo(() => {
-    return rows.filter((row) => {
+    const filteredRows = rows.filter((row) => {
       const rowCategory = row.categoryId || '__uncategorized__';
       const matchesCategory = !categoryId || rowCategory === categoryId;
       return matchesCategory && getStatusCount(row, status) > 0;
     });
+
+    const runningTotals = new Map();
+    const rowsWithOverall = [...filteredRows]
+      .sort((a, b) => new Date(a.submittedAt || 0) - new Date(b.submittedAt || 0))
+      .map((row) => {
+        const key = String(row.code || row.productName || '').trim().toLowerCase();
+        const previousTotal = runningTotals.get(key);
+        const nextTotal = Number(previousTotal || 0) + getStatusCount(row, status);
+        runningTotals.set(key, nextTotal);
+        return {
+          ...row,
+          reportOverallCount: previousTotal === undefined ? null : nextTotal
+        };
+      });
+
+    return rowsWithOverall.sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
   }, [categoryId, rows, status]);
 
   const categoryTotals = useMemo(() => {
     return reportRows.reduce(
       (acc, row) => {
-        acc.overall += row.overallCount;
+        acc.overall += getStatusCount(row, status);
         acc.accepted += row.acceptedCount;
         acc.rejected += row.rejectedCount;
         acc.rework += row.reworkCount;
@@ -277,7 +390,7 @@ const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
         getStatusReason(row, status),
         status,
         getStatusCount(row, status),
-        row.overallCount,
+        row.reportOverallCount ?? '-',
         row.submittedAt
       ]),
       `report-management-${categoryLabel}-${status.toLowerCase()}.csv`
@@ -338,7 +451,15 @@ const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
           <InspectionStatCard label="Rework" value={categoryTotals.rework} tone="amber" />
         </div>
 
-        <DetailedStatusTable rows={reportRows} status={status} setSelected={setSelected} />
+        <div className="mb-4 flex gap-2">
+          <TabButton active={tableView === 'summary'} onClick={() => setTableView('summary')}>Summary Table</TabButton>
+          <TabButton active={tableView === 'details'} onClick={() => setTableView('details')}>Details Table</TabButton>
+        </div>
+        {tableView === 'summary' ? (
+          <DetailedStatusTable rows={reportRows} status={status} setSelected={setSelected} />
+        ) : (
+          <OptionDetailsTable rows={reportRows} status={status} setSelected={setSelected} useReportOverall />
+        )}
       </section>
 
       <ResponseDetailsModal selected={selected} setSelected={setSelected} />
@@ -369,7 +490,7 @@ const SummaryTable = ({ rows, setSelected }) => (
           {[
             'Code',
             'Category',
-            'Part Description',
+            'Product Name',
             'Employee Name',
             'Current Stage',
             'Accepted Count',
@@ -392,7 +513,8 @@ const SummaryTable = ({ rows, setSelected }) => (
           <tr key={r.raw?._id || `${r.code}-${r.submittedAt}`} className="border-t border-slate-200 dark:border-slate-700">
             <td className="px-4 py-3 text-sm font-semibold">{r.code}</td>
             <td className="px-4 py-3 text-sm">{r.categoryName}</td>
-            <td className="px-4 py-3 text-sm">{r.partDescription || '-'}</td>
+            <td className="px-4 py-3 text-sm">{r.productName
+             || '-'}</td>
             <td className="px-4 py-3 text-sm">{r.employeeName || '-'}</td>
             <td className="px-4 py-3 text-sm">{r.stage || '-'}</td>
             <td className="px-4 py-3 text-sm">{r.acceptedCount}</td>
@@ -428,6 +550,70 @@ const SummaryTable = ({ rows, setSelected }) => (
     </table>
   </div>
 );
+
+const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = false }) => {
+  const detailRows = rows.flatMap((row) => {
+    const statuses = status ? [status] : ['REJECTED', 'REWORK'];
+    return statuses.flatMap((resultStatus) => {
+      const responseItems = normalizeQuestionnaireReasonItems(getStatusResponses(row, resultStatus));
+      if (resultStatus === 'ACCEPTED' && responseItems.length === 0) {
+        return [{
+          row,
+          resultStatus,
+          fields: { option: '-', defectType: '-', count: getStatusCount(row, resultStatus) },
+          index: 0
+        }];
+      }
+
+      return responseItems.map((item, index) => ({
+        row,
+        resultStatus,
+        fields: getResponseDisplayFields(item),
+        index
+      }));
+    });
+  });
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1150px] table-fixed">
+        <thead className="bg-slate-50 dark:bg-slate-900/60">
+          <tr>
+            {['Code', 'Category', 'Product Name', 'Employee', 'Stage', 'Result', 'Option Selected', 'Defect Type', 'Count', 'Overall Count', 'Submitted Date'].map((head) => (
+              <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{head}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {detailRows.map(({ row, resultStatus, fields, index }) => (
+            <tr
+              key={`${resultStatus}-${row.raw?._id || row.code}-${fields.option}-${fields.defectType}-${index}`}
+              className="cursor-pointer border-t border-slate-200 dark:border-slate-700"
+              onClick={() => setSelected(row.raw)}
+            >
+              <td className="px-4 py-3 text-sm font-semibold">{row.code}</td>
+              <td className="px-4 py-3 text-sm">{row.categoryName}</td>
+              <td className="px-4 py-3 text-sm">{row.productName || '-'}</td>
+              <td className="px-4 py-3 text-sm">{row.employeeName || '-'}</td>
+              <td className="px-4 py-3 text-sm">{row.stage || '-'}</td>
+              <td className={`px-4 py-3 text-sm font-semibold ${resultStatus === 'ACCEPTED' ? 'text-emerald-700' : resultStatus === 'REJECTED' ? 'text-red-700' : 'text-amber-700'}`}>{resultStatus}</td>
+              <td className="px-4 py-3 text-sm">{fields.option}</td>
+              <td className="px-4 py-3 text-sm">{fields.defectType}</td>
+              <td className="px-4 py-3 text-sm font-semibold">{fields.count}</td>
+              <td className="px-4 py-3 text-sm font-semibold">
+                {useReportOverall ? row.reportOverallCount ?? '-' : row.overallCount}
+              </td>
+              <td className="px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
+            </tr>
+          ))}
+          {detailRows.length === 0 && (
+            <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-500">No option or defect details found.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 const DetailedStatusTable = ({ rows, status, setSelected }) => (
   <div className="overflow-x-auto">
@@ -481,7 +667,7 @@ const DetailedStatusTable = ({ rows, status, setSelected }) => (
               </span>
             </td>
             <td className="px-4 py-3 text-sm">{getStatusCount(row, status)}</td>
-            <td className="px-4 py-3 text-sm">{row.overallCount}</td>
+            <td className="px-4 py-3 text-sm">{row.reportOverallCount ?? '-'}</td>
             <td className="px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
           </tr>
         ))}
@@ -579,10 +765,36 @@ const ResponseDetailsModal = ({ selected, setSelected }) => {
 
 const AnswerBlock = ({ answer, tone = 'slate' }) => {
   const borderClass = tone === 'red' ? 'border-red-200 dark:border-red-900' : tone === 'amber' ? 'border-amber-200 dark:border-amber-900' : 'border-slate-200 dark:border-slate-700';
+  if (answer?.type === 'count' || answer?.type === 'optionDetail') {
+    const fields = getResponseDisplayFields(answer);
+    return (
+      <div className={`rounded-lg border p-4 ${borderClass}`}>
+        <div className="grid gap-3 text-sm md:grid-cols-[1fr_140px_140px_80px]">
+          <div>
+            <p className="text-xs uppercase text-slate-500">Question</p>
+            <p className="font-medium text-slate-900 dark:text-white">{fields.question}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-slate-500">Option</p>
+            <p className="text-slate-700 dark:text-slate-300">{fields.option}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-slate-500">Defect Type</p>
+            <p className="text-slate-700 dark:text-slate-300">{fields.defectType}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-slate-500">Count</p>
+            <p className="font-semibold text-slate-900 dark:text-white">{fields.count}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`rounded-lg border p-4 ${borderClass}`}>
       <p className="font-medium text-slate-900 dark:text-white">{answer.question}</p>
-      <p className="mt-1 text-slate-600 dark:text-slate-300">{formatAnswerValue(answer.answer) || '-'}</p>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">{formatResponseValue(answer) || '-'}</p>
     </div>
   );
 };

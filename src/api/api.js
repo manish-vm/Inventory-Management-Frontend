@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -110,6 +110,15 @@ export const productAPI = {
   updateSubcategory: (id, data) => api.put('/products/subcategories/' + id, data),
   deleteSubcategory: (id) => api.delete('/products/subcategories/' + id),
   getProductAnalytics: (id) => api.get(`/products/${id}/analytics`),
+};
+
+export const roleAPI = {
+  getAll: () => api.get('/roles'),
+  getById: (id) => api.get(`/roles/${id}`),
+  getPermissionTree: () => api.get('/roles/permission-tree'),
+  create: (data) => api.post('/roles', data),
+  update: (id, data) => api.put(`/roles/${id}`, data),
+  delete: (id) => api.delete(`/roles/${id}`),
 };
 
 // Brand & Model APIs
@@ -315,7 +324,6 @@ export const assemblyAPI = {
 };
 
 export default api;
-
 
 
 

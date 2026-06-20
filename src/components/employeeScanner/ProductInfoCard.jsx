@@ -9,7 +9,6 @@ const ProductInfoCard = ({ product }) => {
     ['Current Stage', product.currentStage || (product.currentStageName ? product.currentStageName : product.currentStageNumber ? `Stage ${product.currentStageNumber}` : '')],
     // ['Next Stage', product.nextStage],
     // ['Current Status', product.manufacturingStatus || product.status],
-    ['Total Ideal Items', product.totalIdealItems],
     ['Created Date', product.createdDate || product.generatedDate ? new Date(product.createdDate || product.generatedDate).toLocaleString() : '-']
   ];
 
@@ -37,6 +36,5 @@ const ProductInfoCard = ({ product }) => {
 };
 
 export default ProductInfoCard;
-
 
 

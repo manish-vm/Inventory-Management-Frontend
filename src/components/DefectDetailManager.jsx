@@ -7,7 +7,8 @@ const emptyForm = { type: 'reject', name: '', isActive: true };
 
 const typeLabel = {
   reject: 'Reject',
-  rework: 'Rework'
+  rework: 'Rework',
+  both: 'Common (Reject & Rework)'
 };
 
 const DefectDetailManager = ({ onClose }) => {
@@ -20,7 +21,8 @@ const DefectDetailManager = ({ onClose }) => {
   const grouped = useMemo(
     () => ({
       reject: defects.filter((item) => item.type === 'reject'),
-      rework: defects.filter((item) => item.type === 'rework')
+      rework: defects.filter((item) => item.type === 'rework'),
+      both: defects.filter((item) => item.type === 'both')
     }),
     [defects]
   );
@@ -121,6 +123,7 @@ const DefectDetailManager = ({ onClose }) => {
                 >
                   <option value="reject">Reject</option>
                   <option value="rework">Rework</option>
+                  <option value="both">Common (Reject &amp; Rework)</option>
                 </select>
               </div>
 
@@ -162,7 +165,7 @@ const DefectDetailManager = ({ onClose }) => {
           </form>
 
           <div className="grid gap-4 md:grid-cols-2">
-            {['reject', 'rework'].map((type) => (
+            {['reject', 'rework', 'both'].map((type) => (
               <section key={type} className="rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
                   <h3 className="font-semibold text-slate-900 dark:text-white">{typeLabel[type]} Details</h3>

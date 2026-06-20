@@ -14,40 +14,76 @@ const normalizeCount = (v) => {
  * Renders questionnaire UI where every answer type can capture a quantity.
  * Choice fields capture count per selected option; free-form fields capture one count per answer.
  */
-const QuestionCountGrid = ({ forms = [], values, onChange }) => {
+const QuestionCountGrid = ({ forms = [], values, onChange, defectDetails = [] }) => {
+  const commitChange = (updater) => {
+    if (typeof onChange !== 'function') return;
+    onChange((previousValues) => updater(previousValues || values || {}));
+  };
+
   const update = (question, index, answer, prefix) => {
     const questionId = idOf(question, index, prefix);
-    onChange({
-      ...values,
+    commitChange((currentValues) => ({
+      ...currentValues,
       [questionId]: {
         questionId,
         question: textOf(question),
         type: typeOf(question),
         answer
       }
-    });
+    }));
   };
 
-  const updateCount = (question, optionKey, count) => {
-    const questionId = idOf(question, 0, 'question');
+  const updateCount = (question, index, optionKey, count, prefix) => {
+    const questionId = idOf(question, index, prefix);
     // store per-question per-option counts under special key
     const countKey = `${questionId}::__count__::${optionKey}`;
-    onChange({
-      ...values,
-      [countKey]: {
-        questionId,
-        question: textOf(question),
-        type: 'count',
-        optionKey,
-        answer: normalizeCount(count)
-      }
+    commitChange((currentValues) => {
+      const current = currentValues?.[countKey] || {};
+      return {
+        ...currentValues,
+        [countKey]: {
+          ...current,
+          questionId,
+          question: textOf(question),
+          type: 'count',
+          optionKey,
+          answer: normalizeCount(count),
+          defectDetail: current.defectDetail || ''
+        }
+      };
     });
   };
 
-  const getCount = (question, optionKey) => {
-    const questionId = idOf(question, 0, 'question');
+  const getCount = (question, index, optionKey, prefix) => {
+    const questionId = idOf(question, index, prefix);
     const countKey = `${questionId}::__count__::${optionKey}`;
     return normalizeCount(values?.[countKey]?.answer);
+  };
+
+  const updateDefectDetail = (question, index, optionKey, defectDetail, prefix) => {
+    const questionId = idOf(question, index, prefix);
+    const countKey = `${questionId}::__count__::${optionKey}`;
+    commitChange((currentValues) => {
+      const current = currentValues?.[countKey] || {};
+      return {
+        ...currentValues,
+        [countKey]: {
+          ...current,
+          questionId,
+          question: textOf(question),
+          type: 'count',
+          optionKey,
+          answer: normalizeCount(current.answer),
+          defectDetail
+        }
+      };
+    });
+  };
+
+  const getDefectDetail = (question, index, optionKey, prefix) => {
+    const questionId = idOf(question, index, prefix);
+    const countKey = `${questionId}::__count__::${optionKey}`;
+    return values?.[countKey]?.defectDetail || '';
   };
 
   const renderQuestion = (question, index, level = 0, prefix = 'question', branchLabel = '') => {
@@ -92,15 +128,29 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
 
     const isSingle = isRadio || isSelect || (hasOptions && !isMulti);
 
-    const renderCountInput = (optionKey) => (
-      <input
-        type="number"
-        min={0}
-        value={getCount(question, optionKey)}
-        onChange={(e) => updateCount(question, optionKey, e.target.value)}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
-        placeholder="Count"
-      />
+    const renderOptionDetails = (optionKey) => (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select
+          value={getDefectDetail(question, index, optionKey, prefix)}
+          onChange={(e) => updateDefectDetail(question, index, optionKey, e.target.value, prefix)}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+        >
+          <option value="">Select defect type</option>
+          {defectDetails.map((defect) => (
+            <option key={defect._id || defect.name} value={defect.name}>
+              {defect.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={0}
+          value={getCount(question, index, optionKey, prefix)}
+          onChange={(e) => updateCount(question, index, optionKey, e.target.value, prefix)}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+          placeholder="Count"
+        />
+      </div>
     );
 
     return (
@@ -142,7 +192,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                       <div className="font-medium">{option.label || option.value}</div>
                       {checked && (
                         <div className="mt-2">
-                          {renderCountInput(optionKey)}
+                          {renderOptionDetails(optionKey)}
                         </div>
                       )}
                     </div>
@@ -172,7 +222,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                       <div className="font-medium">{option.label || option.value}</div>
                       {checked && (
                         <div className="mt-2">
-                          {renderCountInput(optionKey)}
+                          {renderOptionDetails(optionKey)}
                         </div>
                       )}
                     </div>
@@ -200,7 +250,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                 );
               })}
             </select>
-            {selected[0] && renderCountInput(selected[0])}
+            {selected[0] && renderOptionDetails(selected[0])}
           </div>
         )}
 
@@ -221,7 +271,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
               />
             )}
-            {renderCountInput(RESPONSE_COUNT_KEY)}
+            {renderOptionDetails(RESPONSE_COUNT_KEY)}
           </div>
         )}
       </div>
@@ -248,4 +298,3 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
 };
 
 export default QuestionCountGrid;
-

@@ -2,8 +2,6 @@ import { CheckCircle2, RotateCcw, Send, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import QuestionCountGrid from '../employeeScanner/QuestionCountGrid';
 
-const DEFECT_DETAIL_KEY = '__defect_detail__';
-
 const fields = [
   { key: 'accepted', label: 'Accepted Items', icon: CheckCircle2, tone: 'emerald' },
   { key: 'rejected', label: 'Rejected Items', icon: XCircle, tone: 'red' },
@@ -20,6 +18,7 @@ const InspectionResponseSection = ({
   counts,
   setCounts,
   availableCount,
+  unlimitedQuantity = false,
   totalEntered,
   quantityError,
   remarks,
@@ -60,30 +59,10 @@ const InspectionResponseSection = ({
     return counts?.[activeMode] ?? 0;
   }, [activeMode, counts]);
 
-  const updateDefectDetail = (kind, defectName) => {
-    const targetValues = kind === 'reject' ? valuesWrapperRejection : valuesWrapperRework;
-    const targetChange = kind === 'reject' ? onChangeRejection : onChangeRework;
-    targetChange({
-      ...targetValues,
-      [DEFECT_DETAIL_KEY]: {
-        questionId: DEFECT_DETAIL_KEY,
-        question: kind === 'reject' ? 'Reject Defect Detail' : 'Rework Defect Detail',
-        type: 'dropdown',
-        answer: defectName
-      }
-    });
-  };
-
-
-
-
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Quantity Breakdown</h2>
-        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-          {totalEntered} / {availableCount} items processed
-        </span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -132,26 +111,8 @@ const InspectionResponseSection = ({
       </div>
 
       {selectedInspectionType === 'rejected' && (
-        <div className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300 mt-4 p-4 rounded-lg">
+          <div className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300 mt-4 p-4 rounded-lg">
           <h3 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-300">Rejected reasons</h3>
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-semibold text-red-700 dark:text-red-300">
-              Reject defect detail <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={valuesWrapperRejection?.[DEFECT_DETAIL_KEY]?.answer || ''}
-              onChange={(event) => updateDefectDetail('reject', event.target.value)}
-              className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-red-900 dark:bg-slate-950 dark:text-white"
-            >
-              <option value="">Select reject defect detail</option>
-              {rejectDefectDetails.map((defect) => (
-                <option key={defect._id || defect.name} value={defect.name}>
-                  {defect.name}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {rejectionForms && rejectionForms.length > 0 ? (
             <div className="space-y-4">
@@ -159,6 +120,7 @@ const InspectionResponseSection = ({
                 forms={rejectionForms}
                 values={valuesWrapperRejection}
                 onChange={onChangeRejection}
+                defectDetails={rejectDefectDetails}
               />
             </div>
           ) : (
@@ -176,30 +138,13 @@ const InspectionResponseSection = ({
         <div className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300 mt-4 p-4 rounded-lg">
           <h3 className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-300">Rework reasons</h3>
 
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-semibold text-amber-700 dark:text-amber-300">
-              Rework defect detail <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={valuesWrapperRework?.[DEFECT_DETAIL_KEY]?.answer || ''}
-              onChange={(event) => updateDefectDetail('rework', event.target.value)}
-              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-amber-900 dark:bg-slate-950 dark:text-white"
-            >
-              <option value="">Select rework defect detail</option>
-              {reworkDefectDetails.map((defect) => (
-                <option key={defect._id || defect.name} value={defect.name}>
-                  {defect.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {reworkForms && reworkForms.length > 0 ? (
             <div className="space-y-4">
               <QuestionCountGrid
                 forms={reworkForms}
                 values={valuesWrapperRework}
                 onChange={onChangeRework}
+                defectDetails={reworkDefectDetails}
               />
             </div>
           ) : (
@@ -237,10 +182,7 @@ const InspectionResponseSection = ({
 
       <div className="mt-5">
         <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-          Remarks{' '}
-          {(Number(derivedTotals?.rejected || 0) > 0 || Number(derivedTotals?.rework || 0) > 0) && (
-            <span className="text-red-500">*</span>
-          )}
+          Remarks <span className="font-normal text-slate-400">(optional)</span>
         </label>
         <textarea
           value={remarks}
