@@ -133,6 +133,21 @@ const rejectionSummaryRows = [
 
 const reportTabs = [
   {
+    id: 'mis-quality-performance',
+    name: 'MIS',
+    subReports: [{
+      id: 'mis-summary',
+      type: 'mis',
+      name: 'Helmet - Partwise Quality Performance Report',
+      sourceFileName: 'MIS',
+      descriptorColumns: [],
+      summaryRows: [],
+      totalColumns: [],
+      dayColumns: [],
+      rows: []
+    }]
+  },
+  {
     id: 'consolidated-rejection-status',
     name: 'CRS',
     subReports: [{
@@ -511,6 +526,66 @@ const totalCellClass = `min-w-20 ${cellHeightClass} ${gridBorderClass} bg-blue-1
 const totalPercentCellClass = `min-w-24 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-2 py-2 text-center dark:bg-blue-900/40`;
 const reportRowClass = 'h-12';
 
+const misLineRows = {
+  1: [
+    ['Shell', 'BOP', 'd1-bop-parts-receipt', 'Shell inward qty'],
+    ['EPS', 'BOP', 'd1-bop-parts-receipt', 'EPS Inward Qty'],
+    ['Harness', 'BOP', 'd1-bop-parts-receipt', 'Harness Inward Qty'],
+    ['Visor', 'BOP', 'd1-bop-parts-receipt', 'Visor Inward Qty'],
+    ['Shell', 'Moulding', 'shell-moulding-quality-performance-d1'],
+    ['Visor', 'Moulding', 'd1-visor-moulding-drr'],
+    ['Visor top', 'Moulding', 'visor-mechanism-top-moulding-d1'],
+    ['Visor', 'Coating', 'visor-coating-quality-performance-d1'],
+    ['Stagewise Rej-Shell', 'Assy', 'stagewise-rejection-performance-d1', 'Shell'],
+    ['Stagewise Rej-EPS', 'Assy', 'stagewise-rejection-performance-d1', 'EPS'],
+    ['Stagewise Rej-Helmet', 'Assy', 'stagewise-rejection-performance-d1', 'Assy'],
+    ['Helmet -Rej', 'Assy', 'd1-helmet-assembly-rejection']
+  ],
+  2: [
+    ['Shell', 'BOP', 'd2-bop-parts-receipt', 'Shell inward qty'],
+    ['EPS', 'BOP', 'd2-bop-parts-receipt', 'EPS Inward Qty'],
+    ['Harness', 'BOP', 'd2-bop-parts-receipt', 'Harness Inward Qty'],
+    ['Visor', 'BOP', 'd2-bop-parts-receipt', 'Visor Inward Qty'],
+    ['Shell', 'Moulding', 'shell-moulding-quality-performance-d2'],
+    ['Visor', 'Moulding', 'd2-visor-moulding-drr'],
+    ['Visor top', 'Moulding', 'visor-mechanism-top-moulding-d2'],
+    ['Visor', 'Coating', 'visor-coating-quality-performance-d2'],
+    ['Stagewise Rej-Shell', 'Assy', 'stagewise-rejection-performance-d2', 'Shell'],
+    ['Stagewise Rej-EPS', 'Assy', 'stagewise-rejection-performance-d2', 'EPS'],
+    ['Stagewise Rej-Helmet', 'Assy', 'stagewise-rejection-performance-d2', 'Assy'],
+    ['Helmet -Rej', 'Assy', 'd2-helmet-assembly-rejection']
+  ],
+  3: [
+    ['Shell', 'BOP', 'd3-bop-parts-receipt', 'Shell inward qty'],
+    ['EPS', 'BOP', 'd3-bop-parts-receipt', 'EPS Inward Qty'],
+    ['Harness', 'BOP', 'd3-bop-parts-receipt', 'Harness Inward Qty'],
+    ['Visor', 'BOP', 'd3-bop-parts-receipt', 'Visor Inward Qty'],
+    ['Visor', 'Moulding', 'd3-visor-moulding-drr'],
+    ['Visor', 'Coating', 'visor-coating-quality-performance-d3'],
+    ['Chin cover', 'Moulding', 'chin-cover-moulding-performance-d3'],
+    ['Shell', 'Moulding', 'shell-moulding-quality-performance-d3'],
+    ['Stagewise Rej-Shell', 'Assy', 'stagewise-rejection-performance-d3', 'Shell'],
+    ['Stagewise Rej-EPS', 'Assy', 'stagewise-rejection-performance-d3', 'EPS'],
+    ['Stagewise Rej-Helmet', 'Assy', 'stagewise-rejection-performance-d3', 'Assy'],
+    ['Helmet -Rej', 'Assy', 'd3-helmet-assembly-rejection']
+  ],
+  4: [
+    ['Shell', 'BOP', 'd4-bop-parts-receipt', 'Shell inward qty'],
+    ['EPS', 'BOP', 'd4-bop-parts-receipt', 'EPS Inward Qty'],
+    ['Harness', 'BOP', 'd4-bop-parts-receipt', 'Harness Inward Qty'],
+    ['Visor', 'BOP', 'd4-bop-parts-receipt', 'Visor Inward Qty'],
+    ['Shell', 'Moulding', 'shell-moulding-quality-performance-d4'],
+    ['Spoiler', 'Moulding', 'spoiler-moulding-performance-d4'],
+    ['Chin cover', 'Moulding', 'chin-cover-moulding-performance-d4'],
+    ['Visor', 'Moulding', 'd4-visor-moulding-drr'],
+    ['Visor', 'Coating', 'visor-coating-quality-performance-d4'],
+    ['Stagewise Rej-Shell', 'Assy', 'stagewise-rejection-performance-d4', 'Shell'],
+    ['Stagewise Rej-EPS', 'Assy', 'stagewise-rejection-performance-d4', 'EPS'],
+    ['Stagewise Rej-Helmet', 'Assy', 'stagewise-rejection-performance-d4', 'Assy'],
+    ['Helmet -Rej', 'Assy', 'd4-helmet-assembly-rejection']
+  ]
+};
+
 const crsLayout = [
   [
     { title: 'D1 - Helmet Assy', reportId: 'd1-helmet-assembly-drr', rejectionId: 'd1-helmet-assembly-rejection', helmet: true },
@@ -605,6 +680,96 @@ const CumulativeBlock = ({ item, reports, monthLabel }) => {
   );
 };
 
+const getMisMetric = (reports, rowConfig, dayIndex, dayId) => {
+  const [, , reportId, detailFilter] = rowConfig;
+  const report = reports[reportId];
+  if (!report) return { dayOutput: 0, dayRejection: 0, monthOutput: 0, monthRejection: 0 };
+  const selectedDay = report.daysById?.[dayId] || report.days?.[dayIndex] || {};
+
+  if (reportId.includes('bop-parts-receipt')) {
+    const matchedRow = report.rows?.find((row) =>
+      normalizeReportKey(row.defectDetails) === normalizeReportKey(detailFilter)
+    );
+    return {
+      dayOutput: matchedRow?.days?.[dayIndex] || 0,
+      dayRejection: 0,
+      monthOutput: matchedRow?.total || 0,
+      monthRejection: 0
+    };
+  }
+
+  if (reportId.includes('stagewise-rejection') && detailFilter) {
+    const matchingRows = (report.rows || []).filter((row) =>
+      normalizeReportKey(row.partDetails).includes(normalizeReportKey(detailFilter))
+    );
+    const dayRejection = matchingRows.reduce((sum, row) => sum + toNumber(row.days?.[dayIndex]), 0);
+    return {
+      dayOutput: selectedDay.output || 0,
+      dayRejection,
+      monthOutput: report.totals?.output || 0,
+      monthRejection: matchingRows.reduce((sum, row) => sum + toNumber(row.total), 0)
+    };
+  }
+
+  return {
+    dayOutput: selectedDay.output || 0,
+    dayRejection: selectedDay.rejection || 0,
+    monthOutput: report.totals?.output || 0,
+    monthRejection: report.totals?.rejection || 0
+  };
+};
+
+const MisLineTable = ({ line, reports, dayIndex, dayId, dayLabel, monthLabel }) => (
+  <section className="overflow-hidden border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="grid gap-0 xl:grid-cols-2">
+      {[
+        { label: `For the day - ${dayLabel}`, period: 'day' },
+        { label: `For the month - ${monthLabel}`, period: 'month' }
+      ].map(({ label, period }) => (
+        <div key={period} className="overflow-x-auto border-slate-300 xl:border-r last:xl:border-r-0 dark:border-slate-700">
+          <div className="flex items-center justify-between border-b border-slate-300 bg-blue-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+            <h3 className="font-bold text-slate-900 dark:text-white">D{line} - {['ACE', 'FIT', 'NEO', 'ARC'][line - 1]}</h3>
+            <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+          </div>
+          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
+            <thead>
+              <tr className="bg-slate-100 dark:bg-slate-900/70">
+                {['Part', 'Process', 'Prodn.Qty', 'Rej.Qty', 'Rej%', 'Part Value (Rs)', 'Rej. Value / Helmet (Rs)'].map((header) => (
+                  <th key={header} className="border-b border-r border-slate-300 px-3 py-2 text-left font-semibold dark:border-slate-700">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {misLineRows[line].map((rowConfig) => {
+                const [part, process] = rowConfig;
+                const metric = getMisMetric(reports, rowConfig, dayIndex, dayId);
+                const output = period === 'day' ? metric.dayOutput : metric.monthOutput;
+                const rejection = period === 'day' ? metric.dayRejection : metric.monthRejection;
+                const percent = output ? (rejection / output) * 100 : 0;
+                return (
+                  <tr key={`${period}-${part}-${process}`}>
+                    <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">{part}</td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">{process}</td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{output}</td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{rejection}</td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{formatPercent(percent)}</td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">0</td>
+                    <td className="border-b border-slate-200 px-3 py-2 text-right dark:border-slate-700">0</td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-blue-50 font-bold dark:bg-blue-900/20">
+                <td colSpan="6" className="border-r border-slate-300 px-3 py-2 text-right dark:border-slate-700">Total rejection Cost</td>
+                <td className="px-3 py-2 text-right">0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  </section>
+);
+
 const UserDashboard = ({ user }) => (
   <div className="space-y-6">
     <div>
@@ -634,6 +799,7 @@ const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [reportMonth, setReportMonth] = useState(now.getMonth() + 1);
   const [reportYear, setReportYear] = useState(now.getFullYear());
+  const [reportDay, setReportDay] = useState(Math.min(now.getDate(), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
   const [rejectionReport, setRejectionReport] = useState(null);
   const [rejectionOverrides, setRejectionOverrides] = useState({});
   const [drrOverrides, setDrrOverrides] = useState({});
@@ -671,6 +837,11 @@ const AdminDashboard = () => {
       return { id: `day-${day}`, label: `${day}/${String(reportMonth).padStart(2, '0')}` };
     });
   }, [reportMonth, reportYear]);
+
+  useEffect(() => {
+    const daysInMonth = new Date(reportYear, reportMonth, 0).getDate();
+    if (reportDay > daysInMonth) setReportDay(daysInMonth);
+  }, [reportDay, reportMonth, reportYear]);
 
   const activeReport = reportTabs.find((report) => report.id === activeReportId) || reportTabs[0];
   const activeSubReportBase = activeReport.subReports.find((report) => report.id === activeSubReportId) || activeReport.subReports[0];
@@ -781,12 +952,16 @@ const AdminDashboard = () => {
     return calculatedRejectionSummary;
   };
   const isCrsReport = activeSubReportBase.type === 'crs';
+  const isMisReport = activeSubReportBase.type === 'mis';
   const crsReports = useMemo(
     () => ({ ...editableDrrReports, ...editableRejectionReports }),
     [editableDrrReports, editableRejectionReports]
   );
   const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' })
     .format(new Date(reportYear, reportMonth - 1, 1));
+  const selectedDayIndex = Math.max(0, Math.min(currentDayColumns.length - 1, reportDay - 1));
+  const selectedDayId = currentDayColumns[selectedDayIndex]?.id || `day-${String(reportDay).padStart(2, '0')}`;
+  const selectedDayLabel = currentDayColumns[selectedDayIndex]?.label || '';
 
   const getColumnClass = (column) => {
     if (column.id === 'totalPercent') return totalPercentCellClass;
@@ -933,7 +1108,24 @@ const AdminDashboard = () => {
           ))}
         </div>
 
-        {isCrsReport ? (
+        {isMisReport ? (
+          <label className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+            Date
+            <input
+              type="date"
+              value={`${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(reportDay).padStart(2, '0')}`}
+              onChange={(event) => {
+                const [year, month, day] = event.target.value.split('-').map(Number);
+                if (year && month && day) {
+                  setReportYear(year);
+                  setReportMonth(month);
+                  setReportDay(day);
+                }
+              }}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            />
+          </label>
+        ) : isCrsReport ? (
           <label className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-300">
             Month
             <input
@@ -963,7 +1155,24 @@ const AdminDashboard = () => {
         )}
       </div>
 
-      {isCrsReport ? (
+      {isMisReport ? (
+        <div className="space-y-4">
+          <div className="border border-slate-200 bg-white px-5 py-4 text-center dark:border-slate-700 dark:bg-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">HELMET - PARTWISE QUALITY PERFORMANCE REPORT</h2>
+          </div>
+          {[1, 2, 3, 4].map((line) => (
+            <MisLineTable
+              key={line}
+              line={line}
+              reports={crsReports}
+              dayIndex={selectedDayIndex}
+              dayId={selectedDayId}
+              dayLabel={selectedDayLabel}
+              monthLabel={monthLabel}
+            />
+          ))}
+        </div>
+      ) : isCrsReport ? (
         <section className="border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
           <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
