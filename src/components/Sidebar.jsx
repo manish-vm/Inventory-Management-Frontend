@@ -139,20 +139,22 @@ const Sidebar = ({ isSuperAdmin }) => {
       <div className="lg:hidden fixed inset-0 z-40 bg-surface-900/50 backdrop-blur-sm hidden" />
       
       <aside className={`
-        fixed left-0 top-0 h-screen flex flex-col z-50
+        fixed left-0 top-0 h-screen flex flex-col z-50 overflow-visible
         bg-white dark:bg-surface-900 border-r border-surface-200 dark:border-surface-700
-        transition-all duration-300 ease-in-out
+        transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
         ${isCollapsed ? 'w-20' : 'w-64'}
         ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}
       `}>
         {/* Logo */}
-        <div className="h-20 flex items-center justify-between px-4 lg:px-6 border-b border-surface-100 dark:border-surface-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 transition-colors flex items-center justify-center shadow-glow text-white drop-shadow-sm">
+        <div className={`relative h-20 flex items-center border-b border-surface-100 dark:border-surface-800 ${
+          isCollapsed ? 'justify-center px-2' : 'justify-between px-4 lg:px-6'
+        }`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-10 h-10 shrink-0 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 transition-colors flex items-center justify-center shadow-glow text-white drop-shadow-sm">
               <Boxes className="w-5 h-5 text-white drop-shadow-sm" />
             </div>
             {!isCollapsed && (
-              <div className="flex flex-col">
+              <div className="flex flex-col animate-slideIn">
                 <h1 className="text-lg font-bold text-surface-900 dark:text-surface-100 tracking-tight">
                   Inventory<span className="text-gradient">Pro</span>
                 </h1>
@@ -164,7 +166,9 @@ const Sidebar = ({ isSuperAdmin }) => {
           </div>
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden lg:flex p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+            className={`hidden lg:flex shrink-0 p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors ${
+              isCollapsed ? 'absolute right-0 z-[70] translate-x-1/2 bg-white shadow-md ring-1 ring-surface-200 dark:bg-surface-900 dark:ring-surface-700' : ''
+            }`}
           >
             <ChevronRight className={`w-4 h-4 text-surface-500 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} />
           </button>
@@ -193,7 +197,7 @@ const Sidebar = ({ isSuperAdmin }) => {
                   )}
                   <item.icon className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
                   {!isCollapsed && (
-                    <span className="font-medium text-sm">{item.label}</span>
+                    <span className="animate-slideIn whitespace-nowrap font-medium text-sm">{item.label}</span>
                   )}
                   {item.badge > 0 && !isCollapsed && (
                     <span className="ml-auto bg-danger-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
@@ -210,7 +214,7 @@ const Sidebar = ({ isSuperAdmin }) => {
           
           {/* Category Manager Button - Admin only */}
           {isAdmin && !isCollapsed && (
-            <>
+            <div className="space-y-1 animate-slideIn">
               <button
                 onClick={() => {
                   import('./CategoryManager').then(() => {
@@ -240,7 +244,7 @@ const Sidebar = ({ isSuperAdmin }) => {
                 <AlertTriangle className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
                 <span className="font-medium text-sm">Manage Defect Details</span>
               </button>
-            </>
+            </div>
           )}
 
           {/* Low Stock Alert - Only show for admins when there are low stock items */}
@@ -278,7 +282,7 @@ const Sidebar = ({ isSuperAdmin }) => {
                 </span>
               </div>
               {!isCollapsed && (
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 animate-slideIn">
                   <p className="font-medium text-surface-900 dark:text-surface-100 text-sm truncate">
                     {user?.name || user?.username}
                   </p>
@@ -291,7 +295,7 @@ const Sidebar = ({ isSuperAdmin }) => {
           </div>
           
           {!isCollapsed && (
-            <>
+            <div className="animate-slideIn">
               <div className="flex items-center justify-between mb-3">
                 <ThemeToggle />
               </div>
@@ -302,7 +306,7 @@ const Sidebar = ({ isSuperAdmin }) => {
                 <LogOut className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} hover:text-danger-700 dark:hover:text-danger-300 drop-shadow-sm`} />
                 <span className="font-medium text-sm">Logout</span>
               </button>
-            </>
+            </div>
           )}
 
           {isCollapsed && (
@@ -332,5 +336,3 @@ const Sidebar = ({ isSuperAdmin }) => {
 };
 
 export default Sidebar;
-
-

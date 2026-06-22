@@ -12,12 +12,25 @@ const getWorkflowType = (stages = []) => `${Math.max(stages.length, 1)}-step`;
 
 const renumberStages = (stages = []) =>
   stages.map((stage, index) => ({
+    ...stage,
     stageNumber: index + 1,
     stageName: /^Stage \d+$/.test(stage.stageName || '') ? `Stage ${index + 1}` : stage.stageName,
     stageType: index === 0 ? 'manufacturing' : stage.stageType || 'processing',
     description: stage.description,
     requiresValidation: Boolean(stage.requiresValidation)
   }));
+
+const reportTypes = [
+  ['helmet-assembly', 'Helmet Assembly'],
+  ['visor-moulding', 'Visor Moulding'],
+  ['visor-mechanism-top-moulding', 'Visor Mechanism Top Moulding'],
+  ['visor-coating', 'Visor Coating'],
+  ['shell-moulding', 'Shell Moulding'],
+  ['chin-cover-moulding', 'Chin Cover Moulding'],
+  ['spoiler-moulding', 'Spoiler Moulding'],
+  ['stagewise-rejection', 'Stagewise Rejection'],
+  ['bop-parts-receipt', 'BOP Parts Receipt']
+];
 
 const ManufacturingConfig = () => {
   const navigate = useNavigate();
@@ -422,7 +435,8 @@ const ManufacturingConfig = () => {
                     <div className="mt-2">
                       <div className="space-y-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-700">
                         {formData.stages.map((stage, index) => (
-                          <div key={stage.stageNumber} className="flex min-w-0 items-center gap-3">
+                          <div key={stage.stageNumber} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-600">
+                            <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
                               {stage.stageNumber}
                             </div>
@@ -461,6 +475,57 @@ const ManufacturingConfig = () => {
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               )}
+                            </div>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <select
+                                value={stage.productionLine || ''}
+                                onChange={(e) => {
+                                  const stages = formData.stages.map((item) => item.stageNumber === stage.stageNumber
+                                    ? { ...item, productionLine: e.target.value }
+                                    : item);
+                                  setFormData((prev) => ({ ...prev, stages }));
+                                }}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                              >
+                                <option value="">Auto-detect production line</option>
+                                {['D1', 'D2', 'D3', 'D4'].map((line) => <option key={line} value={line}>{line}</option>)}
+                              </select>
+                              <select
+                                value={stage.reportType || ''}
+                                onChange={(e) => {
+                                  const stages = formData.stages.map((item) => item.stageNumber === stage.stageNumber
+                                    ? { ...item, reportType: e.target.value }
+                                    : item);
+                                  setFormData((prev) => ({ ...prev, stages }));
+                                }}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                              >
+                                <option value="">Auto-detect report</option>
+                                {reportTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                              </select>
+                              <input
+                                value={stage.processName || ''}
+                                onChange={(e) => {
+                                  const stages = formData.stages.map((item) => item.stageNumber === stage.stageNumber
+                                    ? { ...item, processName: e.target.value, processKey: '' }
+                                    : item);
+                                  setFormData((prev) => ({ ...prev, stages }));
+                                }}
+                                placeholder="Assembly / moulding process"
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                              />
+                              <input
+                                value={stage.partName || ''}
+                                onChange={(e) => {
+                                  const stages = formData.stages.map((item) => item.stageNumber === stage.stageNumber
+                                    ? { ...item, partName: e.target.value, partKey: '' }
+                                    : item);
+                                  setFormData((prev) => ({ ...prev, stages }));
+                                }}
+                                placeholder="Part name"
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                              />
                             </div>
                           </div>
                         ))}
@@ -525,6 +590,5 @@ const ManufacturingConfig = () => {
 };
 
 export default ManufacturingConfig;
-
 
 

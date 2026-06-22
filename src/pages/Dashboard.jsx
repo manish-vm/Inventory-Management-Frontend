@@ -179,9 +179,9 @@ const reportTabs = [
           name: drrReport.subReportName,
           sourceFileName: drrReport.sourceFileName,
           descriptorColumns: [
-            { key: 'assemblyProcess', label: 'Assembly Process', width: 220 },
-            { key: 'partDetails', label: 'Part details', width: 180 },
-            { key: 'defectDetails', label: 'Defect Details', width: 260 },
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
           ],
           summaryRows: drrSummaryRows,
           totalColumns: [
@@ -386,13 +386,20 @@ const getRejectionDayValue = (report, column, metric) => {
   return report?.daysById?.[dayKey]?.[metric] ?? 0;
 };
 
-const buildEditableDrrReport = (rows, overrides, columns) => {
+const buildEditableDrrReport = (rows, overrides, columns, backendReport = null) => {
   const outputOverrides = overrides.output || {};
   const rowOverrides = overrides.rows || {};
+  const backendRows = new Map(
+    (backendReport?.rows || []).map((row) => [normalizeReportKey(row.defectName), row])
+  );
+  const hasRowOverrides = Object.keys(rowOverrides).length > 0;
   const editableRows = rows.map((row, rowIndex) => {
     const rowKey = `${rowIndex}-${normalizeReportKey(row.defectDetails)}`;
     const dayOverrides = rowOverrides[rowKey] || {};
-    const days = columns.map((column) => toNumber(dayOverrides[column.id]));
+    const backendRow = backendRows.get(normalizeReportKey(row.defectDetails));
+    const days = columns.map((column, dayIndex) =>
+      toNumber(dayOverrides[column.id] ?? backendRow?.days?.[dayIndex] ?? 0)
+    );
     return {
       ...row,
       drrRowKey: rowKey,
@@ -401,8 +408,13 @@ const buildEditableDrrReport = (rows, overrides, columns) => {
     };
   });
   const days = columns.map((column, dayIndex) => {
-    const output = toNumber(outputOverrides[column.id]);
-    const rejection = editableRows.reduce((sum, row) => sum + toNumber(row.days[dayIndex]), 0);
+    const output = toNumber(outputOverrides[column.id] ?? backendReport?.days?.[dayIndex]?.output ?? 0);
+    const rowRejection = editableRows.reduce((sum, row) => sum + toNumber(row.days[dayIndex]), 0);
+    const backendDay = backendReport?.days?.[dayIndex];
+    const backendRejection = backendReport?.reportType === 'helmet-assembly'
+      ? backendDay?.rejectionAndRework
+      : backendDay?.rejection;
+    const rejection = hasRowOverrides ? rowRejection : toNumber(backendRejection ?? rowRejection);
     return {
       output,
       rejection,
@@ -521,9 +533,9 @@ const buildEditableRejectionReport = (report, overrides, dayColumnsForReport) =>
 
 const gridBorderClass = 'border-r border-b border-slate-300 dark:border-slate-700';
 const cellHeightClass = 'h-12 max-h-12 overflow-hidden whitespace-nowrap';
-const dayCellClass = `min-w-14 ${cellHeightClass} ${gridBorderClass} px-2 py-2 text-center`;
-const totalCellClass = `min-w-20 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-2 py-2 text-center dark:bg-blue-900/40`;
-const totalPercentCellClass = `min-w-24 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-2 py-2 text-center dark:bg-blue-900/40`;
+const dayCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} px-1 py-2 text-center`;
+const totalCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-900/40`;
+const totalPercentCellClass = `w-20 min-w-20 max-w-20 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-900/40`;
 const reportRowClass = 'h-12';
 
 const misLineRows = {
@@ -726,12 +738,13 @@ const MisLineTable = ({ line, reports, dayIndex, dayId, dayLabel, monthLabel }) 
         { label: `For the day - ${dayLabel}`, period: 'day' },
         { label: `For the month - ${monthLabel}`, period: 'month' }
       ].map(({ label, period }) => (
-        <div key={period} className="overflow-x-auto border-slate-300 xl:border-r last:xl:border-r-0 dark:border-slate-700">
-          <div className="flex items-center justify-between border-b border-slate-300 bg-blue-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+        <div key={period} className="min-w-0 border-slate-300 xl:border-r last:xl:border-r-0 dark:border-slate-700">
+          <div className="relative z-10 flex items-center justify-between border-b border-slate-300 bg-blue-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
             <h3 className="font-bold text-slate-900 dark:text-white">D{line} - {['ACE', 'FIT', 'NEO', 'ARC'][line - 1]}</h3>
             <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{label}</span>
           </div>
-          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
             <thead>
               <tr className="bg-slate-100 dark:bg-slate-900/70">
                 {['Part', 'Process', 'Prodn.Qty', 'Rej.Qty', 'Rej%', 'Part Value (Rs)', 'Rej. Value / Helmet (Rs)'].map((header) => (
@@ -763,7 +776,8 @@ const MisLineTable = ({ line, reports, dayIndex, dayId, dayLabel, monthLabel }) 
                 <td className="px-3 py-2 text-right">0</td>
               </tr>
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       ))}
     </div>
@@ -801,6 +815,8 @@ const AdminDashboard = () => {
   const [reportYear, setReportYear] = useState(now.getFullYear());
   const [reportDay, setReportDay] = useState(Math.min(now.getDate(), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
   const [rejectionReport, setRejectionReport] = useState(null);
+  const [backendMisReports, setBackendMisReports] = useState({});
+  const [supplierRows, setSupplierRows] = useState([]);
   const [rejectionOverrides, setRejectionOverrides] = useState({});
   const [drrOverrides, setDrrOverrides] = useState({});
   const periodKey = `${reportYear}-${String(reportMonth).padStart(2, '0')}`;
@@ -808,10 +824,15 @@ const AdminDashboard = () => {
   useEffect(() => {
     let isMounted = true;
 
-    api.get('/inspection/admin/rejection-report', { params: { month: reportMonth, year: reportYear } })
-      .then((response) => {
+    Promise.all([
+      api.get('/inspection/admin/rejection-report', { params: { month: reportMonth, year: reportYear } }),
+      api.get('/inspection/admin/mis-dashboard', { params: { month: reportMonth, year: reportYear } }),
+      api.get('/mis-operations/bop-receipts', { params: { month: reportMonth, year: reportYear } }),
+      api.get('/mis-operations/supplier-rejections', { params: { month: reportMonth, year: reportYear } })
+    ])
+      .then(([rejectionResponse, misResponse, bopResponse, supplierResponse]) => {
         if (!isMounted) return;
-        const report = response.data || {};
+        const report = rejectionResponse.data || {};
         const days = Array.isArray(report.days) ? report.days : [];
         setRejectionReport({
           ...report,
@@ -820,9 +841,58 @@ const AdminDashboard = () => {
             return acc;
           }, {})
         });
+        const reports = { ...(misResponse.data?.reports || {}) };
+        for (const line of ['D1', 'D2', 'D3', 'D4']) {
+          const reportId = `${line.toLowerCase()}-bop-parts-receipt`;
+          const rows = ['shell', 'eps', 'harness', 'visor'].map((partType) => {
+            const values = Array.from({ length: new Date(reportYear, reportMonth, 0).getDate() }, () => 0);
+            (bopResponse.data || [])
+              .filter((item) => item.productionLine === line && item.partType === partType)
+              .forEach((item) => {
+                const dayIndex = new Date(item.receivedAt).getDate() - 1;
+                values[dayIndex] += Number(item.quantity || 0);
+              });
+            return {
+              defectName: `${partType === 'eps' ? 'EPS' : partType[0].toUpperCase() + partType.slice(1)} Inward Qty`
+                .replace('Shell Inward', 'Shell inward'),
+              days: values,
+              total: values.reduce((sum, value) => sum + value, 0)
+            };
+          });
+          reports[reportId] = {
+            productionLine: line,
+            reportType: 'bop-parts-receipt',
+            days: rows[0].days.map((_, index) => ({
+              day: index + 1,
+              output: rows.reduce((sum, row) => sum + row.days[index], 0),
+              rejection: 0,
+              rejectionPercent: 0
+            })),
+            totals: { output: rows.reduce((sum, row) => sum + row.total, 0), rejection: 0, rejectionPercent: 0 },
+            rows
+          };
+        }
+        setBackendMisReports(reports);
+        setSupplierRows((supplierResponse.data || []).map((item, index) => ({
+          'S.No': index + 1,
+          Source: 'Inward',
+          Date: new Date(item.inspectedAt).toLocaleDateString('en-GB'),
+          'Part no': item.partNumber,
+          'Part name': item.partName,
+          Supplier: item.supplier,
+          'Document Number': item.documentNumber,
+          'Rejection Qty': item.rejectionQuantity,
+          'Reason for rejection': item.rejectionReason,
+          'Action taken': item.actionTaken,
+          When: item.actionDate ? new Date(item.actionDate).toLocaleDateString('en-GB') : ''
+        })));
       })
       .catch(() => {
-        if (isMounted) setRejectionReport({ daysById: {}, totals: { output: 0, rejection: 0, rejectionPercent: 0 }, rows: [] });
+        if (isMounted) {
+          setRejectionReport({ daysById: {}, totals: { output: 0, rejection: 0, rejectionPercent: 0 }, rows: [] });
+          setBackendMisReports({});
+          setSupplierRows([]);
+        }
       });
 
     return () => {
@@ -863,9 +933,39 @@ const AdminDashboard = () => {
       const rejectionSubReport = reportTabs
         .flatMap((reportGroup) => reportGroup.subReports)
         .find((report) => report.id === reportId);
-      const backendRows = reportId === D1_REJECTION_REPORT_ID ? rejectionReport?.rows : [];
+      const backendReport = backendMisReports[reportId];
+      const fallbackReport = reportId === D1_REJECTION_REPORT_ID ? rejectionReport : null;
+      const backendRows = backendReport
+        ? backendReport.rows.map((row) => ({
+            defectGroup: 'Rejection',
+            rejectionDetails: row.defectName,
+            days: row.days.map((rejection, index) => ({ day: index + 1, rejection })),
+            total: row.total
+          }))
+        : fallbackReport?.rows || [];
       const reportWithTemplateRows = {
-        ...(rejectionReport || {}),
+        ...(fallbackReport || {}),
+        ...(backendReport ? {
+          days: backendReport.days.map((day) => ({
+            day: day.day,
+            output: day.output,
+            rejection: day.rejection,
+            rejectionPercent: day.rejectionPercent
+          })),
+          daysById: backendReport.days.reduce((acc, day) => {
+            acc[`day-${String(day.day).padStart(2, '0')}`] = {
+              output: day.output,
+              rejection: day.rejection,
+              rejectionPercent: day.rejectionPercent
+            };
+            return acc;
+          }, {}),
+          totals: {
+            output: backendReport.totals.output,
+            rejection: backendReport.totals.rejection,
+            rejectionPercent: backendReport.totals.rejectionPercent
+          }
+        } : {}),
         rows: mergeRejectionRows(rejectionSubReport?.rows || [], backendRows)
       };
       reports[reportId] = buildEditableRejectionReport(
@@ -875,7 +975,7 @@ const AdminDashboard = () => {
       );
       return reports;
     }, {});
-  }, [periodKey, rejectionReport, rejectionOverrides, rejectionDayColumns]);
+  }, [backendMisReports, periodKey, rejectionReport, rejectionOverrides, rejectionDayColumns]);
   const activeEditableRejectionReport = isRejectionReport
     ? editableRejectionReports[activeSubReportBase.id]
     : editableRejectionReports[D1_REJECTION_REPORT_ID];
@@ -887,12 +987,13 @@ const AdminDashboard = () => {
         reports[subReport.id] = buildEditableDrrReport(
           subReport.rows,
           drrOverrides[`${periodKey}:${subReport.id}`] || emptyRejectionOverrides(),
-          currentDayColumns
+          currentDayColumns,
+          backendMisReports[subReport.id]
         );
       }
     }
     return reports;
-  }, [currentDayColumns, drrOverrides, periodKey]);
+  }, [backendMisReports, currentDayColumns, drrOverrides, periodKey]);
   const activeEditableDrrReport = editableDrrReports[activeSubReportBase.id] || null;
   const activeSubReport = useMemo(() => {
     if (isDrrReport || activeSubReportBase.type === 'visor-drr') {
@@ -901,13 +1002,16 @@ const AdminDashboard = () => {
         rows: activeEditableDrrReport?.rows || []
       };
     }
+    if (activeSubReportBase.id === 'supplier-rejection-inward-inspection') {
+      return { ...activeSubReportBase, rows: supplierRows };
+    }
     if (!isRejectionReport) return activeSubReportBase;
     return {
       ...activeSubReportBase,
       rows: activeEditableRejectionReport?.rows || [],
       dayColumns: rejectionDayColumns
     };
-  }, [activeEditableDrrReport?.rows, activeEditableRejectionReport?.rows, activeSubReportBase, isDrrReport, isRejectionReport, rejectionDayColumns]);
+  }, [activeEditableDrrReport?.rows, activeEditableRejectionReport?.rows, activeSubReportBase, isDrrReport, isRejectionReport, rejectionDayColumns, supplierRows]);
 
   const filteredRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -1017,6 +1121,17 @@ const AdminDashboard = () => {
       }
     }));
   };
+  const saveBopValue = async (row, column, value) => {
+    if (activeReportId !== 'bop-parts-receipt') return;
+    const partType = String(row.defectDetails || '').split(' ')[0].toLowerCase();
+    const day = getDayNumberFromColumn(column);
+    await api.post('/mis-operations/bop-receipts', {
+      productionLine: `D${activeSubReportBase.line}`,
+      partType,
+      quantity: toNumber(value),
+      receivedAt: new Date(reportYear, reportMonth - 1, day, 12).toISOString()
+    });
+  };
   const updateDrrOutputOverride = (dayId, value) => {
     const overrideKey = `${periodKey}:${activeSubReportBase.id}`;
     setDrrOverrides((current) => ({
@@ -1030,7 +1145,7 @@ const AdminDashboard = () => {
       }
     }));
   };
-  const editableCellClass = 'h-8 w-full rounded border border-slate-300 bg-white px-1 text-center text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
+  const editableCellClass = 'h-8 w-full min-w-0 rounded border border-slate-300 bg-white px-1 text-center text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
 
   return (
     <div className="space-y-6">
@@ -1377,6 +1492,7 @@ const AdminDashboard = () => {
                             min="0"
                             value={row.days?.[dayIndex] || ''}
                             onChange={(event) => updateDrrOverride(row, column.id, event.target.value)}
+                            onBlur={(event) => saveBopValue(row, column, event.target.value)}
                             className={editableCellClass}
                           />
                         ) : ''}

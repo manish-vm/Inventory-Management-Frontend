@@ -3,7 +3,27 @@ import toast from 'react-hot-toast';
 import { Edit, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { defectDetailAPI } from '../api/api';
 
-const emptyForm = { type: 'reject', name: '', isActive: true };
+const emptyForm = {
+  type: 'reject',
+  name: '',
+  productionLine: '',
+  reportType: '',
+  processName: '',
+  partName: '',
+  sortOrder: 0,
+  isActive: true
+};
+
+const reportTypes = [
+  ['helmet-assembly', 'Helmet Assembly'],
+  ['visor-moulding', 'Visor Moulding'],
+  ['visor-mechanism-top-moulding', 'Visor Mechanism Top Moulding'],
+  ['visor-coating', 'Visor Coating'],
+  ['shell-moulding', 'Shell Moulding'],
+  ['chin-cover-moulding', 'Chin Cover Moulding'],
+  ['spoiler-moulding', 'Spoiler Moulding'],
+  ['stagewise-rejection', 'Stagewise Rejection']
+];
 
 const typeLabel = {
   reject: 'Reject',
@@ -78,6 +98,11 @@ const DefectDetailManager = ({ onClose }) => {
     setFormData({
       type: item.type,
       name: item.name,
+      productionLine: item.productionLine || '',
+      reportType: item.reportType || '',
+      processName: item.processName || '',
+      partName: item.partName || '',
+      sortOrder: item.sortOrder || 0,
       isActive: item.isActive !== false
     });
   };
@@ -125,6 +150,40 @@ const DefectDetailManager = ({ onClose }) => {
                   <option value="rework">Rework</option>
                   <option value="both">Common (Reject &amp; Rework)</option>
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={formData.productionLine}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, productionLine: event.target.value }))}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800"
+                >
+                  <option value="">All lines</option>
+                  {['D1', 'D2', 'D3', 'D4'].map((line) => <option key={line} value={line}>{line}</option>)}
+                </select>
+                <select
+                  value={formData.reportType}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, reportType: event.target.value }))}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800"
+                >
+                  <option value="">All reports</option>
+                  {reportTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={formData.processName}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, processName: event.target.value, processKey: '' }))}
+                  placeholder="Process (optional)"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800"
+                />
+                <input
+                  value={formData.partName}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, partName: event.target.value, partKey: '' }))}
+                  placeholder="Part (optional)"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800"
+                />
               </div>
 
               <div>
@@ -180,7 +239,9 @@ const DefectDetailManager = ({ onClose }) => {
                       <div key={item._id} className="flex items-center justify-between gap-3 p-4">
                         <div className="min-w-0">
                           <p className="truncate font-medium text-slate-900 dark:text-white">{item.name}</p>
-                          <p className="text-xs text-slate-500">{item.isActive ? 'Active' : 'Inactive'}</p>
+                          <p className="text-xs text-slate-500">
+                            {[item.productionLine || 'All lines', item.reportType || 'All reports', item.isActive ? 'Active' : 'Inactive'].join(' · ')}
+                          </p>
                         </div>
                         <div className="flex shrink-0 gap-1">
                           <button type="button" onClick={() => handleEdit(item)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">

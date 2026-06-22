@@ -113,8 +113,22 @@ const QRScannerPage = () => {
     const fetchDefectDetails = async () => {
       try {
         const [rejectRes, reworkRes] = await Promise.all([
-          defectDetailAPI.getAll({ type: 'reject', isActive: true }),
-          defectDetailAPI.getAll({ type: 'rework', isActive: true })
+          defectDetailAPI.getAll({
+            type: 'reject',
+            isActive: true,
+            productionLine: selectedStage?.productionLine,
+            reportType: selectedStage?.reportType,
+            processKey: selectedStage?.processKey,
+            partKey: selectedStage?.partKey
+          }),
+          defectDetailAPI.getAll({
+            type: 'rework',
+            isActive: true,
+            productionLine: selectedStage?.productionLine,
+            reportType: selectedStage?.reportType,
+            processKey: selectedStage?.processKey,
+            partKey: selectedStage?.partKey
+          })
         ]);
         setDefectDetails({
           reject: rejectRes.data || [],
@@ -126,7 +140,7 @@ const QRScannerPage = () => {
     };
 
     fetchDefectDetails();
-  }, []);
+  }, [selectedStage]);
 
   useEffect(() => {
     const q = search.trim();
@@ -307,6 +321,12 @@ const QRScannerPage = () => {
         productName: product.productName,
         stageId: selectedStage.stageNumber,
         stageName: selectedStage.stageName,
+        productionLine: selectedStage.productionLine || '',
+        reportType: selectedStage.reportType || '',
+        processKey: selectedStage.processKey || '',
+        processName: selectedStage.processName || selectedStage.stageName || '',
+        partKey: selectedStage.partKey || '',
+        partName: selectedStage.partName || product.partDescription || product.productName || '',
         acceptedCount: Number(counts.accepted || 0),
         // Rejected/Rework counts are derived from questionnaire selections.
         // Provide placeholders; backend will overwrite based on rejectionFormResponses/reworkFormResponses.

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -309,7 +309,21 @@ export const inspectionAPI = {
   getAdminTraceability: (id) => api.get(`/inspection/admin/traceability/${id}`),
   getAdminResponses: (params) => api.get('/inspection/admin/responses', { params }),
   getProductionAnalytics: () => api.get('/inspection/admin/production-analytics'),
+  getMisDashboard: (params) => api.get('/inspection/admin/mis-dashboard', { params }),
+  getMisTaxonomy: () => api.get('/inspection/admin/mis-dashboard/taxonomy'),
+  syncMisTaxonomy: () => api.post('/inspection/admin/mis-dashboard/sync-taxonomy'),
   getAdminResponseById: (id) => api.get(`/inspection/admin/responses/${id}`)
+};
+
+export const misOperationsAPI = {
+  getBopReceipts: (params) => api.get('/mis-operations/bop-receipts', { params }),
+  createBopReceipt: (data) => api.post('/mis-operations/bop-receipts', data),
+  updateBopReceipt: (id, data) => api.put(`/mis-operations/bop-receipts/${id}`, data),
+  deleteBopReceipt: (id) => api.delete(`/mis-operations/bop-receipts/${id}`),
+  getSupplierRejections: (params) => api.get('/mis-operations/supplier-rejections', { params }),
+  createSupplierRejection: (data) => api.post('/mis-operations/supplier-rejections', data),
+  updateSupplierRejection: (id, data) => api.put(`/mis-operations/supplier-rejections/${id}`, data),
+  deleteSupplierRejection: (id) => api.delete(`/mis-operations/supplier-rejections/${id}`)
 };
 
 // Assembly APIs
@@ -324,6 +338,4 @@ export const assemblyAPI = {
 };
 
 export default api;
-
-
 
