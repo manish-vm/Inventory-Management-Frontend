@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, FileSpreadsheet, Search, User } from 'lucide-react';
+import { ClipboardList, Download, FileSpreadsheet, Search, User } from 'lucide-react';
+import * as XLSX from 'xlsx-js-style';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../api/api';
+import { api, misOperationsAPI } from '../api/api';
 import {
   helmetD1DrrReport,
   helmetD1RejectionReport,
@@ -27,6 +28,9 @@ import {
   stagewiseReports,
   supplierRejectionReport
 } from '../data/latestWorkbookReportData';
+import { shellMouldingInspectionReports } from '../data/shellMouldingInspectionData';
+import { visorPdiirInspectionReports } from '../data/visorPdiirInspectionData';
+import { d1VmBaseInspectionReports } from '../data/d1VmBaseInspectionData';
 
 const drrSummaryRows = [
   {
@@ -366,6 +370,30 @@ const reportTabs = [
 const D1_REJECTION_REPORT_ID = 'd1-helmet-assembly-rejection';
 const REJECTION_REPORT_IDS = [1, 2, 3, 4].map((line) => `d${line}-helmet-assembly-rejection`);
 const emptyRejectionOverrides = () => ({ output: {}, rows: {} });
+const dashboardReportFamilies = [
+  { id: 'helmet-mis', name: 'MIS Helmet Quality Performance Report' },
+  { id: 'shell-moulding-inspection', name: 'Shell Moulding Inspection Report' },
+  { id: 'visor-pdiir-inspection', name: 'VISOR PDIIR Report' },
+  { id: 'd1-vm-base-rh-lh-inspection', name: 'D1 VM BASE RH/LH Report' },
+];
+const shellInspectionGroups = shellMouldingInspectionReports.reduce((groups, report) => {
+  if (!groups.some((group) => group.id === report.groupId)) {
+    groups.push({ id: report.groupId, name: report.groupName });
+  }
+  return groups;
+}, []);
+const visorPdiirGroups = visorPdiirInspectionReports.reduce((groups, report) => {
+  if (!groups.some((group) => group.id === report.groupId)) {
+    groups.push({ id: report.groupId, name: report.groupName });
+  }
+  return groups;
+}, []);
+const d1VmBaseGroups = d1VmBaseInspectionReports.reduce((groups, report) => {
+  if (!groups.some((group) => group.id === report.groupId)) {
+    groups.push({ id: report.groupId, name: report.groupName });
+  }
+  return groups;
+}, []);
 
 const dayColumns = Array.from({ length: 31 }, (_, index) => {
   const day = String(index + 1).padStart(2, '0');
@@ -378,7 +406,154 @@ const dayColumns = Array.from({ length: 31 }, (_, index) => {
 const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
+const sanitizeSheetName = (name, usedNames = new Set()) => {
+  const baseName = String(name || 'Sheet')
+    .replace(/[:\\/?*[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 31) || 'Sheet';
+  let sheetName = baseName;
+  let index = 2;
+  while (usedNames.has(sheetName)) {
+    const suffix = ` ${index}`;
+    sheetName = `${baseName.slice(0, 31 - suffix.length)}${suffix}`;
+    index += 1;
+  }
+  usedNames.add(sheetName);
+  return sheetName;
+};
+const excelColumn = (index) => XLSX.utils.encode_col(index);
+const numericCell = (value) => Number(value || 0);
+const exportBorder = {
+  top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+  right: { style: 'thin', color: { rgb: 'CBD5E1' } },
+  bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+  left: { style: 'thin', color: { rgb: 'CBD5E1' } }
+};
+const exportStyles = {
+  title: {
+    font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 14 },
+    fill: { fgColor: { rgb: '1E3A8A' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: exportBorder
+  },
+  meta: {
+    font: { bold: true, color: { rgb: '334155' } },
+    fill: { fgColor: { rgb: 'E2E8F0' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: exportBorder
+  },
+  header: {
+    font: { bold: true, color: { rgb: '0F172A' } },
+    fill: { fgColor: { rgb: 'BFDBFE' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: exportBorder
+  },
+  subHeader: {
+    font: { bold: true, color: { rgb: 'FFFFFF' } },
+    fill: { fgColor: { rgb: '2563EB' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: exportBorder
+  },
+  summary: {
+    font: { bold: true, color: { rgb: '7C2D12' } },
+    fill: { fgColor: { rgb: 'FED7AA' } },
+    alignment: { vertical: 'center', wrapText: true },
+    border: exportBorder
+  },
+  total: {
+    font: { bold: true, color: { rgb: '0F172A' } },
+    fill: { fgColor: { rgb: 'DBEAFE' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    border: exportBorder
+  },
+  section: {
+    font: { bold: true, color: { rgb: '1E3A8A' } },
+    fill: { fgColor: { rgb: 'EFF6FF' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: exportBorder
+  },
+  data: {
+    fill: { fgColor: { rgb: 'FFFFFF' } },
+    alignment: { vertical: 'center', wrapText: true },
+    border: exportBorder
+  },
+  number: {
+    fill: { fgColor: { rgb: 'FFFFFF' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    border: exportBorder
+  }
+};
+const mergeStyles = (...styles) => styles.reduce((merged, style) => ({
+  ...merged,
+  ...style,
+  font: { ...(merged.font || {}), ...(style.font || {}) },
+  fill: { ...(merged.fill || {}), ...(style.fill || {}) },
+  alignment: { ...(merged.alignment || {}), ...(style.alignment || {}) },
+  border: style.border || merged.border
+}), {});
+const styleWorksheet = (worksheet, rows, options = {}) => {
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
+  const headerRows = new Set(options.headerRows || []);
+  const subHeaderRows = new Set(options.subHeaderRows || []);
+  const summaryRows = new Set(options.summaryRows || []);
+  const totalRows = new Set(options.totalRows || []);
+  const sectionRows = new Set(options.sectionRows || []);
+  const metaRows = new Set(options.metaRows || []);
+  const numericColumns = new Set(options.numericColumns || []);
+  const percentColumns = new Set(options.percentColumns || []);
+  const percentCells = new Set(options.percentCells || []);
+
+  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+    const isBlankRow = (rows[rowIndex] || []).every((value) => value === '' || value == null);
+    if (isBlankRow) continue;
+
+    for (let colIndex = range.s.c; colIndex <= range.e.c; colIndex += 1) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+      if (!worksheet[address]) worksheet[address] = { t: 's', v: '' };
+      const cell = worksheet[address];
+      const isPercentCell = percentColumns.has(colIndex) || percentCells.has(address);
+      const isNumber = cell.t === 'n' || numericColumns.has(colIndex) || isPercentCell;
+      let style = isNumber ? exportStyles.number : exportStyles.data;
+      if (rowIndex === 0) style = exportStyles.title;
+      else if (metaRows.has(rowIndex)) style = exportStyles.meta;
+      else if (subHeaderRows.has(rowIndex)) style = exportStyles.subHeader;
+      else if (headerRows.has(rowIndex)) style = exportStyles.header;
+      else if (summaryRows.has(rowIndex)) style = exportStyles.summary;
+      else if (totalRows.has(rowIndex)) style = exportStyles.total;
+      else if (sectionRows.has(rowIndex)) style = exportStyles.section;
+      cell.s = mergeStyles(style, cell.s || {});
+      if (isPercentCell || String(cell.z || '').includes('%')) cell.z = '0.00%';
+    }
+  }
+
+  worksheet['!rows'] = rows.map((row, index) => ({
+    hpt: index === 0 ? 26 : (row || []).some((value) => String(value || '').length > 35) ? 32 : 22
+  }));
+};
+const getShellInspectionRowKey = (row, index) => `${index}-${normalizeReportKey(row.characteristic)}-${normalizeReportKey(row.inspectionMethod)}`;
 const toNumber = (value) => Math.max(0, Number(value) || 0);
+const normalizeInspectionDecision = (value) => {
+  const normalized = normalizeReportKey(value).replace(/[\s_-]+/g, '');
+  if (['a', 'acc', 'accept', 'accepted', 'ok', 'pass', 'passed'].includes(normalized)) return 'accepted';
+  if (['r', 'rej', 'reject', 'rejected', 'ng', 'fail', 'failed'].includes(normalized)) return 'rejected';
+  if (['rw', 'rework', 'reworked'].includes(normalized)) return 'rework';
+  return '';
+};
+const emptyShellStageCounts = () => Array.from({ length: 5 }, (_, index) => ({
+  stage: index + 1,
+  accepted: 0,
+  rejected: 0,
+  rework: 0
+}));
+const getShellStageCounts = (rows) => rows.reduce((counts, row) => {
+  if (row.type === 'section') return counts;
+  (row.samples || []).slice(0, 5).forEach((sample, index) => {
+    const decision = normalizeInspectionDecision(sample);
+    if (decision) counts[index][decision] += 1;
+  });
+  return counts;
+}, emptyShellStageCounts());
 const getDayNumberFromColumn = (column) => Number(String(column?.id || '').match(/(\d+)$/)?.[1] || 0);
 const getRejectionDayValue = (report, column, metric) => {
   const dayNumber = getDayNumberFromColumn(column);
@@ -433,6 +608,48 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null) 
     days,
     daysById: days.reduce((acc, day, index) => {
       acc[columns[index].id] = day;
+      return acc;
+    }, {}),
+    totals
+  };
+};
+
+const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = []) => {
+  if (!report) return report;
+  const rowsByKey = new Map((aggregateRows || []).map((row) => [
+    `${row._id?.rowKey}:${row._id?.day}`,
+    Number(row.value || 0)
+  ]));
+
+  const rows = (report.rows || []).map((row) => {
+    const days = (row.days || []).map((value, index) => value + (rowsByKey.get(`${row.drrRowKey}:${index + 1}`) || 0));
+    return {
+      ...row,
+      days,
+      total: days.reduce((sum, value) => sum + value, 0)
+    };
+  });
+
+  const days = (report.days || []).map((day, index) => {
+    const rejection = rows.reduce((sum, row) => sum + toNumber(row.days?.[index]), 0);
+    return {
+      ...day,
+      rejection,
+      rejectionPercent: day.output ? Number(((rejection / day.output) * 100).toFixed(2)) : 0
+    };
+  });
+  const totals = days.reduce(
+    (acc, day) => ({ output: acc.output + day.output, rejection: acc.rejection + day.rejection }),
+    { output: 0, rejection: 0 }
+  );
+  totals.rejectionPercent = totals.output ? Number(((totals.rejection / totals.output) * 100).toFixed(2)) : 0;
+
+  return {
+    ...report,
+    rows,
+    days,
+    daysById: days.reduce((acc, day, index) => {
+      acc[Object.keys(report.daysById || {})[index] || `day-${String(index + 1).padStart(2, '0')}`] = day;
       return acc;
     }, {}),
     totals
@@ -531,11 +748,61 @@ const buildEditableRejectionReport = (report, overrides, dayColumnsForReport) =>
   };
 };
 
+const applyEmployeeSheetAggregateToRejectionReport = (report, aggregateRows = [], dayColumnsForReport = []) => {
+  if (!report) return report;
+  const rowsByKey = new Map((aggregateRows || []).map((row) => [
+    `${row._id?.rowKey}:${row._id?.day}`,
+    Number(row.value || 0)
+  ]));
+
+  const rows = (report.rows || []).map((row) => {
+    const rowKey = normalizeReportKey(row.rejectionDetails);
+    const days = dayColumnsForReport.map((column, index) => {
+      const baseDay = row.days?.[index] || {};
+      return {
+        ...baseDay,
+        rejection: toNumber(baseDay.rejection) + (rowsByKey.get(`${rowKey}:${index + 1}`) || 0)
+      };
+    });
+    const total = days.reduce((sum, day) => sum + toNumber(day.rejection), 0);
+    return { ...row, days, total };
+  });
+
+  const days = dayColumnsForReport.map((column, index) => {
+    const baseDay = report.daysById?.[column.id] || report.days?.[index] || {};
+    const rejection = rows.reduce((sum, row) => sum + toNumber(row.days?.[index]?.rejection), 0);
+    return {
+      ...baseDay,
+      rejection,
+      rejectionPercent: baseDay.output ? Number(((rejection / baseDay.output) * 100).toFixed(2)) : 0
+    };
+  });
+  const totals = days.reduce(
+    (acc, day) => ({ output: acc.output + toNumber(day.output), rejection: acc.rejection + toNumber(day.rejection), rejectionPercent: 0 }),
+    { output: 0, rejection: 0, rejectionPercent: 0 }
+  );
+  totals.rejectionPercent = totals.output ? Number(((totals.rejection / totals.output) * 100).toFixed(2)) : 0;
+
+  return {
+    ...report,
+    rows: rows.map((row) => ({
+      ...row,
+      totalPercent: totals.rejection ? Number(((row.total / totals.rejection) * 100).toFixed(2)) : 0
+    })),
+    days,
+    daysById: days.reduce((acc, day, index) => {
+      acc[dayColumnsForReport[index].id] = day;
+      return acc;
+    }, {}),
+    totals
+  };
+};
+
 const gridBorderClass = 'border-r border-b border-slate-300 dark:border-slate-700';
 const cellHeightClass = 'h-12 max-h-12 overflow-hidden whitespace-nowrap';
 const dayCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} px-1 py-2 text-center`;
-const totalCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-900/40`;
-const totalPercentCellClass = `w-20 min-w-20 max-w-20 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-900/40`;
+const totalCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-950`;
+const totalPercentCellClass = `w-20 min-w-20 max-w-20 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-950`;
 const reportRowClass = 'h-12';
 
 const misLineRows = {
@@ -806,8 +1073,113 @@ const UserDashboard = ({ user }) => (
   </div>
 );
 
+const ShellMouldingInspectionTable = ({ report, rows, stageCounts = [], onSampleChange, onRemarksChange, onSaveRow }) => (
+  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="flex flex-col gap-1 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{report.reportTitle}</h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400">Source: {report.sourceFileName}</p>
+    </div>
+
+    {stageCounts.length > 0 && (
+    <div className="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <p className="mb-3 text-sm font-semibold text-slate-900 dark:text-white">Stage totals from inspection rows</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {stageCounts.map((stage) => (
+          <div key={stage.stage} className="rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Stage {stage.stage}</p>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+              <div>
+                <p className="font-semibold text-emerald-700 dark:text-emerald-300">{stage.accepted}</p>
+                <p className="text-slate-500 dark:text-slate-400">Accepted</p>
+              </div>
+              <div>
+                <p className="font-semibold text-rose-700 dark:text-rose-300">{stage.rejected}</p>
+                <p className="text-slate-500 dark:text-slate-400">Rejected</p>
+              </div>
+              <div>
+                <p className="font-semibold text-amber-700 dark:text-amber-300">{stage.rework}</p>
+                <p className="text-slate-500 dark:text-slate-400">Rework</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+    )}
+
+    <div className="max-h-[70vh] overflow-auto">
+      <table className="min-w-[1100px] w-full border-separate border-spacing-0 text-sm">
+        <thead className="bg-blue-100 dark:bg-slate-900">
+          <tr className={reportRowClass}>
+            {['SI. No', 'Characteristics Description', 'Specification', 'Inspection Method', '1', '2', '3', '4', '5', 'Remarks'].map((header) => (
+              <th
+                key={header}
+                className={`${cellHeightClass} ${gridBorderClass} sticky top-0 z-20 bg-blue-100 px-3 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100 ${
+                  ['1', '2', '3', '4', '5'].includes(header) ? 'w-20 text-center' : ''
+                }`}
+              >
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => {
+            const samples = Array.from({ length: 5 }, (_, index) => row.samples?.[index] || '');
+
+            return row.type === 'section' ? (
+            <tr key={`${row.title}-${rowIndex}`} className={reportRowClass}>
+              <td
+                colSpan={10}
+                className={`${cellHeightClass} border-b border-slate-300 bg-blue-50 px-3 py-2 text-left text-sm font-bold uppercase tracking-wide text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100`}
+              >
+                {row.title}
+              </td>
+            </tr>
+          ) : (
+            <tr key={`${row.characteristic}-${rowIndex}`} className={reportRowClass}>
+              <td className={`${cellHeightClass} ${gridBorderClass} w-20 px-3 py-2 text-center text-slate-700 dark:text-slate-200`}>{row.sno}</td>
+              <td className={`${cellHeightClass} ${gridBorderClass} min-w-[280px] px-3 py-2 font-medium text-slate-900 dark:text-white`}>{row.characteristic}</td>
+              <td className={`${cellHeightClass} ${gridBorderClass} min-w-[220px] px-3 py-2 text-slate-700 dark:text-slate-200`}>{row.specification}</td>
+              <td className={`${cellHeightClass} ${gridBorderClass} min-w-[190px] px-3 py-2 text-slate-700 dark:text-slate-200`}>{row.inspectionMethod}</td>
+              {samples.map((sample, sampleIndex) => (
+                <td key={`${rowIndex}-${sampleIndex}`} className={`${cellHeightClass} ${gridBorderClass} w-20 px-2 py-2 text-center text-slate-700 dark:text-slate-200`}>
+                  <input
+                    type="text"
+                    value={sample}
+                    onChange={(event) => onSampleChange(row, sampleIndex, event.target.value)}
+                    onBlur={() => onSaveRow(row)}
+                    className="h-8 w-full min-w-0 rounded border border-slate-300 bg-white px-1 text-center text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                  />
+                </td>
+              ))}
+              <td className={`${cellHeightClass} border-b border-slate-200 px-3 py-2 text-slate-700 dark:border-slate-700 dark:text-slate-200`}>
+                <input
+                  type="text"
+                  value={row.remarks}
+                  onChange={(event) => onRemarksChange(row, event.target.value)}
+                  onBlur={() => onSaveRow(row)}
+                  className="h-8 w-full min-w-[180px] rounded border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                />
+              </td>
+            </tr>
+          );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
 const AdminDashboard = () => {
   const now = new Date();
+  const [activeDashboardFamilyId, setActiveDashboardFamilyId] = useState(dashboardReportFamilies[0].id);
+  const [activeShellInspectionGroupId, setActiveShellInspectionGroupId] = useState(shellInspectionGroups[0].id);
+  const [activeShellInspectionId, setActiveShellInspectionId] = useState(shellMouldingInspectionReports[0].id);
+  const [activeVisorPdiirGroupId, setActiveVisorPdiirGroupId] = useState(visorPdiirGroups[0].id);
+  const [activeVisorPdiirId, setActiveVisorPdiirId] = useState(visorPdiirInspectionReports[0].id);
+  const [activeD1VmBaseGroupId, setActiveD1VmBaseGroupId] = useState(d1VmBaseGroups[0].id);
+  const [activeD1VmBaseId, setActiveD1VmBaseId] = useState(d1VmBaseInspectionReports[0].id);
   const [activeReportId, setActiveReportId] = useState(reportTabs[0].id);
   const [activeSubReportId, setActiveSubReportId] = useState(reportTabs[0].subReports[0].id);
   const [searchTerm, setSearchTerm] = useState('');
@@ -816,10 +1188,15 @@ const AdminDashboard = () => {
   const [reportDay, setReportDay] = useState(Math.min(now.getDate(), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
   const [rejectionReport, setRejectionReport] = useState(null);
   const [backendMisReports, setBackendMisReports] = useState({});
+  const [employeeSheetAggregates, setEmployeeSheetAggregates] = useState({});
   const [supplierRows, setSupplierRows] = useState([]);
+  const [shellInspectionEntries, setShellInspectionEntries] = useState({});
+  const [visorPdiirEntries, setVisorPdiirEntries] = useState({});
+  const [d1VmBaseEntries, setD1VmBaseEntries] = useState({});
   const [rejectionOverrides, setRejectionOverrides] = useState({});
   const [drrOverrides, setDrrOverrides] = useState({});
   const periodKey = `${reportYear}-${String(reportMonth).padStart(2, '0')}`;
+  const inspectionDateValue = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(reportDay).padStart(2, '0')}`;
 
   useEffect(() => {
     let isMounted = true;
@@ -828,9 +1205,10 @@ const AdminDashboard = () => {
       api.get('/inspection/admin/rejection-report', { params: { month: reportMonth, year: reportYear } }),
       api.get('/inspection/admin/mis-dashboard', { params: { month: reportMonth, year: reportYear } }),
       api.get('/mis-operations/bop-receipts', { params: { month: reportMonth, year: reportYear } }),
-      api.get('/mis-operations/supplier-rejections', { params: { month: reportMonth, year: reportYear } })
+      api.get('/mis-operations/supplier-rejections', { params: { month: reportMonth, year: reportYear } }),
+      misOperationsAPI.getEmployeeSheetEntries({ month: reportMonth, year: reportYear })
     ])
-      .then(([rejectionResponse, misResponse, bopResponse, supplierResponse]) => {
+      .then(([rejectionResponse, misResponse, bopResponse, supplierResponse, employeeSheetResponse]) => {
         if (!isMounted) return;
         const report = rejectionResponse.data || {};
         const days = Array.isArray(report.days) ? report.days : [];
@@ -873,6 +1251,13 @@ const AdminDashboard = () => {
           };
         }
         setBackendMisReports(reports);
+        setEmployeeSheetAggregates((employeeSheetResponse.data?.aggregate || []).reduce((acc, row) => {
+          const sheetId = row._id?.sheetId;
+          if (!sheetId) return acc;
+          if (!acc[sheetId]) acc[sheetId] = [];
+          acc[sheetId].push(row);
+          return acc;
+        }, {}));
         setSupplierRows((supplierResponse.data || []).map((item, index) => ({
           'S.No': index + 1,
           Source: 'Inward',
@@ -891,6 +1276,7 @@ const AdminDashboard = () => {
         if (isMounted) {
           setRejectionReport({ daysById: {}, totals: { output: 0, rejection: 0, rejectionPercent: 0 }, rows: [] });
           setBackendMisReports({});
+          setEmployeeSheetAggregates({});
           setSupplierRows([]);
         }
       });
@@ -913,6 +1299,185 @@ const AdminDashboard = () => {
     if (reportDay > daysInMonth) setReportDay(daysInMonth);
   }, [reportDay, reportMonth, reportYear]);
 
+  const isShellInspectionFamily = activeDashboardFamilyId === 'shell-moulding-inspection';
+  const isVisorPdiirFamily = activeDashboardFamilyId === 'visor-pdiir-inspection';
+  const isD1VmBaseFamily = activeDashboardFamilyId === 'd1-vm-base-rh-lh-inspection';
+  const activeShellInspectionReport = shellMouldingInspectionReports.find((report) => report.id === activeShellInspectionId)
+    || shellMouldingInspectionReports[0];
+  const activeShellInspectionSheets = shellMouldingInspectionReports.filter((report) => report.groupId === activeShellInspectionGroupId);
+  const activeVisorPdiirReport = visorPdiirInspectionReports.find((report) => report.id === activeVisorPdiirId)
+    || visorPdiirInspectionReports[0];
+  const activeVisorPdiirSheets = visorPdiirInspectionReports.filter((report) => report.groupId === activeVisorPdiirGroupId);
+  const activeD1VmBaseReport = d1VmBaseInspectionReports.find((report) => report.id === activeD1VmBaseId)
+    || d1VmBaseInspectionReports[0];
+  const activeD1VmBaseSheets = d1VmBaseInspectionReports.filter((report) => report.groupId === activeD1VmBaseGroupId);
+
+  useEffect(() => {
+    if (!activeShellInspectionSheets.some((report) => report.id === activeShellInspectionId)) {
+      setActiveShellInspectionId(activeShellInspectionSheets[0]?.id || shellMouldingInspectionReports[0].id);
+    }
+  }, [activeShellInspectionGroupId, activeShellInspectionId, activeShellInspectionSheets]);
+
+  useEffect(() => {
+    if (!activeVisorPdiirSheets.some((report) => report.id === activeVisorPdiirId)) {
+      setActiveVisorPdiirId(activeVisorPdiirSheets[0]?.id || visorPdiirInspectionReports[0].id);
+    }
+  }, [activeVisorPdiirGroupId, activeVisorPdiirId, activeVisorPdiirSheets]);
+
+  useEffect(() => {
+    if (!activeD1VmBaseSheets.some((report) => report.id === activeD1VmBaseId)) {
+      setActiveD1VmBaseId(activeD1VmBaseSheets[0]?.id || d1VmBaseInspectionReports[0].id);
+    }
+  }, [activeD1VmBaseGroupId, activeD1VmBaseId, activeD1VmBaseSheets]);
+
+  useEffect(() => {
+    if (!isShellInspectionFamily) return;
+    let isMounted = true;
+
+    misOperationsAPI.getShellMouldingInspections({
+      sheetId: activeShellInspectionId,
+      inspectedAt: inspectionDateValue
+    })
+      .then((response) => {
+        if (!isMounted) return;
+        setShellInspectionEntries((current) => ({
+          ...current,
+          [`${inspectionDateValue}:${activeShellInspectionId}`]: (response.data || []).reduce((entries, row) => {
+            entries[row.rowKey] = {
+              samples: Array.from({ length: 5 }, (_, index) => row.samples?.[index] || ''),
+              remarks: row.remarks || ''
+            };
+            return entries;
+          }, {})
+        }));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setShellInspectionEntries((current) => ({
+          ...current,
+          [`${inspectionDateValue}:${activeShellInspectionId}`]: {}
+        }));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeShellInspectionId, inspectionDateValue, isShellInspectionFamily]);
+
+  useEffect(() => {
+    if (!isVisorPdiirFamily) return;
+    let isMounted = true;
+
+    misOperationsAPI.getVisorPdiirInspections({
+      sheetId: activeVisorPdiirId,
+      inspectedAt: inspectionDateValue
+    })
+      .then((response) => {
+        if (!isMounted) return;
+        setVisorPdiirEntries((current) => ({
+          ...current,
+          [`${inspectionDateValue}:${activeVisorPdiirId}`]: (response.data || []).reduce((entries, row) => {
+            entries[row.rowKey] = {
+              samples: Array.from({ length: 5 }, (_, index) => row.samples?.[index] || ''),
+              remarks: row.remarks || ''
+            };
+            return entries;
+          }, {})
+        }));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setVisorPdiirEntries((current) => ({
+          ...current,
+          [`${inspectionDateValue}:${activeVisorPdiirId}`]: {}
+        }));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeVisorPdiirId, inspectionDateValue, isVisorPdiirFamily]);
+
+  useEffect(() => {
+    if (!isD1VmBaseFamily) return;
+    let isMounted = true;
+
+    misOperationsAPI.getVisorPdiirInspections({
+      sheetId: activeD1VmBaseId,
+      inspectedAt: inspectionDateValue
+    })
+      .then((response) => {
+        if (!isMounted) return;
+        setD1VmBaseEntries((current) => ({
+          ...current,
+          [`${inspectionDateValue}:${activeD1VmBaseId}`]: (response.data || []).reduce((entries, row) => {
+            entries[row.rowKey] = {
+              samples: Array.from({ length: 5 }, (_, index) => row.samples?.[index] || ''),
+              remarks: row.remarks || ''
+            };
+            return entries;
+          }, {})
+        }));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setD1VmBaseEntries((current) => ({
+          ...current,
+          [`${inspectionDateValue}:${activeD1VmBaseId}`]: {}
+        }));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeD1VmBaseId, inspectionDateValue, isD1VmBaseFamily]);
+
+  const activeShellInspectionRows = useMemo(() => {
+    const savedRows = shellInspectionEntries[`${inspectionDateValue}:${activeShellInspectionId}`] || {};
+    return activeShellInspectionReport.rows.map((row, index) => {
+      if (row.type === 'section') return row;
+      const rowKey = getShellInspectionRowKey(row, index);
+      const savedRow = savedRows[rowKey] || {};
+      return {
+        ...row,
+        shellRowKey: rowKey,
+        samples: Array.from({ length: 5 }, (_, sampleIndex) => savedRow.samples?.[sampleIndex] ?? row.samples?.[sampleIndex] ?? ''),
+        remarks: savedRow.remarks ?? row.remarks ?? ''
+      };
+    });
+  }, [activeShellInspectionId, activeShellInspectionReport.rows, inspectionDateValue, shellInspectionEntries]);
+  const activeVisorPdiirRows = useMemo(() => {
+    const savedRows = visorPdiirEntries[`${inspectionDateValue}:${activeVisorPdiirId}`] || {};
+    return activeVisorPdiirReport.rows.map((row, index) => {
+      if (row.type === 'section') return row;
+      const rowKey = getShellInspectionRowKey(row, index);
+      const savedRow = savedRows[rowKey] || {};
+      return {
+        ...row,
+        shellRowKey: rowKey,
+        samples: Array.from({ length: 5 }, (_, sampleIndex) => savedRow.samples?.[sampleIndex] ?? row.samples?.[sampleIndex] ?? ''),
+        remarks: savedRow.remarks ?? row.remarks ?? ''
+      };
+    });
+  }, [activeVisorPdiirId, activeVisorPdiirReport.rows, inspectionDateValue, visorPdiirEntries]);
+  const activeD1VmBaseRows = useMemo(() => {
+    const savedRows = d1VmBaseEntries[`${inspectionDateValue}:${activeD1VmBaseId}`] || {};
+    return activeD1VmBaseReport.rows.map((row, index) => {
+      if (row.type === 'section') return row;
+      const rowKey = getShellInspectionRowKey(row, index);
+      const savedRow = savedRows[rowKey] || {};
+      return {
+        ...row,
+        shellRowKey: rowKey,
+        samples: Array.from({ length: 5 }, (_, sampleIndex) => savedRow.samples?.[sampleIndex] ?? row.samples?.[sampleIndex] ?? ''),
+        remarks: savedRow.remarks ?? row.remarks ?? ''
+      };
+    });
+  }, [activeD1VmBaseId, activeD1VmBaseReport.rows, d1VmBaseEntries, inspectionDateValue]);
+  const shellStageCounts = useMemo(
+    () => getShellStageCounts(activeShellInspectionRows),
+    [activeShellInspectionRows]
+  );
   const activeReport = reportTabs.find((report) => report.id === activeReportId) || reportTabs[0];
   const activeSubReportBase = activeReport.subReports.find((report) => report.id === activeSubReportId) || activeReport.subReports[0];
   const isRejectionReport = activeSubReportBase.type === 'rejection';
@@ -968,14 +1533,14 @@ const AdminDashboard = () => {
         } : {}),
         rows: mergeRejectionRows(rejectionSubReport?.rows || [], backendRows)
       };
-      reports[reportId] = buildEditableRejectionReport(
+      reports[reportId] = applyEmployeeSheetAggregateToRejectionReport(buildEditableRejectionReport(
         reportWithTemplateRows,
         rejectionOverrides[`${periodKey}:${reportId}`] || emptyRejectionOverrides(),
         rejectionDayColumns
-      );
+      ), employeeSheetAggregates[reportId] || [], rejectionDayColumns);
       return reports;
     }, {});
-  }, [backendMisReports, periodKey, rejectionReport, rejectionOverrides, rejectionDayColumns]);
+  }, [backendMisReports, employeeSheetAggregates, periodKey, rejectionReport, rejectionOverrides, rejectionDayColumns]);
   const activeEditableRejectionReport = isRejectionReport
     ? editableRejectionReports[activeSubReportBase.id]
     : editableRejectionReports[D1_REJECTION_REPORT_ID];
@@ -984,16 +1549,16 @@ const AdminDashboard = () => {
     for (const reportGroup of reportTabs) {
       for (const subReport of reportGroup.subReports) {
         if (!['drr', 'visor-drr'].includes(subReport.type)) continue;
-        reports[subReport.id] = buildEditableDrrReport(
+        reports[subReport.id] = applyEmployeeSheetAggregateToDrrReport(buildEditableDrrReport(
           subReport.rows,
           drrOverrides[`${periodKey}:${subReport.id}`] || emptyRejectionOverrides(),
           currentDayColumns,
           backendMisReports[subReport.id]
-        );
+        ), employeeSheetAggregates[subReport.id] || []);
       }
     }
     return reports;
-  }, [backendMisReports, currentDayColumns, drrOverrides, periodKey]);
+  }, [backendMisReports, currentDayColumns, drrOverrides, employeeSheetAggregates, periodKey]);
   const activeEditableDrrReport = editableDrrReports[activeSubReportBase.id] || null;
   const activeSubReport = useMemo(() => {
     if (isDrrReport || activeSubReportBase.type === 'visor-drr') {
@@ -1014,6 +1579,18 @@ const AdminDashboard = () => {
   }, [activeEditableDrrReport?.rows, activeEditableRejectionReport?.rows, activeSubReportBase, isDrrReport, isRejectionReport, rejectionDayColumns, supplierRows]);
 
   const filteredRows = useMemo(() => {
+    if (isShellInspectionFamily || isVisorPdiirFamily || isD1VmBaseFamily) {
+      const inspectionRows = isD1VmBaseFamily ? activeD1VmBaseRows : isVisorPdiirFamily ? activeVisorPdiirRows : activeShellInspectionRows;
+      const query = searchTerm.trim().toLowerCase();
+      if (!query) return inspectionRows;
+
+      return inspectionRows.filter((row) =>
+        [row.title, row.characteristic, row.specification, row.inspectionMethod, row.remarks]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query))
+      );
+    }
+
     const query = searchTerm.trim().toLowerCase();
     if (!query) return activeSubReport.rows;
 
@@ -1022,15 +1599,25 @@ const AdminDashboard = () => {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     );
-  }, [activeSubReport.rows, searchTerm]);
+  }, [activeD1VmBaseRows, activeShellInspectionRows, activeSubReport.descriptorColumns, activeSubReport.rows, activeVisorPdiirRows, isD1VmBaseFamily, isShellInspectionFamily, isVisorPdiirFamily, searchTerm]);
 
-  const primaryDescriptorKey = activeSubReport.descriptorColumns[0]?.key;
-  const detailDescriptorKey = activeSubReport.descriptorColumns[activeSubReport.descriptorColumns.length - 1]?.key;
-  const primaryGroups = primaryDescriptorKey
+  const activeInspectionRowsForCounts = isD1VmBaseFamily ? activeD1VmBaseRows : isVisorPdiirFamily ? activeVisorPdiirRows : activeShellInspectionRows;
+  const isInspectionFamily = isShellInspectionFamily || isVisorPdiirFamily || isD1VmBaseFamily;
+  const primaryDescriptorKey = isInspectionFamily ? 'inspectionMethod' : activeSubReport.descriptorColumns[0]?.key;
+  const detailDescriptorKey = isInspectionFamily ? 'characteristic' : activeSubReport.descriptorColumns[activeSubReport.descriptorColumns.length - 1]?.key;
+  const primaryGroups = isInspectionFamily
+    ? new Set(activeInspectionRowsForCounts.filter((row) => row.type !== 'section').map((row) => row.inspectionMethod).filter(Boolean)).size
+    : primaryDescriptorKey
     ? new Set(activeSubReport.rows.map((row) => row[primaryDescriptorKey]).filter(Boolean)).size
     : 0;
-  const reportRows = activeSubReport.rows.length;
-  const detailCount = detailDescriptorKey ? new Set(
+  const reportRows = isInspectionFamily ? activeInspectionRowsForCounts.filter((row) => row.type !== 'section').length : activeSubReport.rows.length;
+  const detailCount = isInspectionFamily ? new Set(
+    activeInspectionRowsForCounts
+      .filter((row) => row.type !== 'section')
+      .map((row) => row.characteristic)
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase())
+  ).size : detailDescriptorKey ? new Set(
     activeSubReport.rows
       .map((row) => row[detailDescriptorKey])
       .filter(Boolean)
@@ -1067,11 +1654,370 @@ const AdminDashboard = () => {
   const selectedDayId = currentDayColumns[selectedDayIndex]?.id || `day-${String(reportDay).padStart(2, '0')}`;
   const selectedDayLabel = currentDayColumns[selectedDayIndex]?.label || '';
 
+  const appendAoASheet = (workbook, usedSheetNames, sheetName, rows, columnWidths = [], styleOptions = {}) => {
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet['!cols'] = columnWidths.map((width) => ({ wch: width }));
+    styleWorksheet(worksheet, rows, styleOptions);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeSheetName(sheetName, usedSheetNames));
+  };
+
+  const addSheet = (workbook, usedSheetNames, sheetName, worksheet) => {
+    XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeSheetName(sheetName, usedSheetNames));
+  };
+
+  const buildExportReport = (subReport) => {
+    if (['drr', 'visor-drr'].includes(subReport.type)) {
+      return {
+        ...subReport,
+        rows: editableDrrReports[subReport.id]?.rows || [],
+        dayColumns: currentDayColumns
+      };
+    }
+    if (subReport.type === 'rejection') {
+      return {
+        ...subReport,
+        rows: editableRejectionReports[subReport.id]?.rows || [],
+        dayColumns: rejectionDayColumns
+      };
+    }
+    if (subReport.id === 'supplier-rejection-inward-inspection') {
+      return { ...subReport, rows: supplierRows };
+    }
+    return subReport;
+  };
+
+  const appendMisSheet = (workbook, usedSheetNames, subReport) => {
+    const rows = [
+      ['HELMET - PARTWISE QUALITY PERFORMANCE REPORT'],
+      [`Date: ${selectedDayLabel}`],
+      [`Month: ${monthLabel}`],
+      []
+    ];
+    const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }];
+    const widths = Array.from({ length: 14 }, (_, index) => ({ wch: index % 7 < 2 ? 18 : 13 }));
+    const subHeaderRows = [];
+    const headerRows = [];
+    const totalRows = [];
+
+    [1, 2, 3, 4].forEach((line) => {
+      const lineStart = rows.length;
+      subHeaderRows.push(lineStart);
+      rows.push([
+        `D${line} - ${['ACE', 'FIT', 'NEO', 'ARC'][line - 1]}`,
+        `For the day - ${selectedDayLabel}`,
+        '', '', '', '', '',
+        `D${line} - ${['ACE', 'FIT', 'NEO', 'ARC'][line - 1]}`,
+        `For the month - ${monthLabel}`,
+        '', '', '', '', ''
+      ]);
+      headerRows.push(rows.length);
+      rows.push([
+        'Part', 'Process', 'Prodn.Qty', 'Rej.Qty', 'Rej%', 'Part Value (Rs)', 'Rej. Value / Helmet (Rs)',
+        'Part', 'Process', 'Prodn.Qty', 'Rej.Qty', 'Rej%', 'Part Value (Rs)', 'Rej. Value / Helmet (Rs)'
+      ]);
+      merges.push(
+        { s: { r: lineStart, c: 1 }, e: { r: lineStart, c: 6 } },
+        { s: { r: lineStart, c: 8 }, e: { r: lineStart, c: 13 } }
+      );
+
+      misLineRows[line].forEach((rowConfig) => {
+        const [part, process] = rowConfig;
+        const metric = getMisMetric(crsReports, rowConfig, selectedDayIndex, selectedDayId);
+        rows.push([
+          part,
+          process,
+          metric.dayOutput,
+          metric.dayRejection,
+          { t: 'n', f: `IFERROR(D${rows.length + 1}/C${rows.length + 1},0)`, z: '0.00%' },
+          0,
+          0,
+          part,
+          process,
+          metric.monthOutput,
+          metric.monthRejection,
+          { t: 'n', f: `IFERROR(K${rows.length + 1}/J${rows.length + 1},0)`, z: '0.00%' },
+          0,
+          0
+        ]);
+      });
+      totalRows.push(rows.length);
+      rows.push(['', '', '', '', '', 'Total rejection Cost', 0, '', '', '', '', '', 'Total rejection Cost', 0]);
+      rows.push([]);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet['!cols'] = widths;
+    worksheet['!merges'] = merges;
+    styleWorksheet(worksheet, rows, {
+      metaRows: [1, 2],
+      subHeaderRows,
+      headerRows,
+      totalRows,
+      numericColumns: [2, 3, 5, 6, 9, 10, 12, 13],
+      percentColumns: [4, 11]
+    });
+    addSheet(workbook, usedSheetNames, subReport.name, worksheet);
+  };
+
+  const appendCrsSheet = (workbook, usedSheetNames, subReport) => {
+    const rows = [
+      [`Helmet - Consolidated Rejection Status - ${monthLabel}`],
+      []
+    ];
+    const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+    const widths = Array.from({ length: 8 }, (_, index) => ({ wch: index % 2 === 0 ? 28 : 14 }));
+    const subHeaderRows = [];
+    const totalRows = [];
+    const percentCells = [];
+
+    crsLayout.forEach((layoutRow) => {
+      const rowStart = rows.length;
+      subHeaderRows.push(rowStart);
+      const titleRow = Array(8).fill('');
+      const metricRows = Array.from({ length: 6 }, () => Array(8).fill(''));
+
+      layoutRow.forEach((item, blockIndex) => {
+        const col = blockIndex * 2;
+        const report = crsReports[item.reportId];
+        const rejectionReportForLine = crsReports[item.rejectionId];
+        const totals = report?.totals || { output: 0, rejection: 0, rejectionPercent: 0 };
+        titleRow[col] = item.title;
+        merges.push({ s: { r: rowStart, c: col }, e: { r: rowStart, c: col + 1 } });
+
+        if (item.bop) {
+          (report?.rows || []).slice(0, 6).forEach((row, rowIndex) => {
+            metricRows[rowIndex][col] = row.defectDetails;
+            metricRows[rowIndex][col + 1] = row.total || 0;
+          });
+          return;
+        }
+
+        const metrics = [
+          ['Month Cumulative', monthLabel],
+          ['TOTAL PRODUCTION QTY', totals.output || 0],
+          [item.helmet ? 'TOTAL REJECTION & REWORK QTY' : 'TOTAL REJECTION QTY', totals.rejection || 0],
+          [item.helmet ? 'TOTAL REJECTION & REWORK QTY %' : 'TOTAL REJECTION %', { t: 'n', f: `IFERROR(${excelColumn(col + 1)}${rowStart + 4}/${excelColumn(col + 1)}${rowStart + 3},0)`, z: '0.00%' }]
+        ];
+        percentCells.push(XLSX.utils.encode_cell({ r: rowStart + 4, c: col + 1 }));
+        if (item.helmet) {
+          metrics.push(
+            ['TOTAL REJECTION QTY', rejectionReportForLine?.totals?.rejection || 0],
+            ['TOTAL REJECTION %', { t: 'n', f: `IFERROR(${excelColumn(col + 1)}${rowStart + 6}/${excelColumn(col + 1)}${rowStart + 3},0)`, z: '0.00%' }]
+          );
+          percentCells.push(XLSX.utils.encode_cell({ r: rowStart + 6, c: col + 1 }));
+        }
+        metrics.forEach(([label, value], metricIndex) => {
+          metricRows[metricIndex][col] = label;
+          metricRows[metricIndex][col + 1] = value;
+        });
+      });
+
+      rows.push(titleRow, ...metricRows, []);
+      totalRows.push(rowStart + 2, rowStart + 3, rowStart + 5);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet['!cols'] = widths;
+    worksheet['!merges'] = merges;
+    styleWorksheet(worksheet, rows, {
+      subHeaderRows,
+      totalRows,
+      numericColumns: [1, 3, 5, 7],
+      percentCells
+    });
+    addSheet(workbook, usedSheetNames, subReport.name, worksheet);
+  };
+
+  const appendReportSheet = (workbook, usedSheetNames, tab, subReport) => {
+    if (subReport.type === 'mis') {
+      appendMisSheet(workbook, usedSheetNames, subReport);
+      return;
+    }
+    if (subReport.type === 'crs') {
+      appendCrsSheet(workbook, usedSheetNames, subReport);
+      return;
+    }
+
+    const report = buildExportReport(subReport);
+    const reportDays = report.dayColumns || currentDayColumns;
+    const headers = [
+      ...report.descriptorColumns.map((column) => column.label),
+      ...reportDays.map((column) => column.label),
+      ...report.totalColumns.map((column) => column.label)
+    ];
+    const rows = [
+      [report.name],
+      [`Source: ${report.sourceFileName || tab.name}`],
+      []
+    ];
+    const dayStartCol = report.descriptorColumns.length;
+    const dayEndCol = dayStartCol + reportDays.length - 1;
+    const totalCol = dayStartCol + reportDays.length;
+    const totalPercentCol = totalCol + 1;
+    const headerRows = [];
+    const summaryRowsForStyle = [];
+    const totalRows = [];
+    const numericColumns = [...reportDays.map((_, index) => dayStartCol + index), totalCol];
+    const percentColumns = report.totalColumns.some((column) => column.id === 'totalPercent') ? [totalPercentCol] : [];
+
+    if (report.summaryRows.length > 0) {
+      headerRows.push(rows.length);
+      rows.push([
+        'Description',
+        ...reportDays.map((column) => column.label),
+        ...report.totalColumns.map((column) => column.label)
+      ]);
+      report.summaryRows.forEach((summaryRow) => {
+        summaryRowsForStyle.push(rows.length);
+        const summaryReport = report.type === 'drr' && ['Day Wise Rejection Qty', 'Day Wise Rejection %'].includes(summaryRow.label)
+          ? editableRejectionReports[`d${report.line}-helmet-assembly-rejection`]
+          : ['drr', 'visor-drr'].includes(report.type)
+            ? editableDrrReports[report.id]
+            : report.type === 'rejection'
+              ? editableRejectionReports[report.id]
+              : null;
+        rows.push([
+          summaryRow.label,
+          ...reportDays.map((column) => summaryRow.getValue(column, summaryReport)),
+          getCellValue(summaryRow.total, summaryReport),
+          getCellValue(summaryRow.totalPercent, summaryReport)
+        ]);
+      });
+      rows.push([]);
+    }
+
+    headerRows.push(rows.length);
+    rows.push(headers);
+    const headerRowNumber = rows.length;
+    const firstDataRowNumber = headerRowNumber + 1;
+
+    report.rows.forEach((row, rowIndex) => {
+      const rowNumber = firstDataRowNumber + rowIndex;
+      const dataRow = report.descriptorColumns.map((column) => row[column.key] ?? '');
+      reportDays.forEach((_, dayIndex) => {
+        if (report.type === 'rejection') {
+          dataRow.push(numericCell(row.days?.[dayIndex]?.rejection));
+        } else if (['drr', 'visor-drr'].includes(report.type)) {
+          dataRow.push(numericCell(row.days?.[dayIndex]));
+        } else {
+          dataRow.push(row[reportDays[dayIndex]?.id] ?? '');
+        }
+      });
+      if (report.totalColumns.some((column) => column.id === 'total')) {
+        const startRef = `${excelColumn(dayStartCol)}${rowNumber}`;
+        const endRef = `${excelColumn(dayEndCol)}${rowNumber}`;
+        dataRow.push({ t: 'n', f: `SUM(${startRef}:${endRef})` });
+      }
+      if (report.totalColumns.some((column) => column.id === 'totalPercent')) {
+        const dataTotalRef = `${excelColumn(totalCol)}${rowNumber}`;
+        const allTotalRef = `${excelColumn(totalCol)}${firstDataRowNumber + report.rows.length}`;
+        dataRow.push({ t: 'n', f: `IFERROR(${dataTotalRef}/${allTotalRef},0)`, z: '0.00%' });
+      }
+      rows.push(dataRow);
+    });
+
+    if (['drr', 'visor-drr', 'rejection'].includes(report.type)) {
+      const totalRowNumber = firstDataRowNumber + report.rows.length;
+      const totalRow = Array.from({ length: report.descriptorColumns.length }, (_, index) => index === 0 ? 'Total' : '');
+      reportDays.forEach((_, dayIndex) => {
+        const col = excelColumn(dayStartCol + dayIndex);
+        totalRow.push({ t: 'n', f: `SUM(${col}${firstDataRowNumber}:${col}${totalRowNumber - 1})` });
+      });
+      totalRow.push({ t: 'n', f: `SUM(${excelColumn(totalCol)}${firstDataRowNumber}:${excelColumn(totalCol)}${totalRowNumber - 1})` });
+      if (report.totalColumns.some((column) => column.id === 'totalPercent')) totalRow.push('');
+      totalRows.push(rows.length);
+      rows.push(totalRow);
+    }
+
+    appendAoASheet(
+      workbook,
+      usedSheetNames,
+      report.name,
+      rows,
+      [...report.descriptorColumns.map((column) => Math.max(12, Math.round((column.width || 120) / 8))), ...reportDays.map(() => 10), ...report.totalColumns.map(() => 12)],
+      {
+        metaRows: [1],
+        headerRows,
+        summaryRows: summaryRowsForStyle,
+        totalRows,
+        numericColumns,
+        percentColumns
+      }
+    );
+  };
+
+  const appendInspectionSheet = (workbook, usedSheetNames, familyName, report, entryMap) => {
+    const savedRows = entryMap[`${inspectionDateValue}:${report.id}`] || {};
+    const sectionRows = [];
+    const rows = [
+      [report.name],
+      [`Source: ${report.sourceFileName || familyName}`],
+      [`Date: ${inspectionDateValue}`],
+      [],
+      ['SI. No', 'Characteristics Description', 'Specification', 'Inspection Method', '1', '2', '3', '4', '5', 'Remarks']
+    ];
+    report.rows.forEach((row, index) => {
+      if (row.type === 'section') {
+        sectionRows.push(rows.length);
+        rows.push([row.title]);
+        return;
+      }
+      const rowKey = getShellInspectionRowKey(row, index);
+      const savedRow = savedRows[rowKey] || {};
+      const samples = Array.from({ length: 5 }, (_, sampleIndex) => savedRow.samples?.[sampleIndex] ?? row.samples?.[sampleIndex] ?? '');
+      const rowNumber = rows.length + 1;
+      rows.push([
+        row.sno,
+        row.characteristic,
+        row.specification,
+        row.inspectionMethod,
+        ...samples,
+        savedRow.remarks ?? row.remarks ?? ''
+      ]);
+    });
+    appendAoASheet(workbook, usedSheetNames, report.name, rows, [8, 32, 28, 24, 10, 10, 10, 10, 10, 24], {
+      metaRows: [1, 2],
+      headerRows: [4],
+      sectionRows,
+      numericColumns: [0]
+    });
+  };
+
+  const handleExportDashboardWorkbook = () => {
+    const workbook = XLSX.utils.book_new();
+    const usedSheetNames = new Set();
+
+    appendAoASheet(workbook, usedSheetNames, 'Dashboard Index', [
+      ['Overall Dashboard Report'],
+      [`Period: ${monthLabel}`],
+      [`Selected Date: ${selectedDayLabel || inspectionDateValue}`],
+      [],
+      ['Tab', 'Nested sheets'],
+      ...reportTabs.map((tab) => [tab.name, tab.subReports.map((report) => report.name).join(', ')]),
+      ['Shell Moulding Inspection Report', shellMouldingInspectionReports.map((report) => report.name).join(', ')],
+      ['VISOR PDIIR Report', visorPdiirInspectionReports.map((report) => report.name).join(', ')],
+      ['D1 VM BASE RH/LH Report', d1VmBaseInspectionReports.map((report) => report.name).join(', ')]
+    ], [34, 90], { metaRows: [1, 2], headerRows: [4] });
+
+    reportTabs.forEach((tab) => {
+      tab.subReports.forEach((subReport) => appendReportSheet(workbook, usedSheetNames, tab, subReport));
+    });
+    shellMouldingInspectionReports.forEach((report) => appendInspectionSheet(workbook, usedSheetNames, 'Shell Moulding', report, shellInspectionEntries));
+    visorPdiirInspectionReports.forEach((report) => appendInspectionSheet(workbook, usedSheetNames, 'VISOR PDIIR', report, visorPdiirEntries));
+    d1VmBaseInspectionReports.forEach((report) => appendInspectionSheet(workbook, usedSheetNames, 'D1 VM BASE', report, d1VmBaseEntries));
+
+    XLSX.writeFile(workbook, `overall-dashboard-report-${reportYear}-${String(reportMonth).padStart(2, '0')}.xlsx`);
+  };
+
   const getColumnClass = (column) => {
     if (column.id === 'totalPercent') return totalPercentCellClass;
     if (column.id === 'total') return totalCellClass;
     return dayCellClass;
   };
+  const getDescriptorLeft = (columnIndex) => activeSubReport.descriptorColumns
+    .slice(0, columnIndex)
+    .reduce((sum, column) => sum + column.width, 0);
+  const descriptorWidth = activeSubReport.descriptorColumns.reduce((sum, column) => sum + column.width, 0);
   const updateRowOverride = (row, dayId, value) => {
     if (!isRejectionReport) return;
     const rowKey = normalizeReportKey(row.rejectionDetails);
@@ -1145,6 +2091,128 @@ const AdminDashboard = () => {
       }
     }));
   };
+  const updateShellInspectionRow = (row, updater) => {
+    const entryKey = `${inspectionDateValue}:${activeShellInspectionId}`;
+    setShellInspectionEntries((current) => {
+      const currentRows = current[entryKey] || {};
+      const currentRow = currentRows[row.shellRowKey] || {
+        samples: Array.from({ length: 5 }, (_, index) => row.samples?.[index] || ''),
+        remarks: row.remarks || ''
+      };
+      return {
+        ...current,
+        [entryKey]: {
+          ...currentRows,
+          [row.shellRowKey]: updater(currentRow)
+        }
+      };
+    });
+  };
+  const updateShellInspectionSample = (row, sampleIndex, value) => {
+    updateShellInspectionRow(row, (currentRow) => {
+      const samples = Array.from({ length: 5 }, (_, index) => currentRow.samples?.[index] || '');
+      samples[sampleIndex] = value;
+      return { ...currentRow, samples };
+    });
+  };
+  const updateShellInspectionRemarks = (row, value) => {
+    updateShellInspectionRow(row, (currentRow) => ({ ...currentRow, remarks: value }));
+  };
+  const saveShellInspectionRow = async (row) => {
+    const entryKey = `${inspectionDateValue}:${activeShellInspectionId}`;
+    const currentRow = shellInspectionEntries[entryKey]?.[row.shellRowKey] || row;
+    await misOperationsAPI.saveShellMouldingInspection({
+      sheetId: activeShellInspectionReport.id,
+      productionLine: activeShellInspectionReport.productionLine,
+      inspectionStage: activeShellInspectionReport.inspectionStage,
+      inspectedAt: inspectionDateValue,
+      rowKey: row.shellRowKey,
+      samples: Array.from({ length: 5 }, (_, index) => currentRow.samples?.[index] || ''),
+      remarks: currentRow.remarks || ''
+    });
+  };
+  const updateVisorPdiirRow = (row, updater) => {
+    const entryKey = `${inspectionDateValue}:${activeVisorPdiirId}`;
+    setVisorPdiirEntries((current) => {
+      const currentRows = current[entryKey] || {};
+      const currentRow = currentRows[row.shellRowKey] || {
+        samples: Array.from({ length: 5 }, (_, index) => row.samples?.[index] || ''),
+        remarks: row.remarks || ''
+      };
+      return {
+        ...current,
+        [entryKey]: {
+          ...currentRows,
+          [row.shellRowKey]: updater(currentRow)
+        }
+      };
+    });
+  };
+  const updateVisorPdiirSample = (row, sampleIndex, value) => {
+    updateVisorPdiirRow(row, (currentRow) => {
+      const samples = Array.from({ length: 5 }, (_, index) => currentRow.samples?.[index] || '');
+      samples[sampleIndex] = value;
+      return { ...currentRow, samples };
+    });
+  };
+  const updateVisorPdiirRemarks = (row, value) => {
+    updateVisorPdiirRow(row, (currentRow) => ({ ...currentRow, remarks: value }));
+  };
+  const saveVisorPdiirRow = async (row) => {
+    const entryKey = `${inspectionDateValue}:${activeVisorPdiirId}`;
+    const currentRow = visorPdiirEntries[entryKey]?.[row.shellRowKey] || row;
+    await misOperationsAPI.saveVisorPdiirInspection({
+      sheetId: activeVisorPdiirReport.id,
+      productionLine: activeVisorPdiirReport.productionLine,
+      inspectionStage: activeVisorPdiirReport.inspectionStage,
+      side: activeVisorPdiirReport.side,
+      inspectedAt: inspectionDateValue,
+      rowKey: row.shellRowKey,
+      samples: Array.from({ length: 5 }, (_, index) => currentRow.samples?.[index] || ''),
+      remarks: currentRow.remarks || ''
+    });
+  };
+  const updateD1VmBaseRow = (row, updater) => {
+    const entryKey = `${inspectionDateValue}:${activeD1VmBaseId}`;
+    setD1VmBaseEntries((current) => {
+      const currentRows = current[entryKey] || {};
+      const currentRow = currentRows[row.shellRowKey] || {
+        samples: Array.from({ length: 5 }, (_, index) => row.samples?.[index] || ''),
+        remarks: row.remarks || ''
+      };
+      return {
+        ...current,
+        [entryKey]: {
+          ...currentRows,
+          [row.shellRowKey]: updater(currentRow)
+        }
+      };
+    });
+  };
+  const updateD1VmBaseSample = (row, sampleIndex, value) => {
+    updateD1VmBaseRow(row, (currentRow) => {
+      const samples = Array.from({ length: 5 }, (_, index) => currentRow.samples?.[index] || '');
+      samples[sampleIndex] = value;
+      return { ...currentRow, samples };
+    });
+  };
+  const updateD1VmBaseRemarks = (row, value) => {
+    updateD1VmBaseRow(row, (currentRow) => ({ ...currentRow, remarks: value }));
+  };
+  const saveD1VmBaseRow = async (row) => {
+    const entryKey = `${inspectionDateValue}:${activeD1VmBaseId}`;
+    const currentRow = d1VmBaseEntries[entryKey]?.[row.shellRowKey] || row;
+    await misOperationsAPI.saveVisorPdiirInspection({
+      sheetId: activeD1VmBaseReport.id,
+      productionLine: activeD1VmBaseReport.productionLine,
+      inspectionStage: activeD1VmBaseReport.inspectionStage,
+      side: activeD1VmBaseReport.side,
+      inspectedAt: inspectionDateValue,
+      rowKey: row.shellRowKey,
+      samples: Array.from({ length: 5 }, (_, index) => currentRow.samples?.[index] || ''),
+      remarks: currentRow.remarks || ''
+    });
+  };
   const editableCellClass = 'h-8 w-full min-w-0 rounded border border-slate-300 bg-white px-1 text-center text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
 
   return (
@@ -1156,31 +2224,56 @@ const AdminDashboard = () => {
             Inventory Pro MIS reports for production quality performance.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-3 text-sm">
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-            <p className="text-slate-500 dark:text-slate-400">Groups</p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">{primaryGroups}</p>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-            <p className="text-slate-500 dark:text-slate-400">Rows</p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">{reportRows}</p>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-            <p className="text-slate-500 dark:text-slate-400">Details</p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">{detailCount}</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <button
+            type="button"
+            onClick={handleExportDashboardWorkbook}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          >
+            <Download className="h-4 w-4" />
+            Export Excel
+          </button>
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-slate-500 dark:text-slate-400">Groups</p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">{primaryGroups}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-slate-500 dark:text-slate-400">Rows</p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">{reportRows}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-slate-500 dark:text-slate-400">Details</p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">{detailCount}</p>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="border-b border-slate-200 dark:border-slate-700">
-        <div className="flex overflow-x-auto">
-          <div className="inline-flex items-center gap-2 whitespace-nowrap border-b-2 border-primary-600 px-4 py-3 text-sm font-semibold text-primary-700 dark:border-primary-400 dark:text-primary-300">
-            <ClipboardList className="h-4 w-4" />
-            MIS Helmet Quality Performance Report
-          </div>
+        <div className="flex gap-2 overflow-x-auto">
+          {dashboardReportFamilies.map((family) => (
+            <button
+              key={family.id}
+              type="button"
+              onClick={() => {
+                setActiveDashboardFamilyId(family.id);
+                setSearchTerm('');
+              }}
+              className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                activeDashboardFamilyId === family.id
+                  ? 'border-primary-600 text-primary-700 dark:border-primary-400 dark:text-primary-300'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              <ClipboardList className="h-4 w-4" />
+              {family.name}
+            </button>
+          ))}
         </div>
       </div>
 
+      {!isInspectionFamily ? (
       <div className="border-b border-slate-200 dark:border-slate-700">
         <div className="flex gap-2 overflow-x-auto">
           {reportTabs.map((report) => (
@@ -1203,8 +2296,45 @@ const AdminDashboard = () => {
           ))}
         </div>
       </div>
+      ) : (
+      <div className="border-b border-slate-200 dark:border-slate-700">
+        <div className="flex gap-2 overflow-x-auto">
+          {(isD1VmBaseFamily ? d1VmBaseGroups : isVisorPdiirFamily ? visorPdiirGroups : shellInspectionGroups).map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              onClick={() => {
+                if (isD1VmBaseFamily) {
+                  const firstSheet = d1VmBaseInspectionReports.find((report) => report.groupId === group.id);
+                  setActiveD1VmBaseGroupId(group.id);
+                  if (firstSheet) setActiveD1VmBaseId(firstSheet.id);
+                } else if (isVisorPdiirFamily) {
+                  const firstSheet = visorPdiirInspectionReports.find((report) => report.groupId === group.id);
+                  setActiveVisorPdiirGroupId(group.id);
+                  if (firstSheet) setActiveVisorPdiirId(firstSheet.id);
+                } else {
+                  const firstSheet = shellMouldingInspectionReports.find((report) => report.groupId === group.id);
+                  setActiveShellInspectionGroupId(group.id);
+                  if (firstSheet) setActiveShellInspectionId(firstSheet.id);
+                }
+                setSearchTerm('');
+              }}
+              className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                (isD1VmBaseFamily ? activeD1VmBaseGroupId : isVisorPdiirFamily ? activeVisorPdiirGroupId : activeShellInspectionGroupId) === group.id
+                  ? 'border-primary-600 text-primary-700 dark:border-primary-400 dark:text-primary-300'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {group.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      )}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        {!isInspectionFamily && (
         <div className="flex gap-2 overflow-x-auto">
           {activeReport.subReports.map((subReport) => (
             <button
@@ -1222,8 +2352,66 @@ const AdminDashboard = () => {
             </button>
           ))}
         </div>
+        )}
 
-        {isMisReport ? (
+        {isInspectionFamily ? (
+          <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex gap-2 overflow-x-auto">
+              {(isD1VmBaseFamily ? activeD1VmBaseSheets : isVisorPdiirFamily ? activeVisorPdiirSheets : activeShellInspectionSheets).map((report) => (
+                <button
+                  key={report.id}
+                  type="button"
+                  onClick={() => {
+                    if (isD1VmBaseFamily) {
+                      setActiveD1VmBaseId(report.id);
+                    } else if (isVisorPdiirFamily) {
+                      setActiveVisorPdiirId(report.id);
+                    } else {
+                      setActiveShellInspectionId(report.id);
+                    }
+                    setSearchTerm('');
+                  }}
+                  className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
+                    (isD1VmBaseFamily ? activeD1VmBaseId : isVisorPdiirFamily ? activeVisorPdiirId : activeShellInspectionId) === report.id
+                      ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {report.name}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+                Date
+                <input
+                  type="date"
+                  value={inspectionDateValue}
+                  onChange={(event) => {
+                    const [year, month, day] = event.target.value.split('-').map(Number);
+                    if (year && month && day) {
+                      setReportYear(year);
+                      setReportMonth(month);
+                      setReportDay(day);
+                    }
+                  }}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+              <div className="relative w-full sm:w-80">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search this inspection"
+                  className="w-full rounded-md border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+            </div>
+          </div>
+        ) : isMisReport ? (
           <label className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-300">
             Date
             <input
@@ -1270,7 +2458,15 @@ const AdminDashboard = () => {
         )}
       </div>
 
-      {isMisReport ? (
+      {isInspectionFamily ? (
+        <ShellMouldingInspectionTable
+          report={isD1VmBaseFamily ? activeD1VmBaseReport : isVisorPdiirFamily ? activeVisorPdiirReport : activeShellInspectionReport}
+          rows={filteredRows}
+          onSampleChange={isD1VmBaseFamily ? updateD1VmBaseSample : isVisorPdiirFamily ? updateVisorPdiirSample : updateShellInspectionSample}
+          onRemarksChange={isD1VmBaseFamily ? updateD1VmBaseRemarks : isVisorPdiirFamily ? updateVisorPdiirRemarks : updateShellInspectionRemarks}
+          onSaveRow={isD1VmBaseFamily ? saveD1VmBaseRow : isVisorPdiirFamily ? saveVisorPdiirRow : saveShellInspectionRow}
+        />
+      ) : isMisReport ? (
         <div className="space-y-4">
           <div className="border border-slate-200 bg-white px-5 py-4 text-center dark:border-slate-700 dark:bg-slate-800">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">HELMET - PARTWISE QUALITY PERFORMANCE REPORT</h2>
@@ -1311,205 +2507,188 @@ const AdminDashboard = () => {
           <p className="text-sm text-slate-500 dark:text-slate-400">Source: {activeSubReport.sourceFileName}</p>
         </div>
 
-        <div className="flex overflow-hidden">
-          <div className={activeSubReport.type === 'static-table' ? 'min-w-0 flex-1 overflow-x-auto' : 'shrink-0'}>
-            <table className="border-separate border-spacing-0 text-sm">
-              <thead className="bg-blue-100 dark:bg-slate-900">
-                <tr className={reportRowClass}>
-                  {hasSummaryRows ? (
-                    <th
-                      colSpan={activeSubReport.descriptorColumns.length}
-                      style={{
-                        minWidth: activeSubReport.descriptorColumns.reduce((sum, column) => sum + column.width, 0)
-                      }}
-                      className={`${cellHeightClass} ${gridBorderClass} bg-blue-100 px-4 py-3 text-center font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
-                    >
-                      Description
-                    </th>
-                  ) : activeSubReport.descriptorColumns.map((column) => (
-                    <th
-                      key={column.key}
-                      style={{ minWidth: column.width, width: column.width }}
-                      className={`${cellHeightClass} ${gridBorderClass} bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
-                    >
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {activeSubReport.summaryRows.map((row) => (
-                  <tr key={row.label} className={reportRowClass}>
-                    <td
-                      colSpan={activeSubReport.descriptorColumns.length}
-                      style={{
-                        minWidth: activeSubReport.descriptorColumns.reduce((sum, column) => sum + column.width, 0)
-                      }}
-                      className={`${cellHeightClass} ${gridBorderClass} bg-white px-4 py-2 text-right font-semibold text-slate-900 dark:bg-slate-800 dark:text-white`}
-                    >
-                      {row.label}
-                    </td>
-                  </tr>
+        <div className="max-h-[70vh] overflow-auto">
+          <table className="min-w-max table-fixed border-separate border-spacing-0 text-sm">
+            <colgroup>
+              {activeSubReport.descriptorColumns.map((column) => (
+                <col key={`descriptor-col-${column.key}`} style={{ width: column.width, minWidth: column.width }} />
+              ))}
+              {reportDayColumns.map((column) => (
+                <col key={`day-col-${column.id}`} style={{ width: 64, minWidth: 64 }} />
+              ))}
+              {activeSubReport.totalColumns.map((column) => (
+                <col key={`total-col-${column.id}`} style={{ width: column.id === 'totalPercent' ? 80 : 64, minWidth: column.id === 'totalPercent' ? 80 : 64 }} />
+              ))}
+            </colgroup>
+            <thead className="bg-blue-100 dark:bg-slate-900">
+              <tr className={reportRowClass}>
+                {hasSummaryRows ? (
+                  <th
+                    colSpan={activeSubReport.descriptorColumns.length}
+                    style={{ minWidth: descriptorWidth, width: descriptorWidth, maxWidth: descriptorWidth, left: 0 }}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky left-0 top-0 z-40 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                  >
+                    Description
+                  </th>
+                ) : activeSubReport.descriptorColumns.map((column, columnIndex) => (
+                  <th
+                    key={column.key}
+                    style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky top-0 z-40 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                  >
+                    {column.label}
+                  </th>
                 ))}
-                <tr className="h-3">
+                {calendarColumns.map((column) => (
+                  <th
+                    key={column.id}
+                    className={`${getColumnClass(column)} sticky top-0 z-30 bg-blue-100 font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {activeSubReport.summaryRows.map((row, rowIndex) => (
+                <tr key={row.label} className={reportRowClass}>
                   <td
                     colSpan={activeSubReport.descriptorColumns.length}
-                    className={`${gridBorderClass} bg-white dark:bg-slate-800`}
-                  />
+                    style={{
+                      minWidth: descriptorWidth,
+                      left: 0,
+                      top: `${(rowIndex + 1) * 48}px`
+                    }}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky z-30 bg-white px-4 py-2 text-right font-semibold text-slate-900 dark:bg-slate-800 dark:text-white`}
+                  >
+                    {row.label}
+                  </td>
+                  {reportDayColumns.map((column) => (
+                    <td
+                      key={`${row.label}-${column.id}`}
+                      style={{ top: `${(rowIndex + 1) * 48}px` }}
+                      className={`${dayCellClass} sticky z-20 bg-white ${
+                        row.isPercent ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'
+                      } dark:bg-slate-800`}
+                    >
+                      {isRejectionReport && row.metric === 'output' ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.getValue(column, activeEditableRejectionReport)}
+                          onChange={(event) => updateOutputOverride(column.id, event.target.value)}
+                          className={editableCellClass}
+                        />
+                      ) : ((isDrrReport || activeSubReportBase.type === 'visor-drr') && row.metric === 'output') ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.getValue(column, getSummaryReport(row))}
+                          onChange={(event) => updateDrrOutputOverride(column.id, event.target.value)}
+                          className={editableCellClass}
+                        />
+                      ) : (
+                        row.getValue(column, getSummaryReport(row))
+                      )}
+                    </td>
+                  ))}
+                  <td style={{ top: `${(rowIndex + 1) * 48}px` }} className={`${totalCellClass} sticky z-20 font-semibold text-slate-900 dark:text-slate-100`}>
+                    {getCellValue(row.total, getSummaryReport(row))}
+                  </td>
+                  <td
+                    style={{ top: `${(rowIndex + 1) * 48}px` }}
+                    className={`${totalPercentCellClass} sticky z-20 font-semibold ${
+                      getCellValue(row.totalPercent, getSummaryReport(row)) ? 'bg-orange-100 text-slate-900 dark:bg-orange-950 dark:text-orange-100' : 'text-slate-900 dark:text-slate-100'
+                    }`}
+                  >
+                    {getCellValue(row.totalPercent, getSummaryReport(row))}
+                  </td>
                 </tr>
-                {hasSummaryRows && (
-                  <tr className={reportRowClass}>
-                    {isRejectionReport ? (
-                      <th
-                        colSpan={activeSubReport.descriptorColumns.length}
-                        style={{
-                          minWidth: activeSubReport.descriptorColumns.reduce((sum, column) => sum + column.width, 0)
-                        }}
-                        className={`${cellHeightClass} ${gridBorderClass} bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
-                      >
-                        DEFECTS
-                      </th>
-                    ) : activeSubReport.descriptorColumns.map((column) => (
-                      <th
-                        key={`detail-header-${column.key}`}
-                        style={{ minWidth: column.width, width: column.width }}
-                        className={`${cellHeightClass} ${gridBorderClass} bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
-                      >
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                )}
-                {filteredRows.map((row, index) => (
-                  <tr key={`${activeSubReport.id}-descriptors-${index}`} className={`${reportRowClass} hover:bg-slate-50 dark:hover:bg-slate-700/40`}>
-                    {activeSubReport.descriptorColumns.map((column, columnIndex) => (
-                      <td
-                        key={`${activeSubReport.id}-${column.key}-${index}`}
-                        style={{ minWidth: column.width, width: column.width }}
-                        className={`${cellHeightClass} ${gridBorderClass} bg-white px-4 py-2 dark:bg-slate-800 ${
-                          columnIndex === 0
-                            ? 'truncate font-medium text-slate-900 dark:text-white'
-                            : 'truncate text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        {row[column.key]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {calendarColumns.length > 0 && (
-          <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
-            <table className="min-w-max border-separate border-spacing-0 text-sm">
-              <thead className="bg-blue-100 dark:bg-slate-900">
+              ))}
+              <tr className="h-3">
+                <td colSpan={activeSubReport.descriptorColumns.length + calendarColumns.length} className={`${gridBorderClass} bg-white dark:bg-slate-800`} />
+              </tr>
+              {hasSummaryRows && (
                 <tr className={reportRowClass}>
+                  {isRejectionReport ? (
+                    <th
+                      colSpan={activeSubReport.descriptorColumns.length}
+                      style={{
+                        minWidth: descriptorWidth,
+                        left: 0,
+                        top: `${(activeSubReport.summaryRows.length + 1) * 48}px`
+                      }}
+                      className={`${cellHeightClass} ${gridBorderClass} sticky z-30 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    >
+                      DEFECTS
+                    </th>
+                  ) : activeSubReport.descriptorColumns.map((column, columnIndex) => (
+                    <th
+                      key={`detail-header-${column.key}`}
+                      style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex), top: `${(activeSubReport.summaryRows.length + 1) * 48}px` }}
+                      className={`${cellHeightClass} ${gridBorderClass} sticky z-30 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
                   {calendarColumns.map((column) => (
                     <th
-                      key={column.id}
-                      className={`${getColumnClass(column)} font-semibold text-slate-900 dark:text-slate-100`}
+                      key={`detail-date-header-${column.id}`}
+                      style={{ top: `${(activeSubReport.summaryRows.length + 1) * 48}px` }}
+                      className={`${getColumnClass(column)} sticky z-20 bg-blue-100 font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                     >
                       {column.label}
                     </th>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {activeSubReport.summaryRows.map((row) => (
-                  <tr key={`${row.label}-calendar`} className={reportRowClass}>
-                    {reportDayColumns.map((column) => (
-                      <td
-                        key={`${row.label}-${column.id}`}
-                        className={`${dayCellClass} bg-white ${
-                          row.isPercent ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'
-                        } dark:bg-slate-800`}
-                      >
-                        {isRejectionReport && row.metric === 'output' ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={row.getValue(column, activeEditableRejectionReport)}
-                            onChange={(event) => updateOutputOverride(column.id, event.target.value)}
-                            className={editableCellClass}
-                          />
-                        ) : ((isDrrReport || activeSubReportBase.type === 'visor-drr') && row.metric === 'output') ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={row.getValue(column, getSummaryReport(row))}
-                            onChange={(event) => updateDrrOutputOverride(column.id, event.target.value)}
-                            className={editableCellClass}
-                          />
-                        ) : (
-                          row.getValue(column, getSummaryReport(row))
-                        )}
-                      </td>
-                    ))}
-                    <td className={`${totalCellClass} font-semibold text-slate-900 dark:text-slate-100`}>
-                      {getCellValue(row.total, getSummaryReport(row))}
-                    </td>
+              )}
+              {filteredRows.map((row, index) => (
+                <tr key={`${activeSubReport.id}-row-${index}`} className={`${reportRowClass} hover:bg-slate-50 dark:hover:bg-slate-700/40`}>
+                  {activeSubReport.descriptorColumns.map((column, columnIndex) => (
                     <td
-                      className={`${totalPercentCellClass} font-semibold ${
-                        getCellValue(row.totalPercent, getSummaryReport(row)) ? 'bg-orange-100 text-slate-900 dark:bg-orange-900/40 dark:text-orange-100' : 'text-slate-900 dark:text-slate-100'
+                      key={`${activeSubReport.id}-${column.key}-${index}`}
+                      style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
+                      className={`${cellHeightClass} ${gridBorderClass} sticky z-10 bg-white px-4 py-2 dark:bg-slate-800 ${
+                        columnIndex === 0
+                          ? 'truncate font-medium text-slate-900 dark:text-white'
+                          : 'truncate text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {getCellValue(row.totalPercent, getSummaryReport(row))}
+                      {row[column.key]}
                     </td>
-                  </tr>
-                ))}
-                <tr className="h-3">
-                  <td colSpan={calendarColumns.length} className={`${gridBorderClass} bg-white dark:bg-slate-800`} />
+                  ))}
+                  {reportDayColumns.map((column, dayIndex) => (
+                    <td key={`${activeSubReport.id}-${column.id}-${index}`} className={`${dayCellClass} text-slate-700 dark:text-slate-300`}>
+                      {isRejectionReport ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.days?.[dayIndex]?.rejection || ''}
+                          onChange={(event) => updateRowOverride(row, column.id, event.target.value)}
+                          className={editableCellClass}
+                        />
+                      ) : (isDrrReport || activeSubReportBase.type === 'visor-drr') ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.days?.[dayIndex] || ''}
+                          onChange={(event) => updateDrrOverride(row, column.id, event.target.value)}
+                          onBlur={(event) => saveBopValue(row, column, event.target.value)}
+                          className={editableCellClass}
+                        />
+                      ) : ''}
+                    </td>
+                  ))}
+                  <td className={`${totalCellClass} text-slate-900 dark:text-slate-100`}>
+                    {isRejectionReport || isDrrReport || activeSubReportBase.type === 'visor-drr' ? row.total || 0 : 0}
+                  </td>
+                  <td className={`${totalPercentCellClass} text-slate-900 dark:text-slate-100`}>
+                    {isRejectionReport ? formatPercent(row.totalPercent) : '0.00%'}
+                  </td>
                 </tr>
-                {hasSummaryRows && (
-                  <tr className={reportRowClass}>
-                    {calendarColumns.map((column) => (
-                      <th
-                        key={`detail-date-header-${column.id}`}
-                        className={`${getColumnClass(column)} font-semibold text-slate-900 dark:text-slate-100`}
-                      >
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                )}
-                {filteredRows.map((row, index) => (
-                  <tr key={`${activeSubReport.id}-calendar-${index}`} className={reportRowClass}>
-                    {reportDayColumns.map((column, dayIndex) => (
-                      <td key={`${activeSubReport.id}-${column.id}-${index}`} className={`${dayCellClass} text-slate-700 dark:text-slate-300`}>
-                        {isRejectionReport ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={row.days?.[dayIndex]?.rejection || ''}
-                            onChange={(event) => updateRowOverride(row, column.id, event.target.value)}
-                            className={editableCellClass}
-                          />
-                        ) : (isDrrReport || activeSubReportBase.type === 'visor-drr') ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={row.days?.[dayIndex] || ''}
-                            onChange={(event) => updateDrrOverride(row, column.id, event.target.value)}
-                            onBlur={(event) => saveBopValue(row, column, event.target.value)}
-                            className={editableCellClass}
-                          />
-                        ) : ''}
-                      </td>
-                    ))}
-                    <td className={`${totalCellClass} text-slate-900 dark:text-slate-100`}>
-                      {isRejectionReport || isDrrReport || activeSubReportBase.type === 'visor-drr' ? row.total || 0 : 0}
-                    </td>
-                    <td className={`${totalPercentCellClass} text-slate-900 dark:text-slate-100`}>
-                      {isRejectionReport ? formatPercent(row.totalPercent) : '0.00%'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {filteredRows.length === 0 && (

@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = "http://localhost:5000/api";
+//const API_URL = "http://localhost:5000/api";
+const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -323,7 +324,13 @@ export const misOperationsAPI = {
   getSupplierRejections: (params) => api.get('/mis-operations/supplier-rejections', { params }),
   createSupplierRejection: (data) => api.post('/mis-operations/supplier-rejections', data),
   updateSupplierRejection: (id, data) => api.put(`/mis-operations/supplier-rejections/${id}`, data),
-  deleteSupplierRejection: (id) => api.delete(`/mis-operations/supplier-rejections/${id}`)
+  deleteSupplierRejection: (id) => api.delete(`/mis-operations/supplier-rejections/${id}`),
+  getShellMouldingInspections: (params) => api.get('/mis-operations/shell-moulding-inspections', { params }),
+  saveShellMouldingInspection: (data) => api.post('/mis-operations/shell-moulding-inspections', data),
+  getVisorPdiirInspections: (params) => api.get('/mis-operations/visor-pdiir-inspections', { params }),
+  saveVisorPdiirInspection: (data) => api.post('/mis-operations/visor-pdiir-inspections', data),
+  getEmployeeSheetEntries: (params) => api.get('/mis-operations/employee-sheet-entries', { params }),
+  saveEmployeeSheetEntry: (data) => api.post('/mis-operations/employee-sheet-entries', data)
 };
 
 // Assembly APIs
@@ -338,4 +345,3 @@ export const assemblyAPI = {
 };
 
 export default api;
-

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ScanLine } from 'lucide-react';
+import { FileSpreadsheet, ScanLine } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inspectionAPI } from '../../api/api';
 import InspectionStatCard from '../../components/inspection/InspectionStatCard';
@@ -29,10 +29,16 @@ const EmployeeDashboard = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Manufacturing Inspection Dashboard</h1>
           <p className="text-slate-600 dark:text-slate-400">Scan products, record quality decisions, and maintain traceability.</p>
         </div>
-        <Link to="/app/employee/scanner" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700">
-          <ScanLine className="h-4 w-4" />
-          Start Scan
-        </Link>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link to="/app/employee/sheet-inspection" className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700">
+            <FileSpreadsheet className="h-4 w-4" />
+            Sheet Entry
+          </Link>
+          <Link to="/app/employee/scanner" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700">
+            <ScanLine className="h-4 w-4" />
+            Start Scan
+          </Link>
+        </div>
       </div>
 
       <section>
@@ -80,5 +86,4 @@ const EmployeeDashboard = () => {
 };
 
 export default EmployeeDashboard;
-
 

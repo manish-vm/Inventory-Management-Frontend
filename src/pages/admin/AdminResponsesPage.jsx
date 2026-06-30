@@ -576,11 +576,26 @@ const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = fals
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1150px] table-fixed">
+      <table className="w-full min-w-[1500px] table-fixed">
+        <colgroup>
+          <col className="w-[130px]" />
+          <col className="w-[180px]" />
+          <col className="w-[150px]" />
+          <col className="w-[140px]" />
+          <col className="w-[140px]" />
+          <col className="w-[120px]" />
+          <col className="w-[170px]" />
+          <col className="w-[170px]" />
+          <col className="w-[90px]" />
+          <col className="w-[120px]" />
+          <col className="w-[190px]" />
+        </colgroup>
         <thead className="bg-slate-50 dark:bg-slate-900/60">
           <tr>
             {['Code', 'Category', 'Product Name', 'Employee', 'Stage', 'Result', 'Option Selected', 'Defect Type', 'Count', 'Overall Count', 'Submitted Date'].map((head) => (
-              <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{head}</th>
+              <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+                {head}
+              </th>
             ))}
           </tr>
         </thead>
@@ -591,19 +606,19 @@ const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = fals
               className="cursor-pointer border-t border-slate-200 dark:border-slate-700"
               onClick={() => setSelected(row.raw)}
             >
-              <td className="px-4 py-3 text-sm font-semibold">{row.code}</td>
-              <td className="px-4 py-3 text-sm">{row.categoryName}</td>
-              <td className="px-4 py-3 text-sm">{row.productName || '-'}</td>
-              <td className="px-4 py-3 text-sm">{row.employeeName || '-'}</td>
-              <td className="px-4 py-3 text-sm">{row.stage || '-'}</td>
-              <td className={`px-4 py-3 text-sm font-semibold ${resultStatus === 'ACCEPTED' ? 'text-emerald-700' : resultStatus === 'REJECTED' ? 'text-red-700' : 'text-amber-700'}`}>{resultStatus}</td>
-              <td className="px-4 py-3 text-sm">{fields.option}</td>
-              <td className="px-4 py-3 text-sm">{fields.defectType}</td>
-              <td className="px-4 py-3 text-sm font-semibold">{fields.count}</td>
-              <td className="px-4 py-3 text-sm font-semibold">
+              <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">{row.code}</td>
+              <td className="whitespace-normal break-normal px-4 py-3 text-sm leading-5">{row.categoryName}</td>
+              <td className="whitespace-normal break-normal px-4 py-3 text-sm leading-5">{row.productName || '-'}</td>
+              <td className="whitespace-normal break-normal px-4 py-3 text-sm leading-5">{row.employeeName || '-'}</td>
+              <td className="whitespace-normal break-normal px-4 py-3 text-sm leading-5">{row.stage || '-'}</td>
+              <td className={`whitespace-nowrap px-4 py-3 text-sm font-semibold ${resultStatus === 'ACCEPTED' ? 'text-emerald-700' : resultStatus === 'REJECTED' ? 'text-red-700' : 'text-amber-700'}`}>{resultStatus}</td>
+              <td className="whitespace-normal break-normal px-4 py-3 text-sm leading-5">{fields.option}</td>
+              <td className="whitespace-normal break-normal px-4 py-3 text-sm leading-5">{fields.defectType}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">{fields.count}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">
                 {useReportOverall ? row.reportOverallCount ?? '-' : row.overallCount}
               </td>
-              <td className="px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
             </tr>
           ))}
           {detailRows.length === 0 && (

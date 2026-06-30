@@ -112,6 +112,7 @@ const Sidebar = ({ isSuperAdmin }) => {
   const employeeNavItems = [
     { path: '/app/employee', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/app/employee/scanner', icon: Scan, label: 'QR Scanner' },
+    { path: '/app/employee/sheet-inspection', icon: FileText, label: 'Sheet Inspection' },
     { path: '/app/employee/scan-logs', icon: FileText, label: 'Scan Logs' },
   ];
 
