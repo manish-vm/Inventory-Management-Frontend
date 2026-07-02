@@ -4,7 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 const CHOICE_TYPES = ['dropdown', 'radio', 'checkbox'];
 
 const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) => {
+  const isSubQuestion = level > 0;
   const isChoiceType = CHOICE_TYPES.includes(question.responseType);
+  const optionsLocked = Boolean(question.optionsLocked || question.optionsSource);
 
   const updateQuestion = (patch) => {
     const next = { ...question, ...patch };
@@ -105,7 +107,7 @@ const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) 
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+      <div className={`grid gap-4 ${isSubQuestion ? '' : 'md:grid-cols-[1fr_220px]'}`}>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Question Text</span>
           <input
@@ -117,33 +119,41 @@ const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) 
           />
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Response Type</span>
-          <select
-            value={question.responseType || 'text'}
-            onChange={(e) => updateQuestion({ responseType: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-          >
-            <option value="dropdown">Dropdown</option>
-            <option value="radio">Multiple Choice (Radio)</option>
-            <option value="checkbox">Checkbox</option>
-            <option value="text">Empty Text Box</option>
-          </select>
-        </label>
+        {!isSubQuestion && (
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Response Type</span>
+            <select
+              value={question.responseType || 'text'}
+              onChange={(e) => updateQuestion({ responseType: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+            >
+              <option value="dropdown">Dropdown</option>
+              <option value="radio">Multiple Choice (Radio)</option>
+              <option value="checkbox">Checkbox</option>
+              <option value="text">Empty Text Box</option>
+            </select>
+          </label>
+        )}
       </div>
 
-      {isChoiceType && (
+      {!isSubQuestion && isChoiceType && (
         <div className="mt-5 rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
           <div className="mb-3 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Answer Options</p>
-            <button
-              type="button"
-              onClick={addOption}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-            >
-              <Plus className="h-4 w-4" />
-              Add Option
-            </button>
+            {optionsLocked ? (
+              <span className="rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">
+                Auto from report sheet
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={addOption}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add Option
+              </button>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -155,9 +165,11 @@ const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) 
                     value={option.label || ''}
                     onChange={(e) => updateOption(option.optionId, { label: e.target.value })}
                     placeholder={`Option ${optionIndex + 1}`}
-                    className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                    readOnly={optionsLocked}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 read-only:bg-slate-100 read-only:font-medium dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:read-only:bg-slate-950"
                   />
-                  <div className="flex shrink-0 gap-2">
+                  {!optionsLocked && (
+                    <div className="flex shrink-0 gap-2">
                     <button
                       type="button"
                       onClick={() => addSubQuestion(option.optionId)}
@@ -176,6 +188,7 @@ const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) 
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+                  )}
                 </div>
 
                 {(option.subQuestions || []).length > 0 && (

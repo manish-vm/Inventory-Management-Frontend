@@ -8,6 +8,30 @@ import EmployeeReviewRenderer from '../components/productReview/EmployeeReviewRe
 import RejectionQuestionBuilder from '../components/productReview/RejectionQuestionBuilder';
 import ReviewAnalyticsCard from '../components/productReview/ReviewAnalyticsCard';
 import ReviewRoutingSection from '../components/productReview/ReviewRoutingSection';
+import {
+  helmetD1DrrReport,
+  helmetD1RejectionReport,
+  helmetD2RejectionReport,
+  helmetD3RejectionReport,
+  helmetD4RejectionReport
+} from '../data/helmetWorkbookReportData';
+import {
+  helmetD2DrrReport,
+  helmetD3DrrReport,
+  helmetD4DrrReport
+} from '../data/correctedHelmetDrrData';
+import { visorMouldingReports } from '../data/visorMouldingReportData';
+import {
+  shellMouldingReports,
+  visorCoatingReports,
+  visorMechanismTopMouldingReports
+} from '../data/additionalMouldingReportData';
+import {
+  bopReports,
+  chinCoverReports,
+  spoilerReports,
+  stagewiseReports
+} from '../data/latestWorkbookReportData';
 
 const defaultConfig = {
   acceptedRouteStage: '',
@@ -28,6 +52,65 @@ const normalizeQuestions = (questions = []) =>
       subQuestions: normalizeQuestions(option.subQuestions || [])
     }))
   }));
+
+const toKey = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+const lineFromValue = (...values) => {
+  const text = values.join(' ').toLowerCase();
+  const match = text.match(/\bd\s*([1-4])\b/);
+  return match ? Number(match[1]) : null;
+};
+
+const reportRowsByContext = ({ productionLine, reportType }) => {
+  const line = Number(String(productionLine || '').replace(/\D/g, '')) || null;
+  const byLine = (reports) => reports.find((report) => Number(report.line) === line)?.rows || [];
+  if (reportType === 'helmet-assembly') {
+    return line === 1
+      ? [...(helmetD1DrrReport.rows || []), ...(helmetD1RejectionReport.rows || [])]
+      : line === 2
+      ? [...(helmetD2DrrReport.rows || []), ...(helmetD2RejectionReport.rows || [])]
+      : line === 3
+      ? [...(helmetD3DrrReport.rows || []), ...(helmetD3RejectionReport.rows || [])]
+      : line === 4
+      ? [...(helmetD4DrrReport.rows || []), ...(helmetD4RejectionReport.rows || [])]
+      : [];
+  }
+  if (reportType === 'visor-moulding') return byLine(visorMouldingReports);
+  if (reportType === 'visor-mechanism-top-moulding') return byLine(visorMechanismTopMouldingReports);
+  if (reportType === 'visor-coating') return byLine(visorCoatingReports);
+  if (reportType === 'shell-moulding') return byLine(shellMouldingReports);
+  if (reportType === 'stagewise-rejection') return byLine(stagewiseReports);
+  if (reportType === 'chin-cover-moulding') return byLine(chinCoverReports);
+  if (reportType === 'spoiler-moulding') return byLine(spoilerReports);
+  if (reportType === 'bop-parts-receipt') return byLine(bopReports);
+  return [];
+};
+
+const groupedProcessDefects = (rows = []) => {
+  const groups = new Map();
+  let currentProcess = '';
+  let currentPart = '';
+
+  rows.forEach((row) => {
+    if (row.assemblyProcess || row.defectGroup) currentProcess = String(row.assemblyProcess || row.defectGroup).trim();
+    if (row.partDetails) currentPart = String(row.partDetails).trim();
+    const process = currentProcess || 'Unspecified';
+    const defectType = String(row.defectDetails || row.rejectionDetails || row.partDetails || currentPart || '').trim();
+    if (!defectType) return;
+    if (!groups.has(process)) groups.set(process, new Set());
+    groups.get(process).add(defectType);
+  });
+
+  return Array.from(groups.entries()).map(([assemblyProcess, defects]) => ({
+    assemblyProcess,
+    defects: Array.from(defects)
+  }));
+};
 
 const ProductReviewConfig = () => {
   const navigate = useNavigate();
@@ -59,6 +142,55 @@ const ProductReviewConfig = () => {
     [currentStageNumber, location.state?.stage, stages]
   );
 
+  const rejectionOptionGroups = useMemo(() => {
+    const rows = reportRowsByContext({
+      productionLine: currentStage.productionLine || `D${lineFromValue(productName, currentStage.stageName) || ''}`,
+      reportType: currentStage.reportType
+    });
+    return groupedProcessDefects(rows);
+  }, [currentStage.productionLine, currentStage.reportType, currentStage.stageName, productName]);
+
+  const applyReportOptionsToRejectionQuestions = (questions = []) =>
+    normalizeQuestions(questions).map((question) => {
+      if (!rejectionOptionGroups.length) return question;
+      const questionId = question.questionId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      return {
+        ...question,
+        questionId,
+        responseType: 'checkbox',
+        optionsLocked: true,
+        optionsSource: 'dashboard-report-sheet',
+        options: rejectionOptionGroups.map((group) => {
+          const processKey = toKey(group.assemblyProcess);
+          return {
+            optionId: `${questionId}-${processKey}`,
+            label: group.assemblyProcess,
+            value: group.assemblyProcess,
+            assemblyProcess: group.assemblyProcess,
+            optionsLocked: true,
+            subQuestions: [
+              {
+                questionId: `${questionId}-${processKey}-defects`,
+                questionText: `${group.assemblyProcess} defect type`,
+                responseType: 'checkbox',
+                assemblyProcess: group.assemblyProcess,
+                optionsLocked: true,
+                optionsSource: 'dashboard-report-sheet',
+                options: group.defects.map((defect) => ({
+                  optionId: `${questionId}-${processKey}-${toKey(defect)}`,
+                  label: defect,
+                  value: defect,
+                  assemblyProcess: group.assemblyProcess,
+                  defectType: defect,
+                  subQuestions: []
+                }))
+              }
+            ]
+          };
+        })
+      };
+    });
+
   useEffect(() => {
     const fetchPageData = async () => {
       setLoading(true);
@@ -71,6 +203,15 @@ const ProductReviewConfig = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageKey]);
 
+  useEffect(() => {
+    if (!rejectionOptionGroups.length || !config.rejectionQuestions.length) return;
+    setConfig((prev) => ({
+      ...prev,
+      rejectionQuestions: applyReportOptionsToRejectionQuestions(prev.rejectionQuestions)
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejectionOptionGroups.length]);
+
   const fetchConfig = async () => {
     try {
       const response = await api.get(`/stage-review-config/${encodeURIComponent(productReviewKey)}`);
@@ -81,7 +222,7 @@ const ProductReviewConfig = () => {
           ...prev,
           ...data,
           rejectionQuestionnaireEnabled: Boolean(data.rejectionQuestionnaireEnabled || data.rejectionQuestions?.length),
-          rejectionQuestions: normalizeQuestions(data.rejectionQuestions || []),
+          rejectionQuestions: applyReportOptionsToRejectionQuestions(data.rejectionQuestions || []),
           reworkQuestionnaireEnabled: Boolean(data.reworkQuestionnaireEnabled || data.reworkQuestions?.length || prev.reworkQuestions?.length),
           reworkQuestions: normalizeQuestions(data.reworkQuestions?.length ? data.reworkQuestions : prev.reworkQuestions || [])
         }));
@@ -139,7 +280,7 @@ const ProductReviewConfig = () => {
           setConfig((prev) => ({
             ...prev,
             rejectionQuestionnaireEnabled: Boolean(savedRejectionQuestions.length || savedQuestions.length),
-            rejectionQuestions: normalizeQuestions(savedRejectionQuestions.length ? savedRejectionQuestions : savedQuestions),
+            rejectionQuestions: applyReportOptionsToRejectionQuestions(savedRejectionQuestions.length ? savedRejectionQuestions : savedQuestions),
             reworkQuestionnaireEnabled: Boolean(savedReworkQuestions.length),
             reworkQuestions: normalizeQuestions(savedReworkQuestions)
           }));
@@ -214,6 +355,35 @@ const ProductReviewConfig = () => {
     }
   };
 
+  const cloneQuestionsForPairedQuestionnaire = (questions = []) =>
+    normalizeQuestions(JSON.parse(JSON.stringify(questions || [])));
+
+  const copyQuestionnaireToPairedType = (sourceType) => {
+    setConfig((prev) => {
+      if (sourceType === 'rejection') {
+        return {
+          ...prev,
+          reworkQuestionnaireEnabled: true,
+          reworkQuestions: cloneQuestionsForPairedQuestionnaire(prev.rejectionQuestions)
+        };
+      }
+
+      return {
+        ...prev,
+        rejectionQuestionnaireEnabled: true,
+        rejectionQuestions: cloneQuestionsForPairedQuestionnaire(prev.reworkQuestions)
+      };
+    });
+
+    if (sourceType === 'rejection') {
+      setShowReworkBuilder(true);
+      toast.success('Rejection questionnaire copied to Rework');
+    } else {
+      setShowRejectionBuilder(true);
+      toast.success('Rework questionnaire copied to Rejection');
+    }
+  };
+
   const enableQuestionnaire = () => {
     setConfig((prev) => ({
       ...prev,
@@ -282,12 +452,15 @@ const ProductReviewConfig = () => {
               setConfig((prev) => ({
                 ...prev,
                 rejectionQuestionnaireEnabled: true,
-                rejectionQuestions: questions
+                rejectionQuestions: applyReportOptionsToRejectionQuestions(questions)
               }))
             }
+            autoOptionGroups={rejectionOptionGroups}
             onSave={() => saveQuestionnaire('rejection')}
             saving={savingQuestionnaire === 'rejection'}
             saveLabel="Save Rejection Questionnaire"
+            onCopy={() => copyQuestionnaireToPairedType('rejection')}
+            copyLabel="Copy to Rework"
           />
 
           <RejectionQuestionBuilder
@@ -306,6 +479,8 @@ const ProductReviewConfig = () => {
             onSave={() => saveQuestionnaire('rework')}
             saving={savingQuestionnaire === 'rework'}
             saveLabel="Save Rework Questionnaire"
+            onCopy={() => copyQuestionnaireToPairedType('rework')}
+            copyLabel="Copy to Reject"
           />
 
           {config.rejectionQuestionnaireEnabled && config.rejectionQuestions.length > 0 && (
@@ -346,5 +521,3 @@ const ProductReviewConfig = () => {
 };
 
 export default ProductReviewConfig;
-
-

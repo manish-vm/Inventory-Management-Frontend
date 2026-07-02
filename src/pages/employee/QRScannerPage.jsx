@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ChevronDown, PackageSearch } from 'lucide-react';
-import { defectDetailAPI, inspectionAPI } from '../../api/api';
+import { inspectionAPI } from '../../api/api';
 import QRScanner from '../../components/employeeScanner/QRScanner';
 import InspectionResponseSection from '../../components/employeeScanner/InspectionResponseSection';
 import ProductInfoCard from '../../components/employeeScanner/ProductInfoCard';
@@ -10,7 +10,7 @@ const missingDefectDetailForCount = (values = {}) =>
   Object.values(values).some((item) => {
     if (item?.type !== 'count') return false;
     const count = Number(item.answer || 0);
-    if (count <= 0 || String(item.defectDetail || '').trim()) return false;
+    if (count <= 0 || String(item.defectDetail || item.question || '').trim()) return false;
     const optionKey = String(item.optionKey || '');
     if (optionKey === '__response__') return true;
     const questionId = String(item.questionId || item.question || '');
@@ -60,6 +60,8 @@ const QRScannerPage = () => {
   const [search, setSearch] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState('');
   const [lookupData, setLookupData] = useState(null);
   const [selectedStageNumber, setSelectedStageNumber] = useState('');
   const [inspectionValues, setInspectionValues] = useState({});
@@ -68,7 +70,6 @@ const QRScannerPage = () => {
   const [counts, setCounts] = useState({ accepted: 0, rejected: 0, rework: 0 });
   const [activeQuantityMode, setActiveQuantityMode] = useState(null);
   const [selectedInspectionType, setSelectedInspectionType] = useState(null); // 'rejected' | 'rework' | null
-  const [defectDetails, setDefectDetails] = useState({ reject: [], rework: [] });
 
 
   const [remarks, setRemarks] = useState('');
@@ -110,52 +111,25 @@ const QRScannerPage = () => {
         : '';
 
   useEffect(() => {
-    const fetchDefectDetails = async () => {
-      try {
-        const [rejectRes, reworkRes] = await Promise.all([
-          defectDetailAPI.getAll({
-            type: 'reject',
-            isActive: true,
-            productionLine: selectedStage?.productionLine,
-            reportType: selectedStage?.reportType,
-            processKey: selectedStage?.processKey,
-            partKey: selectedStage?.partKey
-          }),
-          defectDetailAPI.getAll({
-            type: 'rework',
-            isActive: true,
-            productionLine: selectedStage?.productionLine,
-            reportType: selectedStage?.reportType,
-            processKey: selectedStage?.processKey,
-            partKey: selectedStage?.partKey
-          })
-        ]);
-        setDefectDetails({
-          reject: rejectRes.data || [],
-          rework: reworkRes.data || []
-        });
-      } catch {
-        setDefectDetails({ reject: [], rework: [] });
-      }
-    };
-
-    fetchDefectDetails();
-  }, [selectedStage]);
-
-  useEffect(() => {
     const q = search.trim();
 
     // The search input always remains product-only, including after a product is loaded.
     const handle = setTimeout(async () => {
       if (!q && !dropdownOpen) {
         setSuggestions([]);
+        setSuggestionsError('');
         return;
       }
       try {
+        setSuggestionsLoading(true);
+        setSuggestionsError('');
         const response = await inspectionAPI.searchProducts({ q });
         setSuggestions(response.data || []);
-      } catch {
+      } catch (error) {
         setSuggestions([]);
+        setSuggestionsError(error.response?.data?.message || 'Unable to load assigned products');
+      } finally {
+        setSuggestionsLoading(false);
       }
     }, 250);
 
@@ -302,12 +276,12 @@ const QRScannerPage = () => {
 
 
     if (totalRejectedDerived > 0 && missingDefectDetailForCount(rejectionValues)) {
-      toast.error('Select a reject defect type for every counted option');
+      toast.error('Enter a reject count for the selected reason details');
       return;
     }
 
     if (totalReworkDerived > 0 && missingDefectDetailForCount(reworkValues)) {
-      toast.error('Select a rework defect type for every counted option');
+      toast.error('Enter a rework count for the selected reason details');
       return;
     }
 
@@ -430,11 +404,23 @@ const QRScannerPage = () => {
               <ChevronDown className="h-4 w-4" />
             </button>
 
-            {dropdownOpen && suggestions.length > 0 && (
+            {dropdownOpen && (
               <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                {suggestions.map((item) => (
+                {suggestionsLoading ? (
+                  <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                    Loading assigned products...
+                  </div>
+                ) : suggestionsError ? (
+                  <div className="px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                    {suggestionsError}
+                  </div>
+                ) : suggestions.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                    {search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your role.'}
+                  </div>
+                ) : suggestions.map((item) => (
                     <button
-                      key={`${item.code}-${item.batchNo}`}
+                      key={`${item.productId || item.code}-${item.batchNo || item.productName}`}
                       type="button"
                       onClick={() => {
                         setSearch(item.productName);
@@ -534,8 +520,6 @@ const QRScannerPage = () => {
               setSelectedInspectionType={setSelectedInspectionType}
               rejectionForms={lookupData.rejectionForms || []}
               reworkForms={lookupData.reworkForms || []}
-              rejectDefectDetails={defectDetails.reject}
-              reworkDefectDetails={defectDetails.rework}
               valuesWrapperRejection={rejectionValues}
               valuesWrapperRework={reworkValues}
               onChangeRejection={setRejectionValues}

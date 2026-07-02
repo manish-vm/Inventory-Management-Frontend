@@ -26,11 +26,52 @@ import { useAuth } from '../context/AuthContext';
 import { CheckCircle, MinusCircle, Tag } from 'lucide-react';
 import CategoryManager from '../components/CategoryManager';
 import ProductAnalyticsModal from './ProductAnalyticsModal';
+import { visorMouldingReports } from '../data/visorMouldingReportData';
+import {
+  shellMouldingReports,
+  visorCoatingReports,
+  visorMechanismTopMouldingReports
+} from '../data/additionalMouldingReportData';
+import {
+  bopReports,
+  chinCoverReports,
+  spoilerReports,
+  stagewiseReports,
+  supplierRejectionReport
+} from '../data/latestWorkbookReportData';
 
 const getQRCodeValue = (product) => {
   if (!product?.withQRCode) return '';
   return product?.code || product?.code || product?.productName || product?._id || '';
 };
+
+const uniqueNames = (names) => [...new Set(names.filter(Boolean).map((name) => String(name).trim()).filter(Boolean))];
+const excludedDashboardSummaryCategoryNames = ['MIS', 'CRS'];
+const dashboardSheetCatalog = [
+  {
+    name: 'Helmet Assembly',
+    subcategories: uniqueNames([
+      'D1 - Helmet Assembly',
+      'D2 - Helmet Assembly',
+      'D3 - Helmet Assembly',
+      'D4 - Helmet Assembly'
+    ])
+  },
+  { name: 'Visor Moulding Quality Performance', subcategories: uniqueNames(visorMouldingReports.map((report) => report.subReportName)) },
+  { name: 'Visor Mechanism Top Moulding', subcategories: uniqueNames(visorMechanismTopMouldingReports.map((report) => report.subReportName)) },
+  { name: 'Visor Coating Quality Performance', subcategories: uniqueNames(visorCoatingReports.map((report) => report.subReportName)) },
+  { name: 'Shell Moulding Quality Performance', subcategories: uniqueNames(shellMouldingReports.map((report) => report.subReportName)) },
+  { name: 'Stagewise Rejection', subcategories: uniqueNames(stagewiseReports.map((report) => report.subReportName)) },
+  { name: 'Chin Cover Moulding', subcategories: uniqueNames(chinCoverReports.map((report) => report.subReportName)) },
+  { name: 'Spoiler Moulding', subcategories: uniqueNames(spoilerReports.map((report) => report.subReportName)) },
+  { name: 'BOP Parts Receipt', subcategories: uniqueNames(bopReports.map((report) => report.subReportName)) },
+  { name: 'Supplier Rejection', subcategories: [supplierRejectionReport.subReportName] }
+];
+const dashboardSheetCategoryNames = dashboardSheetCatalog.map((sheet) => sheet.name.toLowerCase());
+const dashboardSheetSubcategoryNamesByCategory = dashboardSheetCatalog.reduce((lookup, sheet) => {
+  lookup[sheet.name.toLowerCase()] = new Set(sheet.subcategories.map((name) => name.toLowerCase()));
+  return lookup;
+}, {});
 
 // QR Code Popup Modal Component
 const QRCodePopup = ({ product, onClose }) => {
@@ -377,9 +418,6 @@ const ProductModal = ({
     brandName: product?.brandName || '',
     model: product?.model || '',
 
-    // REQUIRED for production generation
-    numberOfItems: product?.numberOfItems ?? '',
-
     category: product?.category?._id || product?.category || '',
     subcategory: product?.subcategory?._id || product?.subcategory || '',
   });
@@ -471,21 +509,6 @@ const ProductModal = ({
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 placeholder="Auto-generated if empty"
                 className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-            </div>
-
-            {/* REQUIRED UI FIELD */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Number of Items
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={formData.numberOfItems}
-                onChange={(e) => setFormData({ ...formData, numberOfItems: e.target.value })}
-                className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-                required
               />
             </div>
             {(
@@ -702,6 +725,9 @@ const Products = () => {
   const productColumnMap = {
     productname: 'productName',
     producname: 'productName',
+    partdetails: 'productName',
+    partdetail: 'productName',
+    partname: 'productName',
     name: 'productName',
     description: 'description',
     code: 'code',
@@ -874,10 +900,94 @@ const Products = () => {
     }
   };
 
+  const syncDashboardSheetCategories = async () => {
+    let categoryRecords = (await productAPI.getCategories()).data || [];
+    let subcategoryRecords = (await productAPI.getSubcategories({})).data || [];
+    const excludedSummaryCategories = categoryRecords.filter((category) =>
+      excludedDashboardSummaryCategoryNames.some((name) => category.name?.trim().toLowerCase() === name.toLowerCase())
+    );
+
+    if (isAdmin) {
+      for (const category of excludedSummaryCategories) {
+        try {
+          await productAPI.deleteCategory(category._id);
+        } catch {
+          // Existing products may still reference this category; hide it from the add/edit dropdown instead.
+        }
+      }
+      categoryRecords = (await productAPI.getCategories()).data || [];
+      subcategoryRecords = (await productAPI.getSubcategories({})).data || [];
+    }
+
+    for (const sheet of dashboardSheetCatalog) {
+      const categoryName = sheet.name.trim();
+      let category = categoryRecords.find((item) => item.name?.trim().toLowerCase() === categoryName.toLowerCase());
+
+      if (!category && isAdmin) {
+        try {
+          category = (await productAPI.createCategory({
+            name: categoryName,
+            description: 'Dashboard report sheet'
+          })).data;
+          categoryRecords = [...categoryRecords, category];
+        } catch {
+          categoryRecords = (await productAPI.getCategories()).data || [];
+          category = categoryRecords.find((item) => item.name?.trim().toLowerCase() === categoryName.toLowerCase());
+        }
+      }
+
+      if (!category || !isAdmin) continue;
+
+      for (const subcategoryName of sheet.subcategories) {
+        const cleanSubcategoryName = String(subcategoryName || '').trim();
+        if (!cleanSubcategoryName) continue;
+        const exists = subcategoryRecords.some((item) => {
+          const itemCategoryId = item.category?._id || item.category;
+          return String(itemCategoryId) === String(category._id)
+            && item.name?.trim().toLowerCase() === cleanSubcategoryName.toLowerCase();
+        });
+
+        if (exists) continue;
+
+        try {
+          const subcategory = (await productAPI.createSubcategory({
+            name: cleanSubcategoryName,
+            category: category._id,
+            description: `${categoryName} nested sheet`
+          })).data;
+          subcategoryRecords = [...subcategoryRecords, subcategory];
+        } catch {
+          subcategoryRecords = (await productAPI.getSubcategories({})).data || [];
+        }
+      }
+    }
+
+    setCategoriesList(categoryRecords);
+    setCategories(categoryRecords);
+    setSubcategoriesList(subcategoryRecords);
+    setSubcategories(subcategoryRecords);
+  };
+
   useEffect(() => {
-    fetchCategoriesList();
-    fetchSubcategoriesList();
-  }, []);
+    const loadProductTaxonomy = async () => {
+      setLoadingCategories(true);
+      setLoadingSubcategories(true);
+      try {
+        if (isAdmin) {
+          await syncDashboardSheetCategories();
+        } else {
+          await Promise.all([fetchCategoriesList(), fetchSubcategoriesList()]);
+        }
+      } catch (error) {
+        toast.error('Failed to load dashboard sheet categories');
+      } finally {
+        setLoadingCategories(false);
+        setLoadingSubcategories(false);
+      }
+    };
+
+    loadProductTaxonomy();
+  }, [isAdmin]);
 
   // Fetch products when search/filter changes
   useEffect(() => {
@@ -1037,6 +1147,7 @@ const Products = () => {
         subcategory: formData.subcategory || null,
         withQRCode: Boolean(options.createQRCode),
       };
+      delete dataToSend.numberOfItems;
 
       if (editingProduct) {
         await productAPI.update(editingProduct._id, dataToSend);
@@ -1458,5 +1569,3 @@ const Products = () => {
 }
 
 export default Products;
-
-

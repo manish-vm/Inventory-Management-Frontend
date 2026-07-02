@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Download, FileSpreadsheet, Search, User } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { api, misOperationsAPI } from '../api/api';
+import { api, misOperationsAPI, productAPI } from '../api/api';
 import {
   helmetD1DrrReport,
   helmetD1RejectionReport,
@@ -54,6 +55,19 @@ const drrSummaryRows = [
     isPercent: true,
   },
   {
+    label: 'Day Wise Total Rework',
+    getValue: (column, report) => report?.daysById?.[column.id]?.rework ?? 0,
+    total: (report) => report?.totals?.rework ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Total Rework %',
+    getValue: (column, report) => formatPercent(report?.daysById?.[column.id]?.reworkPercent ?? 0),
+    total: (report) => formatPercent(report?.totals?.reworkPercent ?? 0),
+    totalPercent: '',
+    isPercent: true,
+  },
+  {
     label: 'Day Wise Rejection Qty',
     getValue: (column, report) => getRejectionDayValue(report, column, 'rejection'),
     total: (report) => report?.totals?.rejection ?? 0,
@@ -62,6 +76,52 @@ const drrSummaryRows = [
   {
     label: 'Day Wise Rejection %',
     getValue: (column, report) => formatPercent(getRejectionDayValue(report, column, 'rejectionPercent')),
+    total: (report) => formatPercent(report?.totals?.rejectionPercent ?? 0),
+    totalPercent: '',
+    isPercent: true,
+  },
+];
+
+const dynamicRejectionSummaryRows = [
+  {
+    label: 'Day wise Total Production',
+    metric: 'output',
+    getValue: (column, report) => report?.daysById?.[column.id]?.output ?? 0,
+    total: (report) => report?.totals?.output ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Rejection Qty',
+    getValue: (column, report) => report?.daysById?.[column.id]?.rejection ?? 0,
+    total: (report) => report?.totals?.rejection ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Rejection %',
+    getValue: (column, report) => formatPercent(report?.daysById?.[column.id]?.rejectionPercent ?? 0),
+    total: (report) => formatPercent(report?.totals?.rejectionPercent ?? 0),
+    totalPercent: '',
+    isPercent: true,
+  },
+];
+
+const dynamicReworkSummaryRows = [
+  {
+    label: 'Day wise Total Production',
+    metric: 'output',
+    getValue: (column, report) => report?.daysById?.[column.id]?.output ?? 0,
+    total: (report) => report?.totals?.output ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Rework Qty',
+    getValue: (column, report) => report?.daysById?.[column.id]?.rejection ?? 0,
+    total: (report) => report?.totals?.rejection ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Rework %',
+    getValue: (column, report) => formatPercent(report?.daysById?.[column.id]?.rejectionPercent ?? 0),
     total: (report) => formatPercent(report?.totals?.rejectionPercent ?? 0),
     totalPercent: '',
     isPercent: true,
@@ -135,6 +195,13 @@ const rejectionSummaryRows = [
   },
 ];
 
+const reworkSummaryRows = rejectionSummaryRows.map((row) => ({
+  ...row,
+  label: row.label
+    .replace('TOTAL REJECTION', 'TOTAL REWORK')
+    .replace('PERCENTAGE OF REJECTION', 'PERCENTAGE OF REWORK')
+}));
+
 const reportTabs = [
   {
     id: 'mis-quality-performance',
@@ -198,6 +265,7 @@ const reportTabs = [
           id: `d${line}-helmet-assembly-rejection`,
           line,
           type: 'rejection',
+          defectMode: 'reject',
           name: rejectionReport.subReportName,
           sourceFileName: rejectionReport.sourceFileName,
           descriptorColumns: line >= 3
@@ -207,6 +275,26 @@ const reportTabs = [
                 { key: 'rejectionDetails', label: 'Rejection Details', width: 420 },
               ],
           summaryRows: rejectionSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'G.Total' },
+            { id: 'totalPercent', label: '%' },
+          ],
+          rows: rejectionReport.rows,
+        },
+        {
+          id: `d${line}-helmet-assembly-rework`,
+          line,
+          type: 'rejection',
+          defectMode: 'rework',
+          name: `D${line} - Helmet Assembly Rework`,
+          sourceFileName: `${rejectionReport.sourceFileName} / Rework`,
+          descriptorColumns: line >= 3
+            ? [{ key: 'rejectionDetails', label: 'Defects', width: 640 }]
+            : [
+                { key: 'defectGroup', label: 'Defects', width: 220 },
+                { key: 'rejectionDetails', label: 'Rework Details', width: 420 },
+              ],
+          summaryRows: reworkSummaryRows,
           totalColumns: [
             { id: 'total', label: 'G.Total' },
             { id: 'totalPercent', label: '%' },
@@ -367,11 +455,35 @@ const reportTabs = [
   },
 ];
 
+const visibleDashboardReportIds = new Set([
+  'mis-quality-performance',
+  'consolidated-rejection-status',
+  'helmet-quality-performance',
+  'visor-moulding-quality-performance'
+]);
+const visibleStaticReportTabs = reportTabs.filter((report) => visibleDashboardReportIds.has(report.id));
+const productCategoryColumns = [
+  { key: 'productName', label: 'Product', width: 220 },
+  { key: 'code', label: 'Code', width: 140 },
+  { key: 'categoryName', label: 'Category', width: 160 },
+  { key: 'subcategoryName', label: 'Sub Category', width: 180 },
+  { key: 'stockQuantity', label: 'Stock', width: 90 },
+  { key: 'numberOfItems', label: 'Items', width: 90 },
+  { key: 'brandName', label: 'Brand', width: 140 },
+  { key: 'model', label: 'Model', width: 140 }
+];
+
 const D1_REJECTION_REPORT_ID = 'd1-helmet-assembly-rejection';
 const REJECTION_REPORT_IDS = [1, 2, 3, 4].map((line) => `d${line}-helmet-assembly-rejection`);
+const REWORK_REPORT_IDS = [1, 2, 3, 4].map((line) => `d${line}-helmet-assembly-rework`);
+const DEFECT_COUNT_REPORT_IDS = [...REJECTION_REPORT_IDS, ...REWORK_REPORT_IDS];
 const emptyRejectionOverrides = () => ({ output: {}, rows: {} });
 const dashboardReportFamilies = [
   { id: 'helmet-mis', name: 'MIS Helmet Quality Performance Report' },
+  { id: 'inspection', name: 'Inspection' },
+];
+const visibleDashboardFamilies = dashboardReportFamilies.filter((family) => family.id === 'helmet-mis');
+const inspectionReportFamilies = [
   { id: 'shell-moulding-inspection', name: 'Shell Moulding Inspection Report' },
   { id: 'visor-pdiir-inspection', name: 'VISOR PDIIR Report' },
   { id: 'd1-vm-base-rh-lh-inspection', name: 'D1 VM BASE RH/LH Report' },
@@ -406,6 +518,22 @@ const dayColumns = Array.from({ length: 31 }, (_, index) => {
 const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
+const getRejectionRowKey = (row) => normalizeReportKey([
+  row?.questionHeader,
+  row?.questionAnswer,
+  row?.partDetails,
+  row?.rejectionDetails
+].filter(Boolean).join(' | ') || row?.rejectionDetails);
+const hasQuestionnaireSubDetail = (row) => {
+  const detail = String(row?.defectName || row?.defectDetails || row?.rejectionDetails || '').trim();
+  const question = String(row?.questionHeader || '').trim();
+  const answer = String(row?.questionAnswer || '').trim();
+  const normalizedDetail = normalizeReportKey(detail);
+  return Boolean(
+    row?.hasSubQuestion ||
+    (question && answer && detail && normalizedDetail !== normalizeReportKey(question) && normalizedDetail !== normalizeReportKey(answer))
+  );
+};
 const sanitizeSheetName = (name, usedNames = new Set()) => {
   const baseName = String(name || 'Sheet')
     .replace(/[:\\/?*[\]]/g, ' ')
@@ -561,47 +689,60 @@ const getRejectionDayValue = (report, column, metric) => {
   return report?.daysById?.[dayKey]?.[metric] ?? 0;
 };
 
-const buildEditableDrrReport = (rows, overrides, columns, backendReport = null) => {
+const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, metric = 'rejection') => {
   const outputOverrides = overrides.output || {};
   const rowOverrides = overrides.rows || {};
-  const backendRows = new Map(
-    (backendReport?.rows || []).map((row) => [normalizeReportKey(row.defectName), row])
-  );
+  const backendRows = backendReport?.rows || [];
   const hasRowOverrides = Object.keys(rowOverrides).length > 0;
-  const editableRows = rows.map((row, rowIndex) => {
-    const rowKey = `${rowIndex}-${normalizeReportKey(row.defectDetails)}`;
+  const editableRows = backendRows.map((backendRow) => {
+    const rowKey = `backend-${normalizeReportKey(backendRow.defectCode || backendRow.defectName)}`;
     const dayOverrides = rowOverrides[rowKey] || {};
-    const backendRow = backendRows.get(normalizeReportKey(row.defectDetails));
     const days = columns.map((column, dayIndex) =>
-      toNumber(dayOverrides[column.id] ?? backendRow?.days?.[dayIndex] ?? 0)
+      toNumber(dayOverrides[column.id] ?? backendRow.days?.[dayIndex] ?? 0)
     );
     return {
-      ...row,
+      questionHeader: backendRow.questionHeader || '',
+      questionAnswer: backendRow.questionAnswer || '',
+      hasSubQuestion: hasQuestionnaireSubDetail(backendRow),
+      assemblyProcess: backendRow.questionAnswer || backendRow.assemblyProcess || backendReport.processName || '',
+      partDetails: backendRow.partName || backendReport.partName || '',
+      defectDetails: hasQuestionnaireSubDetail(backendRow) ? (backendRow.defectName || 'Unspecified') : '',
       drrRowKey: rowKey,
       days,
       total: days.reduce((sum, value) => sum + value, 0)
     };
   });
+
   const days = columns.map((column, dayIndex) => {
     const output = toNumber(outputOverrides[column.id] ?? backendReport?.days?.[dayIndex]?.output ?? 0);
     const rowRejection = editableRows.reduce((sum, row) => sum + toNumber(row.days[dayIndex]), 0);
     const backendDay = backendReport?.days?.[dayIndex];
-    const backendRejection = backendReport?.reportType === 'helmet-assembly'
-      ? backendDay?.rejectionAndRework
-      : backendDay?.rejection;
+    const rejected = toNumber(backendDay?.rejected ?? backendDay?.rejection ?? 0);
+    const backendRejection = metric === 'rework'
+      ? backendDay?.rework
+      : metric === 'rejectionAndRework' || backendReport?.reportType === 'helmet-assembly'
+        ? backendDay?.rejectionAndRework ?? rejected + toNumber(backendDay?.rework)
+        : backendDay?.rejection;
+    const rework = toNumber(backendDay?.rework ?? 0);
     const rejection = hasRowOverrides ? rowRejection : toNumber(backendRejection ?? rowRejection);
     return {
       output,
+      rejected,
       rejection,
-      rejectionPercent: output ? Number(((rejection / output) * 100).toFixed(2)) : 0
+      rejectionPercent: output ? Number(((rejection / output) * 100).toFixed(2)) : 0,
+      rework,
+      reworkPercent: output ? Number(((rework / output) * 100).toFixed(2)) : 0
     };
   });
   const totals = days.reduce(
-    (acc, day) => ({ output: acc.output + day.output, rejection: acc.rejection + day.rejection }),
-    { output: 0, rejection: 0 }
+    (acc, day) => ({ output: acc.output + day.output, rejection: acc.rejection + day.rejection, rework: acc.rework + day.rework }),
+    { output: 0, rejection: 0, rework: 0 }
   );
   totals.rejectionPercent = totals.output
     ? Number(((totals.rejection / totals.output) * 100).toFixed(2))
+    : 0;
+  totals.reworkPercent = totals.output
+    ? Number(((totals.rework / totals.output) * 100).toFixed(2))
     : 0;
   return {
     rows: editableRows,
@@ -614,7 +755,7 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null) 
   };
 };
 
-const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = []) => {
+const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = [], metric = 'rejection') => {
   if (!report) return report;
   const rowsByKey = new Map((aggregateRows || []).map((row) => [
     `${row._id?.rowKey}:${row._id?.day}`,
@@ -631,7 +772,10 @@ const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = []) => {
   });
 
   const days = (report.days || []).map((day, index) => {
-    const rejection = rows.reduce((sum, row) => sum + toNumber(row.days?.[index]), 0);
+    const rowTotal = rows.reduce((sum, row) => sum + toNumber(row.days?.[index]), 0);
+    const rejection = metric === 'rejectionAndRework'
+      ? toNumber(day.rejected) + toNumber(day.rework)
+      : rowTotal;
     return {
       ...day,
       rejection,
@@ -639,10 +783,15 @@ const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = []) => {
     };
   });
   const totals = days.reduce(
-    (acc, day) => ({ output: acc.output + day.output, rejection: acc.rejection + day.rejection }),
-    { output: 0, rejection: 0 }
+    (acc, day) => ({
+      output: acc.output + day.output,
+      rejection: acc.rejection + day.rejection,
+      rework: acc.rework + toNumber(day.rework)
+    }),
+    { output: 0, rejection: 0, rework: 0 }
   );
   totals.rejectionPercent = totals.output ? Number(((totals.rejection / totals.output) * 100).toFixed(2)) : 0;
+  totals.reworkPercent = totals.output ? Number(((totals.rework / totals.output) * 100).toFixed(2)) : 0;
 
   return {
     ...report,
@@ -689,7 +838,7 @@ const buildEditableRejectionReport = (report, overrides, dayColumnsForReport) =>
   const rowOverrides = overrides.rows || {};
 
   const rows = (baseReport.rows || []).map((row) => {
-    const rowKey = normalizeReportKey(row.rejectionDetails);
+    const rowKey = getRejectionRowKey(row);
     const rowDayOverrides = rowOverrides[rowKey] || {};
     const rowDays = dayColumnsForReport.map((column, index) => {
       const baseDay = row.days?.[index] || {};
@@ -756,7 +905,7 @@ const applyEmployeeSheetAggregateToRejectionReport = (report, aggregateRows = []
   ]));
 
   const rows = (report.rows || []).map((row) => {
-    const rowKey = normalizeReportKey(row.rejectionDetails);
+    const rowKey = getRejectionRowKey(row);
     const days = dayColumnsForReport.map((column, index) => {
       const baseDay = row.days?.[index] || {};
       return {
@@ -1171,9 +1320,15 @@ const ShellMouldingInspectionTable = ({ report, rows, stageCounts = [], onSample
   </div>
 );
 
-const AdminDashboard = () => {
+const AdminDashboard = ({
+  title = 'Dashboard',
+  subtitle = 'Inventory Pro MIS reports for production quality performance.',
+  allowedReportIds = null,
+  showInspectionReports = true,
+}) => {
   const now = new Date();
   const [activeDashboardFamilyId, setActiveDashboardFamilyId] = useState(dashboardReportFamilies[0].id);
+  const [activeInspectionFamilyId, setActiveInspectionFamilyId] = useState(inspectionReportFamilies[0].id);
   const [activeShellInspectionGroupId, setActiveShellInspectionGroupId] = useState(shellInspectionGroups[0].id);
   const [activeShellInspectionId, setActiveShellInspectionId] = useState(shellMouldingInspectionReports[0].id);
   const [activeVisorPdiirGroupId, setActiveVisorPdiirGroupId] = useState(visorPdiirGroups[0].id);
@@ -1189,6 +1344,9 @@ const AdminDashboard = () => {
   const [rejectionReport, setRejectionReport] = useState(null);
   const [backendMisReports, setBackendMisReports] = useState({});
   const [employeeSheetAggregates, setEmployeeSheetAggregates] = useState({});
+  const [productCategories, setProductCategories] = useState([]);
+  const [productSubcategories, setProductSubcategories] = useState([]);
+  const [dashboardProducts, setDashboardProducts] = useState([]);
   const [supplierRows, setSupplierRows] = useState([]);
   const [shellInspectionEntries, setShellInspectionEntries] = useState({});
   const [visorPdiirEntries, setVisorPdiirEntries] = useState({});
@@ -1197,6 +1355,32 @@ const AdminDashboard = () => {
   const [drrOverrides, setDrrOverrides] = useState({});
   const periodKey = `${reportYear}-${String(reportMonth).padStart(2, '0')}`;
   const inspectionDateValue = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(reportDay).padStart(2, '0')}`;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    Promise.all([
+      productAPI.getCategories(),
+      productAPI.getSubcategories(),
+      productAPI.getAll()
+    ])
+      .then(([categoryResponse, subcategoryResponse, productResponse]) => {
+        if (!isMounted) return;
+        setProductCategories(categoryResponse.data || []);
+        setProductSubcategories(subcategoryResponse.data || []);
+        setDashboardProducts(productResponse.data || []);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setProductCategories([]);
+        setProductSubcategories([]);
+        setDashboardProducts([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -1299,9 +1483,81 @@ const AdminDashboard = () => {
     if (reportDay > daysInMonth) setReportDay(daysInMonth);
   }, [reportDay, reportMonth, reportYear]);
 
-  const isShellInspectionFamily = activeDashboardFamilyId === 'shell-moulding-inspection';
-  const isVisorPdiirFamily = activeDashboardFamilyId === 'visor-pdiir-inspection';
-  const isD1VmBaseFamily = activeDashboardFamilyId === 'd1-vm-base-rh-lh-inspection';
+  const allowedReportIdSet = useMemo(
+    () => (Array.isArray(allowedReportIds) ? new Set(allowedReportIds) : null),
+    [allowedReportIds]
+  );
+  const availableStaticReportTabs = useMemo(
+    () => (allowedReportIdSet
+      ? visibleStaticReportTabs.filter((report) => allowedReportIdSet.has(report.id))
+      : visibleStaticReportTabs),
+    [allowedReportIdSet]
+  );
+  const availableDashboardFamilies = useMemo(
+    () => (showInspectionReports ? dashboardReportFamilies : dashboardReportFamilies.filter((family) => family.id !== 'inspection')),
+    [showInspectionReports]
+  );
+  const isInspectionFamily = showInspectionReports && activeDashboardFamilyId === 'inspection';
+  const isShellInspectionFamily = isInspectionFamily && activeInspectionFamilyId === 'shell-moulding-inspection';
+  const isVisorPdiirFamily = isInspectionFamily && activeInspectionFamilyId === 'visor-pdiir-inspection';
+  const isD1VmBaseFamily = isInspectionFamily && activeInspectionFamilyId === 'd1-vm-base-rh-lh-inspection';
+  const dynamicProductReportTabs = useMemo(() => {
+    if (allowedReportIdSet) return [];
+    const fixedReportNames = new Set(visibleStaticReportTabs.map((report) => normalizeReportKey(report.name)));
+    const createDynamicReports = ({ baseId, baseName, sourceFileName }) => ([
+      { suffix: '', label: 'DRR', metric: 'rejectionAndRework', summaryRows: drrSummaryRows },
+      { suffix: '-rejection', label: 'Rejection', metric: 'rejection', summaryRows: dynamicRejectionSummaryRows },
+      { suffix: '-rework', label: 'Rework', metric: 'rework', summaryRows: dynamicReworkSummaryRows }
+    ].map((item) => ({
+      id: `${baseId}${item.suffix}`,
+      type: 'drr',
+      metric: item.metric,
+      name: `${baseName} ${item.label}`,
+      sourceFileName,
+      descriptorColumns: [
+        { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+        { key: 'partDetails', label: 'Part details', width: 120 },
+        { key: 'defectDetails', label: 'Defect Details', width: 180 },
+      ],
+      summaryRows: item.summaryRows,
+      totalColumns: [
+        { id: 'total', label: 'Total' },
+        { id: 'totalPercent', label: 'Total %' },
+      ],
+      rows: []
+    })));
+
+    return productCategories
+      .filter((category) => !fixedReportNames.has(normalizeReportKey(category.name)))
+      .map((category) => {
+        const categoryId = String(category._id);
+        const subReports = productSubcategories
+          .filter((subcategory) => String(subcategory.category?._id || subcategory.category || '') === categoryId)
+          .flatMap((subcategory) => {
+            const subcategoryId = String(subcategory._id);
+            return createDynamicReports({
+              baseId: `product-subcategory-${subcategoryId}`,
+              baseName: `${category.name} - ${subcategory.name}`,
+              sourceFileName: `${category.name} / ${subcategory.name}`
+            });
+          });
+
+        return {
+          id: `product-category-${categoryId}`,
+          name: category.name,
+          dynamic: true,
+          subReports: subReports.length ? subReports : createDynamicReports({
+            baseId: `product-category-${categoryId}-all`,
+            baseName: category.name,
+            sourceFileName: category.name
+          })
+        };
+      });
+  }, [allowedReportIdSet, productCategories, productSubcategories]);
+  const dashboardReportTabs = useMemo(
+    () => [...availableStaticReportTabs, ...dynamicProductReportTabs],
+    [availableStaticReportTabs, dynamicProductReportTabs]
+  );
   const activeShellInspectionReport = shellMouldingInspectionReports.find((report) => report.id === activeShellInspectionId)
     || shellMouldingInspectionReports[0];
   const activeShellInspectionSheets = shellMouldingInspectionReports.filter((report) => report.groupId === activeShellInspectionGroupId);
@@ -1311,6 +1567,25 @@ const AdminDashboard = () => {
   const activeD1VmBaseReport = d1VmBaseInspectionReports.find((report) => report.id === activeD1VmBaseId)
     || d1VmBaseInspectionReports[0];
   const activeD1VmBaseSheets = d1VmBaseInspectionReports.filter((report) => report.groupId === activeD1VmBaseGroupId);
+
+  useEffect(() => {
+    if (!availableDashboardFamilies.some((family) => family.id === activeDashboardFamilyId)) {
+      setActiveDashboardFamilyId(availableDashboardFamilies[0]?.id || 'dashboard');
+    }
+  }, [activeDashboardFamilyId, availableDashboardFamilies]);
+
+  useEffect(() => {
+    const nextReport = dashboardReportTabs.find((report) => report.id === activeReportId) || dashboardReportTabs[0];
+    if (!nextReport) return;
+    if (nextReport.id !== activeReportId) {
+      setActiveReportId(nextReport.id);
+      setActiveSubReportId(nextReport.subReports[0]?.id || '');
+      return;
+    }
+    if (!nextReport.subReports.some((report) => report.id === activeSubReportId)) {
+      setActiveSubReportId(nextReport.subReports[0]?.id || '');
+    }
+  }, [activeReportId, activeSubReportId, dashboardReportTabs]);
 
   useEffect(() => {
     if (!activeShellInspectionSheets.some((report) => report.id === activeShellInspectionId)) {
@@ -1478,7 +1753,7 @@ const AdminDashboard = () => {
     () => getShellStageCounts(activeShellInspectionRows),
     [activeShellInspectionRows]
   );
-  const activeReport = reportTabs.find((report) => report.id === activeReportId) || reportTabs[0];
+  const activeReport = dashboardReportTabs.find((report) => report.id === activeReportId) || dashboardReportTabs[0] || availableStaticReportTabs[0];
   const activeSubReportBase = activeReport.subReports.find((report) => report.id === activeSubReportId) || activeReport.subReports[0];
   const isRejectionReport = activeSubReportBase.type === 'rejection';
   const isDrrReport = activeSubReportBase.type === 'drr';
@@ -1494,17 +1769,22 @@ const AdminDashboard = () => {
     }));
   }, [currentDayColumns, rejectionReport]);
   const editableRejectionReports = useMemo(() => {
-    return REJECTION_REPORT_IDS.reduce((reports, reportId) => {
+    return DEFECT_COUNT_REPORT_IDS.reduce((reports, reportId) => {
       const rejectionSubReport = reportTabs
         .flatMap((reportGroup) => reportGroup.subReports)
         .find((report) => report.id === reportId);
+      const metricKey = rejectionSubReport?.defectMode === 'rework' ? 'rework' : 'rejection';
       const backendReport = backendMisReports[reportId];
       const fallbackReport = reportId === D1_REJECTION_REPORT_ID ? rejectionReport : null;
       const backendRows = backendReport
         ? backendReport.rows.map((row) => ({
-            defectGroup: 'Rejection',
-            rejectionDetails: row.defectName,
-            days: row.days.map((rejection, index) => ({ day: index + 1, rejection })),
+            defectGroup: metricKey === 'rework' ? 'Rework' : 'Rejection',
+            questionHeader: row.questionHeader || (metricKey === 'rework' ? 'Rework Reason' : 'Rejection Reason'),
+            questionAnswer: row.questionAnswer || row.defectName,
+            hasSubQuestion: hasQuestionnaireSubDetail(row),
+            partDetails: row.partName || backendReport.partName || '',
+            rejectionDetails: hasQuestionnaireSubDetail(row) ? row.defectName : '',
+            days: row.days.map((value, index) => ({ day: index + 1, rejection: value })),
             total: row.total
           }))
         : fallbackReport?.rows || [];
@@ -1514,24 +1794,24 @@ const AdminDashboard = () => {
           days: backendReport.days.map((day) => ({
             day: day.day,
             output: day.output,
-            rejection: day.rejection,
-            rejectionPercent: day.rejectionPercent
+            rejection: day[metricKey],
+            rejectionPercent: day.output ? Number(((day[metricKey] || 0) / day.output * 100).toFixed(2)) : 0
           })),
           daysById: backendReport.days.reduce((acc, day) => {
             acc[`day-${String(day.day).padStart(2, '0')}`] = {
               output: day.output,
-              rejection: day.rejection,
-              rejectionPercent: day.rejectionPercent
+              rejection: day[metricKey],
+              rejectionPercent: day.output ? Number(((day[metricKey] || 0) / day.output * 100).toFixed(2)) : 0
             };
             return acc;
           }, {}),
           totals: {
             output: backendReport.totals.output,
-            rejection: backendReport.totals.rejection,
-            rejectionPercent: backendReport.totals.rejectionPercent
+            rejection: backendReport.totals[metricKey],
+            rejectionPercent: backendReport.totals.output ? Number(((backendReport.totals[metricKey] || 0) / backendReport.totals.output * 100).toFixed(2)) : 0
           }
         } : {}),
-        rows: mergeRejectionRows(rejectionSubReport?.rows || [], backendRows)
+        rows: backendRows
       };
       reports[reportId] = applyEmployeeSheetAggregateToRejectionReport(buildEditableRejectionReport(
         reportWithTemplateRows,
@@ -1546,24 +1826,37 @@ const AdminDashboard = () => {
     : editableRejectionReports[D1_REJECTION_REPORT_ID];
   const editableDrrReports = useMemo(() => {
     const reports = {};
-    for (const reportGroup of reportTabs) {
+    for (const reportGroup of dashboardReportTabs) {
       for (const subReport of reportGroup.subReports) {
         if (!['drr', 'visor-drr'].includes(subReport.type)) continue;
         reports[subReport.id] = applyEmployeeSheetAggregateToDrrReport(buildEditableDrrReport(
           subReport.rows,
           drrOverrides[`${periodKey}:${subReport.id}`] || emptyRejectionOverrides(),
           currentDayColumns,
-          backendMisReports[subReport.id]
-        ), employeeSheetAggregates[subReport.id] || []);
+          backendMisReports[subReport.id],
+          subReport.metric || 'rejection'
+        ), employeeSheetAggregates[subReport.id] || [], subReport.metric || 'rejection');
       }
     }
     return reports;
-  }, [backendMisReports, currentDayColumns, drrOverrides, employeeSheetAggregates, periodKey]);
+  }, [backendMisReports, currentDayColumns, dashboardReportTabs, drrOverrides, employeeSheetAggregates, periodKey]);
   const activeEditableDrrReport = editableDrrReports[activeSubReportBase.id] || null;
   const activeSubReport = useMemo(() => {
     if (isDrrReport || activeSubReportBase.type === 'visor-drr') {
+      const firstQuestionHeader = (activeEditableDrrReport?.rows || [])
+        .map((row) => String(row.questionHeader || '').trim())
+        .find(Boolean);
+      const hasSubQuestionRows = (activeEditableDrrReport?.rows || []).some((row) => row.hasSubQuestion);
+      const dynamicDescriptorColumns = firstQuestionHeader
+        ? [
+            { ...activeSubReportBase.descriptorColumns[0], label: firstQuestionHeader },
+            activeSubReportBase.descriptorColumns[1],
+            ...(hasSubQuestionRows ? [activeSubReportBase.descriptorColumns[2]] : [])
+          ].filter(Boolean)
+        : activeSubReportBase.descriptorColumns;
       return {
         ...activeSubReportBase,
+        descriptorColumns: dynamicDescriptorColumns,
         rows: activeEditableDrrReport?.rows || []
       };
     }
@@ -1571,8 +1864,20 @@ const AdminDashboard = () => {
       return { ...activeSubReportBase, rows: supplierRows };
     }
     if (!isRejectionReport) return activeSubReportBase;
+    const firstQuestionHeader = (activeEditableRejectionReport?.rows || [])
+      .map((row) => String(row.questionHeader || '').trim())
+      .find(Boolean);
+    const hasSubQuestionRows = (activeEditableRejectionReport?.rows || []).some((row) => row.hasSubQuestion);
+    const dynamicDescriptorColumns = firstQuestionHeader
+      ? [
+          { key: 'questionAnswer', label: firstQuestionHeader, width: 220 },
+          { key: 'partDetails', label: 'Part details', width: 180 },
+          ...(hasSubQuestionRows ? [{ key: 'rejectionDetails', label: 'Defect Details', width: 260 }] : [])
+        ]
+      : activeSubReportBase.descriptorColumns;
     return {
       ...activeSubReportBase,
+      descriptorColumns: dynamicDescriptorColumns,
       rows: activeEditableRejectionReport?.rows || [],
       dayColumns: rejectionDayColumns
     };
@@ -1602,7 +1907,6 @@ const AdminDashboard = () => {
   }, [activeD1VmBaseRows, activeShellInspectionRows, activeSubReport.descriptorColumns, activeSubReport.rows, activeVisorPdiirRows, isD1VmBaseFamily, isShellInspectionFamily, isVisorPdiirFamily, searchTerm]);
 
   const activeInspectionRowsForCounts = isD1VmBaseFamily ? activeD1VmBaseRows : isVisorPdiirFamily ? activeVisorPdiirRows : activeShellInspectionRows;
-  const isInspectionFamily = isShellInspectionFamily || isVisorPdiirFamily || isD1VmBaseFamily;
   const primaryDescriptorKey = isInspectionFamily ? 'inspectionMethod' : activeSubReport.descriptorColumns[0]?.key;
   const detailDescriptorKey = isInspectionFamily ? 'characteristic' : activeSubReport.descriptorColumns[activeSubReport.descriptorColumns.length - 1]?.key;
   const primaryGroups = isInspectionFamily
@@ -1637,13 +1941,21 @@ const AdminDashboard = () => {
     ? editableRejectionReports[`d${activeSubReportBase.line}-helmet-assembly-rejection`]
     : null;
   const getSummaryReport = (row) => {
-    if (isDrrReport && ['Day Wise Rejection Qty', 'Day Wise Rejection %'].includes(row.label)) {
+    if (isDrrReport && activeSubReportBase.line && ['Day Wise Rejection Qty', 'Day Wise Rejection %'].includes(row.label)) {
       return linkedHelmetRejectionReport;
+    }
+    if (
+      isDrrReport &&
+      activeSubReportBase.metric === 'rejectionAndRework' &&
+      ['Day Wise Rejection Qty', 'Day Wise Rejection %'].includes(row.label)
+    ) {
+      return editableDrrReports[`${activeSubReportBase.id}-rejection`] || calculatedRejectionSummary;
     }
     return calculatedRejectionSummary;
   };
   const isCrsReport = activeSubReportBase.type === 'crs';
   const isMisReport = activeSubReportBase.type === 'mis';
+  const isProductCategoryReport = activeSubReportBase.type === 'product-category';
   const crsReports = useMemo(
     () => ({ ...editableDrrReports, ...editableRejectionReports }),
     [editableDrrReports, editableRejectionReports]
@@ -1983,6 +2295,20 @@ const AdminDashboard = () => {
     });
   };
 
+  const appendProductCategorySheet = (workbook, usedSheetNames, tab, subReport) => {
+    appendAoASheet(workbook, usedSheetNames, `${tab.name} - ${subReport.name}`, [
+      [subReport.name],
+      [`Source: ${subReport.sourceFileName || tab.name}`],
+      [],
+      subReport.descriptorColumns.map((column) => column.label),
+      ...subReport.rows.map((row) => subReport.descriptorColumns.map((column) => row[column.key] ?? ''))
+    ], subReport.descriptorColumns.map((column) => Math.max(12, Math.round((column.width || 120) / 8))), {
+      metaRows: [1],
+      headerRows: [3],
+      numericColumns: [4, 5]
+    });
+  };
+
   const handleExportDashboardWorkbook = () => {
     const workbook = XLSX.utils.book_new();
     const usedSheetNames = new Set();
@@ -1993,18 +2319,18 @@ const AdminDashboard = () => {
       [`Selected Date: ${selectedDayLabel || inspectionDateValue}`],
       [],
       ['Tab', 'Nested sheets'],
-      ...reportTabs.map((tab) => [tab.name, tab.subReports.map((report) => report.name).join(', ')]),
-      ['Shell Moulding Inspection Report', shellMouldingInspectionReports.map((report) => report.name).join(', ')],
-      ['VISOR PDIIR Report', visorPdiirInspectionReports.map((report) => report.name).join(', ')],
-      ['D1 VM BASE RH/LH Report', d1VmBaseInspectionReports.map((report) => report.name).join(', ')]
+      ...dashboardReportTabs.map((tab) => [tab.name, tab.subReports.map((report) => report.name).join(', ')])
     ], [34, 90], { metaRows: [1, 2], headerRows: [4] });
 
-    reportTabs.forEach((tab) => {
-      tab.subReports.forEach((subReport) => appendReportSheet(workbook, usedSheetNames, tab, subReport));
+    dashboardReportTabs.forEach((tab) => {
+      tab.subReports.forEach((subReport) => {
+        if (subReport.type === 'product-category') {
+          appendProductCategorySheet(workbook, usedSheetNames, tab, subReport);
+          return;
+        }
+        appendReportSheet(workbook, usedSheetNames, tab, subReport);
+      });
     });
-    shellMouldingInspectionReports.forEach((report) => appendInspectionSheet(workbook, usedSheetNames, 'Shell Moulding', report, shellInspectionEntries));
-    visorPdiirInspectionReports.forEach((report) => appendInspectionSheet(workbook, usedSheetNames, 'VISOR PDIIR', report, visorPdiirEntries));
-    d1VmBaseInspectionReports.forEach((report) => appendInspectionSheet(workbook, usedSheetNames, 'D1 VM BASE', report, d1VmBaseEntries));
 
     XLSX.writeFile(workbook, `overall-dashboard-report-${reportYear}-${String(reportMonth).padStart(2, '0')}.xlsx`);
   };
@@ -2020,7 +2346,7 @@ const AdminDashboard = () => {
   const descriptorWidth = activeSubReport.descriptorColumns.reduce((sum, column) => sum + column.width, 0);
   const updateRowOverride = (row, dayId, value) => {
     if (!isRejectionReport) return;
-    const rowKey = normalizeReportKey(row.rejectionDetails);
+    const rowKey = getRejectionRowKey(row);
     const overrideKey = `${periodKey}:${activeSubReportBase.id}`;
     setRejectionOverrides((current) => ({
       ...current,
@@ -2036,9 +2362,8 @@ const AdminDashboard = () => {
       }
     }));
   };
-  const updateOutputOverride = (dayId, value) => {
-    if (!isRejectionReport) return;
-    const overrideKey = `${periodKey}:${activeSubReportBase.id}`;
+  const updateRejectionOutputOverride = (reportId, dayId, value) => {
+    const overrideKey = `${periodKey}:${reportId}`;
     setRejectionOverrides((current) => ({
       ...current,
       [overrideKey]: {
@@ -2049,6 +2374,32 @@ const AdminDashboard = () => {
         }
       }
     }));
+  };
+  const updateDrrOutputOverrideById = (reportId, dayId, value) => {
+    const overrideKey = `${periodKey}:${reportId}`;
+    setDrrOverrides((current) => ({
+      ...current,
+      [overrideKey]: {
+        ...(current[overrideKey] || emptyRejectionOverrides()),
+        output: {
+          ...(current[overrideKey]?.output || {}),
+          [dayId]: value
+        }
+      }
+    }));
+  };
+  const updateSharedHelmetOutputOverride = (dayId, value) => {
+    const line = activeSubReportBase.line;
+    if (!line) return false;
+
+    updateDrrOutputOverrideById(`d${line}-helmet-assembly-drr`, dayId, value);
+    updateRejectionOutputOverride(`d${line}-helmet-assembly-rejection`, dayId, value);
+    updateRejectionOutputOverride(`d${line}-helmet-assembly-rework`, dayId, value);
+    return true;
+  };
+  const updateOutputOverride = (dayId, value) => {
+    if (!isRejectionReport) return;
+    updateSharedHelmetOutputOverride(dayId, value);
   };
   const updateDrrOverride = (row, dayId, value) => {
     const rowKey = row.drrRowKey;
@@ -2079,17 +2430,11 @@ const AdminDashboard = () => {
     });
   };
   const updateDrrOutputOverride = (dayId, value) => {
-    const overrideKey = `${periodKey}:${activeSubReportBase.id}`;
-    setDrrOverrides((current) => ({
-      ...current,
-      [overrideKey]: {
-        ...(current[overrideKey] || emptyRejectionOverrides()),
-        output: {
-          ...(current[overrideKey]?.output || {}),
-          [dayId]: value
-        }
-      }
-    }));
+    if (activeSubReportBase.id === `d${activeSubReportBase.line}-helmet-assembly-drr`) {
+      updateSharedHelmetOutputOverride(dayId, value);
+      return;
+    }
+    updateDrrOutputOverrideById(activeSubReportBase.id, dayId, value);
   };
   const updateShellInspectionRow = (row, updater) => {
     const entryKey = `${inspectionDateValue}:${activeShellInspectionId}`;
@@ -2219,9 +2564,9 @@ const AdminDashboard = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
           <p className="text-slate-500 dark:text-slate-400">
-            Inventory Pro MIS reports for production quality performance.
+            {subtitle}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -2250,18 +2595,19 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {isInspectionFamily && (
       <div className="border-b border-slate-200 dark:border-slate-700">
         <div className="flex gap-2 overflow-x-auto">
-          {dashboardReportFamilies.map((family) => (
+          {inspectionReportFamilies.map((family) => (
             <button
               key={family.id}
               type="button"
               onClick={() => {
-                setActiveDashboardFamilyId(family.id);
+                setActiveInspectionFamilyId(family.id);
                 setSearchTerm('');
               }}
               className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
-                activeDashboardFamilyId === family.id
+                activeInspectionFamilyId === family.id
                   ? 'border-primary-600 text-primary-700 dark:border-primary-400 dark:text-primary-300'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
               }`}
@@ -2272,28 +2618,52 @@ const AdminDashboard = () => {
           ))}
         </div>
       </div>
+      )}
 
       {!isInspectionFamily ? (
       <div className="border-b border-slate-200 dark:border-slate-700">
-        <div className="flex gap-2 overflow-x-auto">
-          {reportTabs.map((report) => (
-            <button
-              key={report.id}
-              type="button"
-              onClick={() => {
-                setActiveReportId(report.id);
-                setActiveSubReportId(report.subReports[0].id);
-              }}
-              className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
-                activeReportId === report.id
-                  ? 'border-primary-600 text-primary-700 dark:border-primary-400 dark:text-primary-300'
-                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-              }`}
-            >
-              <ClipboardList className="h-4 w-4" />
-              {report.name}
-            </button>
-          ))}
+        <div className="space-y-3 py-3">
+          <div className="flex gap-2 overflow-x-auto">
+            {dashboardReportTabs.map((report) => (
+              <button
+                key={report.id}
+                type="button"
+                onClick={() => {
+                  setActiveReportId(report.id);
+                  setActiveSubReportId(report.subReports[0]?.id || '');
+                  setSearchTerm('');
+                }}
+                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
+                  activeReportId === report.id
+                    ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                {report.name}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 overflow-x-auto">
+            {activeReport.subReports.map((subReport) => (
+              <button
+                key={subReport.id}
+                type="button"
+                onClick={() => {
+                  setActiveSubReportId(subReport.id);
+                  setSearchTerm('');
+                }}
+                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
+                  activeSubReportId === subReport.id
+                    ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {subReport.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       ) : (
@@ -2335,22 +2705,7 @@ const AdminDashboard = () => {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         {!isInspectionFamily && (
-        <div className="flex gap-2 overflow-x-auto">
-          {activeReport.subReports.map((subReport) => (
-            <button
-              key={subReport.id}
-              type="button"
-              onClick={() => setActiveSubReportId(subReport.id)}
-              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
-                activeSubReportId === subReport.id
-                  ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-              }`}
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              {subReport.name}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
         </div>
         )}
 
@@ -2500,6 +2855,46 @@ const AdminDashboard = () => {
             ))}
           </div>
         </section>
+      ) : isProductCategoryReport ? (
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex flex-col gap-1 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{activeSubReport.name}</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Source: {activeSubReport.sourceFileName}</p>
+          </div>
+          <div className="max-h-[calc(100vh-270px)] overflow-auto">
+            <table className="min-w-[1100px] w-full border-separate border-spacing-0 text-sm">
+              <thead className="bg-blue-100 dark:bg-slate-900">
+                <tr>
+                  {activeSubReport.descriptorColumns.map((column) => (
+                    <th
+                      key={column.key}
+                      style={{ width: column.width }}
+                      className={`${gridBorderClass} sticky top-0 z-10 px-3 py-2 text-left text-xs font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row, index) => (
+                  <tr key={`${activeSubReport.id}-product-${index}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                    {activeSubReport.descriptorColumns.map((column) => (
+                      <td key={`${activeSubReport.id}-${column.key}-${index}`} className={`${gridBorderClass} px-3 py-2 text-slate-700 dark:text-slate-300`}>
+                        {row[column.key]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filteredRows.length === 0 && (
+            <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+              No products found for this category.
+            </div>
+          )}
+        </section>
       ) : (
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         <div className="flex flex-col gap-1 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
@@ -2507,7 +2902,7 @@ const AdminDashboard = () => {
           <p className="text-sm text-slate-500 dark:text-slate-400">Source: {activeSubReport.sourceFileName}</p>
         </div>
 
-        <div className="max-h-[70vh] overflow-auto">
+        <div className="h-[calc(100vh-250px)] min-h-[420px] overflow-auto">
           <table className="min-w-max table-fixed border-separate border-spacing-0 text-sm">
             <colgroup>
               {activeSubReport.descriptorColumns.map((column) => (
@@ -2526,7 +2921,7 @@ const AdminDashboard = () => {
                   <th
                     colSpan={activeSubReport.descriptorColumns.length}
                     style={{ minWidth: descriptorWidth, width: descriptorWidth, maxWidth: descriptorWidth, left: 0 }}
-                    className={`${cellHeightClass} ${gridBorderClass} sticky left-0 top-0 z-40 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky left-0 top-0 z-40 bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                   >
                     Description
                   </th>
@@ -2534,7 +2929,7 @@ const AdminDashboard = () => {
                   <th
                     key={column.key}
                     style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
-                    className={`${cellHeightClass} ${gridBorderClass} sticky top-0 z-40 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky top-0 z-40 bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                   >
                     {column.label}
                   </th>
@@ -2556,18 +2951,16 @@ const AdminDashboard = () => {
                     colSpan={activeSubReport.descriptorColumns.length}
                     style={{
                       minWidth: descriptorWidth,
-                      left: 0,
-                      top: `${(rowIndex + 1) * 48}px`
+                      left: 0
                     }}
-                    className={`${cellHeightClass} ${gridBorderClass} sticky z-30 bg-white px-4 py-2 text-right font-semibold text-slate-900 dark:bg-slate-800 dark:text-white`}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky left-0 z-20 bg-white px-3 py-1 text-right font-semibold text-slate-900 dark:bg-slate-800 dark:text-white`}
                   >
                     {row.label}
                   </td>
                   {reportDayColumns.map((column) => (
                     <td
                       key={`${row.label}-${column.id}`}
-                      style={{ top: `${(rowIndex + 1) * 48}px` }}
-                      className={`${dayCellClass} sticky z-20 bg-white ${
+                      className={`${dayCellClass} bg-white ${
                         row.isPercent ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'
                       } dark:bg-slate-800`}
                     >
@@ -2592,12 +2985,11 @@ const AdminDashboard = () => {
                       )}
                     </td>
                   ))}
-                  <td style={{ top: `${(rowIndex + 1) * 48}px` }} className={`${totalCellClass} sticky z-20 font-semibold text-slate-900 dark:text-slate-100`}>
+                  <td className={`${totalCellClass} font-semibold text-slate-900 dark:text-slate-100`}>
                     {getCellValue(row.total, getSummaryReport(row))}
                   </td>
                   <td
-                    style={{ top: `${(rowIndex + 1) * 48}px` }}
-                    className={`${totalPercentCellClass} sticky z-20 font-semibold ${
+                    className={`${totalPercentCellClass} font-semibold ${
                       getCellValue(row.totalPercent, getSummaryReport(row)) ? 'bg-orange-100 text-slate-900 dark:bg-orange-950 dark:text-orange-100' : 'text-slate-900 dark:text-slate-100'
                     }`}
                   >
@@ -2605,28 +2997,16 @@ const AdminDashboard = () => {
                   </td>
                 </tr>
               ))}
-              <tr className="h-3">
+              <tr className="h-1">
                 <td colSpan={activeSubReport.descriptorColumns.length + calendarColumns.length} className={`${gridBorderClass} bg-white dark:bg-slate-800`} />
               </tr>
               {hasSummaryRows && (
                 <tr className={reportRowClass}>
-                  {isRejectionReport ? (
-                    <th
-                      colSpan={activeSubReport.descriptorColumns.length}
-                      style={{
-                        minWidth: descriptorWidth,
-                        left: 0,
-                        top: `${(activeSubReport.summaryRows.length + 1) * 48}px`
-                      }}
-                      className={`${cellHeightClass} ${gridBorderClass} sticky z-30 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
-                    >
-                      DEFECTS
-                    </th>
-                  ) : activeSubReport.descriptorColumns.map((column, columnIndex) => (
+                  {activeSubReport.descriptorColumns.map((column, columnIndex) => (
                     <th
                       key={`detail-header-${column.key}`}
-                      style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex), top: `${(activeSubReport.summaryRows.length + 1) * 48}px` }}
-                      className={`${cellHeightClass} ${gridBorderClass} sticky z-30 bg-blue-100 px-4 py-3 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                      style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
+                      className={`${cellHeightClass} ${gridBorderClass} sticky z-20 bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                     >
                       {column.label}
                     </th>
@@ -2634,8 +3014,7 @@ const AdminDashboard = () => {
                   {calendarColumns.map((column) => (
                     <th
                       key={`detail-date-header-${column.id}`}
-                      style={{ top: `${(activeSubReport.summaryRows.length + 1) * 48}px` }}
-                      className={`${getColumnClass(column)} sticky z-20 bg-blue-100 font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                      className={`${getColumnClass(column)} bg-blue-100 font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                     >
                       {column.label}
                     </th>
@@ -2648,7 +3027,7 @@ const AdminDashboard = () => {
                     <td
                       key={`${activeSubReport.id}-${column.key}-${index}`}
                       style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
-                      className={`${cellHeightClass} ${gridBorderClass} sticky z-10 bg-white px-4 py-2 dark:bg-slate-800 ${
+                      className={`${cellHeightClass} ${gridBorderClass} sticky z-10 bg-white px-3 py-1 dark:bg-slate-800 ${
                         columnIndex === 0
                           ? 'truncate font-medium text-slate-900 dark:text-white'
                           : 'truncate text-slate-700 dark:text-slate-300'
@@ -2702,11 +3081,11 @@ const AdminDashboard = () => {
   );
 };
 
-const Dashboard = () => {
+const Dashboard = (props = {}) => {
   const { user, isAdmin } = useAuth();
 
-  if (isAdmin) {
-    return <AdminDashboard />;
+  if (props.allowedReportIds || isAdmin) {
+    return <AdminDashboard {...props} />;
   }
 
   return <UserDashboard user={user} />;

@@ -30,8 +30,6 @@ const InspectionResponseSection = ({
   setSelectedInspectionType,
   rejectionForms = [],
   reworkForms = [],
-  rejectDefectDetails = [],
-  reworkDefectDetails = [],
   valuesWrapperRejection = {},
   valuesWrapperRework = {},
   onChangeRejection,
@@ -120,7 +118,6 @@ const InspectionResponseSection = ({
                 forms={rejectionForms}
                 values={valuesWrapperRejection}
                 onChange={onChangeRejection}
-                defectDetails={rejectDefectDetails}
               />
             </div>
           ) : (
@@ -144,7 +141,6 @@ const InspectionResponseSection = ({
                 forms={reworkForms}
                 values={valuesWrapperRework}
                 onChange={onChangeRework}
-                defectDetails={reworkDefectDetails}
               />
             </div>
           ) : (

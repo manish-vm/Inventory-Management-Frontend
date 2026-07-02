@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Copy, Plus } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import QuestionCard from './QuestionCard';
 
@@ -18,7 +18,10 @@ const RejectionQuestionBuilder = ({
   emptyMessage = 'No rejection questions configured yet.',
   onSave,
   saving = false,
-  saveLabel = 'Save Questionnaire'
+  saveLabel = 'Save Questionnaire',
+  autoOptionGroups = [],
+  onCopy,
+  copyLabel = ''
 }) => {
   const addQuestion = () => {
     setQuestions([...questions, newQuestion()]);
@@ -34,17 +37,35 @@ const RejectionQuestionBuilder = ({
         <div>
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Add parent questions, then attach nested dependencies to specific answer choices.
+            Add parent questions. Sheet-derived answer options are filled automatically when available.
           </p>
+          {autoOptionGroups.length > 0 && (
+            <p className="mt-1 text-xs font-medium text-primary-700 dark:text-primary-300">
+              {autoOptionGroups.length} Assembly Process option(s) loaded from the report sheet.
+            </p>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={addQuestion}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Add Parent Question
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {onCopy && (
+            <button
+              type="button"
+              onClick={onCopy}
+              disabled={questions.length === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+            >
+              <Copy className="h-4 w-4" />
+              {copyLabel || 'Copy Questionnaire'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" />
+            Add Parent Question
+          </button>
+        </div>
       </div>
 
       {questions.length === 0 ? (

@@ -33,7 +33,6 @@ import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import QRScannerPage from './pages/employee/QRScannerPage';
 import ScanLogsPage from './pages/employee/ScanLogsPage';
 import ProductTraceabilityPage from './pages/employee/ProductTraceabilityPage';
-import SheetInspectionPage from './pages/employee/SheetInspectionPage';
 import AdminResponsesPage from './pages/admin/AdminResponsesPage';
 
 // Protected Route Component
@@ -291,11 +290,6 @@ function AppRoutes() {
          <Route path="employee/scanner" element={
            <ProtectedRoute allowedRoles={['employee', 'admin']}>
              <QRScannerPage />
-           </ProtectedRoute>
-         } />
-         <Route path="employee/sheet-inspection" element={
-           <ProtectedRoute allowedRoles={['employee', 'admin']}>
-             <SheetInspectionPage />
            </ProtectedRoute>
          } />
          <Route path="employee/scan-logs" element={
