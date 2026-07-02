@@ -107,7 +107,7 @@ const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) 
         </button>
       </div>
 
-      <div className={`grid gap-4 ${isSubQuestion ? '' : 'md:grid-cols-[1fr_220px]'}`}>
+      <div className="grid gap-4 md:grid-cols-[1fr_220px]">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Question Text</span>
           <input
@@ -119,24 +119,22 @@ const QuestionCard = ({ question, onChange, onRemove, level = 0, branchLabel }) 
           />
         </label>
 
-        {!isSubQuestion && (
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Response Type</span>
-            <select
-              value={question.responseType || 'text'}
-              onChange={(e) => updateQuestion({ responseType: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-            >
-              <option value="dropdown">Dropdown</option>
-              <option value="radio">Multiple Choice (Radio)</option>
-              <option value="checkbox">Checkbox</option>
-              <option value="text">Empty Text Box</option>
-            </select>
-          </label>
-        )}
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Response Type</span>
+          <select
+            value={question.responseType || 'text'}
+            onChange={(e) => updateQuestion({ responseType: e.target.value })}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="dropdown">Dropdown</option>
+            <option value="radio">Multiple Choice (Radio)</option>
+            <option value="checkbox">Checkbox</option>
+            <option value="text">Empty Text Box</option>
+          </select>
+        </label>
       </div>
 
-      {!isSubQuestion && isChoiceType && (
+      {isChoiceType && (
         <div className="mt-5 rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
           <div className="mb-3 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Answer Options</p>

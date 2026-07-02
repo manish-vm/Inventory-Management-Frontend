@@ -50,9 +50,17 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           answer: normalizeCount(count),
           rootQuestion: lineage.rootQuestion || textOf(question),
           parentOption: lineage.parentOption || (optionKey === RESPONSE_COUNT_KEY ? '' : option.label || option.value || optionKey),
-          defectDetail: textOf(question) || option.defectType || option.defectDetail || current.defectDetail || '',
+          subQuestion: lineage.subQuestion || '',
+          subOption: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
+            ? option.label || option.value || optionKey
+            : lineage.subOption || '',
+          defectDetail: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
+            ? option.label || option.value || optionKey
+            : textOf(question) || option.defectType || option.defectDetail || current.defectDetail || '',
           assemblyProcess: option.assemblyProcess || question.assemblyProcess || current.assemblyProcess || '',
-          defectType: textOf(question) || option.defectType || option.defectDetail || current.defectType || ''
+          defectType: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
+            ? option.label || option.value || optionKey
+            : textOf(question) || option.defectType || option.defectDetail || current.defectType || ''
         }
       };
     });
@@ -143,7 +151,9 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           {childQuestions.map((subQuestion, subIndex) =>
             renderQuestion(subQuestion, subIndex, level + 1, `${questionId}-${optionKey}`, option.label || option.value, {
               rootQuestion: lineage.rootQuestion || textOf(question),
-              parentOption: option.label || option.value || optionKey
+              parentOption: lineage.parentOption || option.label || option.value || optionKey,
+              subQuestion: level === 0 ? textOf(subQuestion) : lineage.subQuestion,
+              subOption: level > 0 ? option.label || option.value || optionKey : lineage.subOption
             })
           )}
         </div>

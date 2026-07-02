@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, Download, FileSpreadsheet, Search, User } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import toast from 'react-hot-toast';
@@ -518,10 +518,13 @@ const dayColumns = Array.from({ length: 31 }, (_, index) => {
 const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
+const subQuestionColumnKey = (value) => `subQuestion:${normalizeReportKey(value)}`;
 const getRejectionRowKey = (row) => normalizeReportKey([
   row?.questionHeader,
   row?.questionAnswer,
   row?.partDetails,
+  row?.subQuestion,
+  row?.subOption,
   row?.rejectionDetails
 ].filter(Boolean).join(' | ') || row?.rejectionDetails);
 const hasQuestionnaireSubDetail = (row) => {
@@ -700,13 +703,18 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
     const days = columns.map((column, dayIndex) =>
       toNumber(dayOverrides[column.id] ?? backendRow.days?.[dayIndex] ?? 0)
     );
+    const subQuestion = String(backendRow.subQuestion || '').trim();
+    const subOption = String(backendRow.subOption || '').trim();
     return {
       questionHeader: backendRow.questionHeader || '',
       questionAnswer: backendRow.questionAnswer || '',
+      subQuestion,
+      subOption,
+      ...(subQuestion && subOption ? { [subQuestionColumnKey(subQuestion)]: subOption } : {}),
       hasSubQuestion: hasQuestionnaireSubDetail(backendRow),
       assemblyProcess: backendRow.questionAnswer || backendRow.assemblyProcess || backendReport.processName || '',
       partDetails: backendRow.partName || backendReport.partName || '',
-      defectDetails: hasQuestionnaireSubDetail(backendRow) ? (backendRow.defectName || 'Unspecified') : '',
+      defectDetails: hasQuestionnaireSubDetail(backendRow) && !subOption ? (backendRow.defectName || 'Unspecified') : '',
       drrRowKey: rowKey,
       days,
       total: days.reduce((sum, value) => sum + value, 0)
@@ -1338,6 +1346,7 @@ const AdminDashboard = ({
   const [activeReportId, setActiveReportId] = useState(reportTabs[0].id);
   const [activeSubReportId, setActiveSubReportId] = useState(reportTabs[0].subReports[0].id);
   const [searchTerm, setSearchTerm] = useState('');
+  const [reportScrollMode, setReportScrollMode] = useState('calendar');
   const [reportMonth, setReportMonth] = useState(now.getMonth() + 1);
   const [reportYear, setReportYear] = useState(now.getFullYear());
   const [reportDay, setReportDay] = useState(Math.min(now.getDate(), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
@@ -1348,6 +1357,8 @@ const AdminDashboard = ({
   const [productSubcategories, setProductSubcategories] = useState([]);
   const [dashboardProducts, setDashboardProducts] = useState([]);
   const [supplierRows, setSupplierRows] = useState([]);
+  const [quickReportMenu, setQuickReportMenu] = useState(null);
+  const quickReportMenuCloseTimer = useRef(null);
   const [shellInspectionEntries, setShellInspectionEntries] = useState({});
   const [visorPdiirEntries, setVisorPdiirEntries] = useState({});
   const [d1VmBaseEntries, setD1VmBaseEntries] = useState({});
@@ -1482,6 +1493,23 @@ const AdminDashboard = ({
     const daysInMonth = new Date(reportYear, reportMonth, 0).getDate();
     if (reportDay > daysInMonth) setReportDay(daysInMonth);
   }, [reportDay, reportMonth, reportYear]);
+
+  useEffect(() => {
+    if (!quickReportMenu?.anchor) return undefined;
+    const updateMenuPosition = () => {
+      const rect = quickReportMenu.anchor.getBoundingClientRect();
+      setQuickReportMenu((current) => current?.anchor
+        ? { ...current, left: rect.left, top: rect.bottom + 8 }
+        : current);
+    };
+
+    window.addEventListener('scroll', updateMenuPosition, true);
+    window.addEventListener('resize', updateMenuPosition);
+    return () => {
+      window.removeEventListener('scroll', updateMenuPosition, true);
+      window.removeEventListener('resize', updateMenuPosition);
+    };
+  }, [quickReportMenu?.anchor]);
 
   const allowedReportIdSet = useMemo(
     () => (Array.isArray(allowedReportIds) ? new Set(allowedReportIds) : null),
@@ -1854,16 +1882,23 @@ const AdminDashboard = ({
       const backendReport = backendMisReports[reportId];
       const fallbackReport = reportId === D1_REJECTION_REPORT_ID ? rejectionReport : null;
       const backendRows = backendReport
-        ? backendReport.rows.map((row) => ({
-            defectGroup: metricKey === 'rework' ? 'Rework' : 'Rejection',
-            questionHeader: row.questionHeader || (metricKey === 'rework' ? 'Rework Reason' : 'Rejection Reason'),
-            questionAnswer: row.questionAnswer || row.defectName,
-            hasSubQuestion: hasQuestionnaireSubDetail(row),
-            partDetails: row.partName || backendReport.partName || '',
-            rejectionDetails: hasQuestionnaireSubDetail(row) ? row.defectName : '',
-            days: row.days.map((value, index) => ({ day: index + 1, rejection: value })),
-            total: row.total
-          }))
+        ? backendReport.rows.map((row) => {
+            const subQuestion = String(row.subQuestion || '').trim();
+            const subOption = String(row.subOption || '').trim();
+            return {
+              defectGroup: metricKey === 'rework' ? 'Rework' : 'Rejection',
+              questionHeader: row.questionHeader || (metricKey === 'rework' ? 'Rework Reason' : 'Rejection Reason'),
+              questionAnswer: row.questionAnswer || row.defectName,
+              subQuestion,
+              subOption,
+              ...(subQuestion && subOption ? { [subQuestionColumnKey(subQuestion)]: subOption } : {}),
+              hasSubQuestion: hasQuestionnaireSubDetail(row),
+              partDetails: row.partName || backendReport.partName || '',
+              rejectionDetails: hasQuestionnaireSubDetail(row) && !subOption ? row.defectName : '',
+              days: row.days.map((value, index) => ({ day: index + 1, rejection: value })),
+              total: row.total
+            };
+          })
         : fallbackReport?.rows || [];
       const reportWithTemplateRows = {
         ...(fallbackReport || {}),
@@ -1924,12 +1959,18 @@ const AdminDashboard = ({
       const firstQuestionHeader = (activeEditableDrrReport?.rows || [])
         .map((row) => String(row.questionHeader || '').trim())
         .find(Boolean);
-      const hasSubQuestionRows = (activeEditableDrrReport?.rows || []).some((row) => row.hasSubQuestion);
+      const hasSubQuestionRows = (activeEditableDrrReport?.rows || []).some((row) => row.hasSubQuestion && !row.subOption);
+      const subQuestionColumns = Array.from(new Set((activeEditableDrrReport?.rows || [])
+        .filter((row) => String(row.subOption || '').trim())
+        .map((row) => String(row.subQuestion || '').trim())
+        .filter(Boolean)))
+        .map((header) => ({ key: subQuestionColumnKey(header), label: header, width: 180 }));
       const dynamicDescriptorColumns = firstQuestionHeader
         ? [
-            { ...activeSubReportBase.descriptorColumns[0], label: firstQuestionHeader },
             activeSubReportBase.descriptorColumns[1],
-            ...(hasSubQuestionRows ? [activeSubReportBase.descriptorColumns[2]] : [])
+            { ...activeSubReportBase.descriptorColumns[0], label: firstQuestionHeader },
+            ...(hasSubQuestionRows || subQuestionColumns.length ? [activeSubReportBase.descriptorColumns[2]] : []),
+            ...subQuestionColumns
           ].filter(Boolean)
         : activeSubReportBase.descriptorColumns;
       return {
@@ -1945,12 +1986,18 @@ const AdminDashboard = ({
     const firstQuestionHeader = (activeEditableRejectionReport?.rows || [])
       .map((row) => String(row.questionHeader || '').trim())
       .find(Boolean);
-    const hasSubQuestionRows = (activeEditableRejectionReport?.rows || []).some((row) => row.hasSubQuestion);
+    const hasSubQuestionRows = (activeEditableRejectionReport?.rows || []).some((row) => row.hasSubQuestion && !row.subOption);
+    const subQuestionColumns = Array.from(new Set((activeEditableRejectionReport?.rows || [])
+      .filter((row) => String(row.subOption || '').trim())
+      .map((row) => String(row.subQuestion || '').trim())
+      .filter(Boolean)))
+      .map((header) => ({ key: subQuestionColumnKey(header), label: header, width: 180 }));
     const dynamicDescriptorColumns = firstQuestionHeader
       ? [
-          { key: 'questionAnswer', label: firstQuestionHeader, width: 220 },
           { key: 'partDetails', label: 'Part details', width: 180 },
-          ...(hasSubQuestionRows ? [{ key: 'rejectionDetails', label: 'Defect Details', width: 260 }] : [])
+          { key: 'questionAnswer', label: firstQuestionHeader, width: 220 },
+          ...(hasSubQuestionRows || subQuestionColumns.length ? [{ key: 'rejectionDetails', label: 'Defect Details', width: 260 }] : []),
+          ...subQuestionColumns
         ]
       : activeSubReportBase.descriptorColumns;
     return {
@@ -2737,6 +2784,14 @@ const AdminDashboard = ({
     });
   };
   const editableCellClass = 'h-8 w-full min-w-0 rounded border border-slate-300 bg-white px-1 text-center text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
+  const isFullTableScroll = reportScrollMode === 'full';
+  const scheduleQuickReportMenuClose = () => {
+    if (quickReportMenuCloseTimer.current) clearTimeout(quickReportMenuCloseTimer.current);
+    quickReportMenuCloseTimer.current = setTimeout(() => setQuickReportMenu(null), 150);
+  };
+  const keepQuickReportMenuOpen = () => {
+    if (quickReportMenuCloseTimer.current) clearTimeout(quickReportMenuCloseTimer.current);
+  };
 
   return (
     <div className="space-y-6">
@@ -2802,26 +2857,98 @@ const AdminDashboard = ({
       <div className="border-b border-slate-200 dark:border-slate-700">
         <div className="space-y-3 py-3">
           <div className="flex gap-2 overflow-x-auto">
-            {dashboardReportTabs.map((report) => (
-              <button
-                key={report.id}
-                type="button"
-                onClick={() => {
-                  setActiveReportId(report.id);
-                  setActiveSubReportId(report.subReports[0]?.id || '');
-                  setSearchTerm('');
-                }}
-                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
-                  activeReportId === report.id
-                    ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                <ClipboardList className="h-4 w-4" />
-                {report.name}
-              </button>
-            ))}
+            {dashboardReportTabs.map((report) => {
+              const quickReportItems = report.dynamic
+                ? report.subReports
+                    .filter((subReport) => subReport.type === 'drr' && !subReport.id.endsWith('-rejection') && !subReport.id.endsWith('-rework'))
+                    .flatMap((subReport) => ([
+                      {
+                        id: `${subReport.id}-quick-mis`,
+                        label: `${subReport.sourceFileName || subReport.name} MIS`,
+                        reportId: 'mis-quality-performance',
+                        subReportId: `${subReport.id}-mis`
+                      },
+                      {
+                        id: `${subReport.id}-quick-crs`,
+                        label: `${subReport.sourceFileName || subReport.name} CRS`,
+                        reportId: 'consolidated-rejection-status',
+                        subReportId: `${subReport.id}-crs`
+                      }
+                    ]))
+                : [];
+              return (
+              <div key={report.id} className="shrink-0">
+                <button
+                  type="button"
+                  onMouseEnter={(event) => {
+                    if (!quickReportItems.length) return;
+                    keepQuickReportMenuOpen();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setQuickReportMenu({
+                      reportId: report.id,
+                      items: quickReportItems,
+                      anchor: event.currentTarget,
+                      left: rect.left,
+                      top: rect.bottom + 8
+                    });
+                  }}
+                  onMouseLeave={() => {
+                    if (quickReportItems.length) scheduleQuickReportMenuClose();
+                  }}
+                  onFocus={(event) => {
+                    if (!quickReportItems.length) return;
+                    keepQuickReportMenuOpen();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setQuickReportMenu({
+                      reportId: report.id,
+                      items: quickReportItems,
+                      anchor: event.currentTarget,
+                      left: rect.left,
+                      top: rect.bottom + 8
+                    });
+                  }}
+                  onClick={() => {
+                    setActiveReportId(report.id);
+                    setActiveSubReportId(report.subReports[0]?.id || '');
+                    setSearchTerm('');
+                  }}
+                  className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
+                    activeReportId === report.id
+                      ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  {report.name}
+                </button>
+              </div>
+              );
+            })}
           </div>
+          {quickReportMenu && (
+            <div
+              onMouseEnter={keepQuickReportMenuOpen}
+              onMouseLeave={scheduleQuickReportMenuClose}
+              className="fixed z-50 max-h-72 min-w-64 overflow-y-auto rounded-md border border-slate-200 bg-white py-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+              style={{ left: quickReportMenu.left, top: quickReportMenu.top }}
+            >
+              {quickReportMenu.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveReportId(item.reportId);
+                    setActiveSubReportId(item.subReportId);
+                    setSearchTerm('');
+                    setQuickReportMenu(null);
+                  }}
+                  className="block w-full whitespace-nowrap px-4 py-2 text-left text-sm text-slate-700 hover:bg-primary-50 hover:text-primary-700 dark:text-slate-200 dark:hover:bg-primary-900/30 dark:hover:text-primary-200"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2 overflow-x-auto">
             {activeReport.subReports.map((subReport) => (
               <button
@@ -2978,6 +3105,26 @@ const AdminDashboard = ({
             />
           </label>
         ) : (
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <div className="inline-flex rounded-md border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800">
+            {[
+              ['calendar', 'Calendar'],
+              ['full', 'Full table']
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setReportScrollMode(mode)}
+                className={`rounded px-3 py-1.5 text-xs font-semibold transition ${
+                  reportScrollMode === mode
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="relative w-full lg:w-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -2987,6 +3134,7 @@ const AdminDashboard = ({
               placeholder="Search this report"
               className="w-full rounded-md border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             />
+          </div>
           </div>
         )}
       </div>
@@ -3188,16 +3336,16 @@ const AdminDashboard = ({
                 {hasSummaryRows ? (
                   <th
                     colSpan={activeSubReport.descriptorColumns.length}
-                    style={{ minWidth: descriptorWidth, width: descriptorWidth, maxWidth: descriptorWidth, left: 0 }}
-                    className={`${cellHeightClass} ${gridBorderClass} sticky left-0 top-0 z-40 bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    style={{ minWidth: descriptorWidth, width: descriptorWidth, maxWidth: descriptorWidth, ...(isFullTableScroll ? {} : { left: 0 }) }}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky top-0 ${isFullTableScroll ? 'z-30' : 'left-0 z-40'} bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                   >
                     Description
                   </th>
                 ) : activeSubReport.descriptorColumns.map((column, columnIndex) => (
                   <th
                     key={column.key}
-                    style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
-                    className={`${cellHeightClass} ${gridBorderClass} sticky top-0 z-40 bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                    style={{ minWidth: column.width, width: column.width, ...(isFullTableScroll ? {} : { left: getDescriptorLeft(columnIndex) }) }}
+                    className={`${cellHeightClass} ${gridBorderClass} sticky top-0 ${isFullTableScroll ? 'z-30' : 'z-40'} bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                   >
                     {column.label}
                   </th>
@@ -3219,9 +3367,9 @@ const AdminDashboard = ({
                     colSpan={activeSubReport.descriptorColumns.length}
                     style={{
                       minWidth: descriptorWidth,
-                      left: 0
+                      ...(isFullTableScroll ? {} : { left: 0 })
                     }}
-                    className={`${cellHeightClass} ${gridBorderClass} sticky left-0 z-20 bg-white px-3 py-1 text-right font-semibold text-slate-900 dark:bg-slate-800 dark:text-white`}
+                    className={`${cellHeightClass} ${gridBorderClass} ${isFullTableScroll ? '' : 'sticky left-0 z-20'} bg-white px-3 py-1 text-right font-semibold text-slate-900 dark:bg-slate-800 dark:text-white`}
                   >
                     {row.label}
                   </td>
@@ -3273,8 +3421,8 @@ const AdminDashboard = ({
                   {activeSubReport.descriptorColumns.map((column, columnIndex) => (
                     <th
                       key={`detail-header-${column.key}`}
-                      style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
-                      className={`${cellHeightClass} ${gridBorderClass} sticky z-20 bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
+                      style={{ minWidth: column.width, width: column.width, ...(isFullTableScroll ? {} : { left: getDescriptorLeft(columnIndex) }) }}
+                      className={`${cellHeightClass} ${gridBorderClass} ${isFullTableScroll ? '' : 'sticky z-20'} bg-blue-100 px-3 py-2 text-left font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
                     >
                       {column.label}
                     </th>
@@ -3294,8 +3442,8 @@ const AdminDashboard = ({
                   {activeSubReport.descriptorColumns.map((column, columnIndex) => (
                     <td
                       key={`${activeSubReport.id}-${column.key}-${index}`}
-                      style={{ minWidth: column.width, width: column.width, left: getDescriptorLeft(columnIndex) }}
-                      className={`${cellHeightClass} ${gridBorderClass} sticky z-10 bg-white px-3 py-1 dark:bg-slate-800 ${
+                      style={{ minWidth: column.width, width: column.width, ...(isFullTableScroll ? {} : { left: getDescriptorLeft(columnIndex) }) }}
+                      className={`${cellHeightClass} ${gridBorderClass} ${isFullTableScroll ? '' : 'sticky z-10'} bg-white px-3 py-1 dark:bg-slate-800 ${
                         columnIndex === 0
                           ? 'truncate font-medium text-slate-900 dark:text-white'
                           : 'truncate text-slate-700 dark:text-slate-300'
