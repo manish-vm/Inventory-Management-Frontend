@@ -56,11 +56,6 @@ const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
       setError('Please enter a valid email address');
       return;
     }
-    if (!formData.assignedRole) {
-      setError('Select a role for the employee');
-      return;
-    }
-    
     setLoading(true);
     try {
       // Only send password if it's filled (for new employees or password changes)
@@ -162,14 +157,14 @@ const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Employee Role *
+              Employee Role
             </label>
             <select value={formData.assignedRole} onChange={(e) => setFormData({ ...formData, assignedRole: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none">
-              <option value="">Select a role</option>
+              <option value="">No role assigned</option>
               {roles.map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
             </select>
-            <p className="text-xs text-slate-500 mt-1">The employee inherits the category, subcategory, product, and stage permissions configured for this role.</p>
-            {roles.length === 0 && <p className="text-xs text-amber-500 mt-1">No roles are available. Create a role in Role Management first.</p>}
+            <p className="text-xs text-slate-500 mt-1">Optional. The admin can assign or change the employee role later.</p>
+            {roles.length === 0 && <p className="text-xs text-amber-500 mt-1">No roles are available yet. You can create the employee now and assign a role later.</p>}
           </div>
 
           {/* Login Access Section */}
@@ -582,4 +577,3 @@ const AdminEmployees = () => {
 };
 
 export default AdminEmployees;
-

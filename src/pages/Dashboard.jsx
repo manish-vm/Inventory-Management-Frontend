@@ -457,11 +457,13 @@ const reportTabs = [
 
 const visibleDashboardReportIds = new Set([
   'mis-quality-performance',
-  'consolidated-rejection-status',
-  'helmet-quality-performance',
-  'visor-moulding-quality-performance'
+  'consolidated-rejection-status'
 ]);
 const visibleStaticReportTabs = reportTabs.filter((report) => visibleDashboardReportIds.has(report.id));
+const isGeneratedDashboardCategory = (category) =>
+  normalizeReportKey(category?.description) === normalizeReportKey('Dashboard report sheet');
+const isGeneratedDashboardSubcategory = (subcategory) =>
+  normalizeReportKey(subcategory?.description).includes(normalizeReportKey('nested sheet'));
 const productCategoryColumns = [
   { key: 'productName', label: 'Product', width: 220 },
   { key: 'code', label: 'Code', width: 140 },
@@ -519,6 +521,21 @@ const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
 const subQuestionColumnKey = (value) => `subQuestion:${normalizeReportKey(value)}`;
+const normalizeSubQuestionPath = (path, fallbackQuestion = '', fallbackOption = '') => {
+  const items = Array.isArray(path) ? path : [];
+  const normalized = items
+    .map((item) => ({
+      question: String(item?.question || '').trim(),
+      option: String(item?.option || '').trim()
+    }))
+    .filter((item) => item.question && item.option);
+  if (normalized.length) return normalized;
+  return fallbackQuestion && fallbackOption ? [{ question: fallbackQuestion, option: fallbackOption }] : [];
+};
+const subQuestionPathValues = (path) => path.reduce((values, item) => ({
+  ...values,
+  [subQuestionColumnKey(item.question)]: item.option
+}), {});
 const getRejectionRowKey = (row) => normalizeReportKey([
   row?.questionHeader,
   row?.questionAnswer,
@@ -692,6 +709,21 @@ const getRejectionDayValue = (report, column, metric) => {
   return report?.daysById?.[dayKey]?.[metric] ?? 0;
 };
 
+const getMisProcessRows = (report) => {
+  if (Array.isArray(report?.processRows) && report.processRows.length) return report.processRows;
+  return (report?.rows || []).map((row) => ({
+    key: row.drrRowKey || row.defectCode || `${row.partDetails || row.partName}-${row.assemblyProcess || row.processName}`,
+    partName: row.partDetails || row.partName || '',
+    processName: row.assemblyProcess || row.processName || row.questionAnswer || row.defectDetails || '',
+    days: (row.days || []).map((value, index) => ({
+      output: report?.days?.[index]?.output || 0,
+      rejection: toNumber(value)
+    })),
+    totalOutput: report?.totals?.output || 0,
+    totalRejection: row.total || 0
+  }));
+};
+
 const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, metric = 'rejection') => {
   const outputOverrides = overrides.output || {};
   const rowOverrides = overrides.rows || {};
@@ -705,12 +737,14 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
     );
     const subQuestion = String(backendRow.subQuestion || '').trim();
     const subOption = String(backendRow.subOption || '').trim();
+    const subQuestionPath = normalizeSubQuestionPath(backendRow.subQuestionPath, subQuestion, subOption);
     return {
       questionHeader: backendRow.questionHeader || '',
       questionAnswer: backendRow.questionAnswer || '',
       subQuestion,
       subOption,
-      ...(subQuestion && subOption ? { [subQuestionColumnKey(subQuestion)]: subOption } : {}),
+      subQuestionPath,
+      ...subQuestionPathValues(subQuestionPath),
       hasSubQuestion: hasQuestionnaireSubDetail(backendRow),
       assemblyProcess: backendRow.questionAnswer || backendRow.assemblyProcess || backendReport.processName || '',
       partDetails: backendRow.partName || backendReport.partName || '',
@@ -1529,67 +1563,20 @@ const AdminDashboard = ({
   const isShellInspectionFamily = isInspectionFamily && activeInspectionFamilyId === 'shell-moulding-inspection';
   const isVisorPdiirFamily = isInspectionFamily && activeInspectionFamilyId === 'visor-pdiir-inspection';
   const isD1VmBaseFamily = isInspectionFamily && activeInspectionFamilyId === 'd1-vm-base-rh-lh-inspection';
-  const dynamicProductReportTabs = useMemo(() => {
+  const reportableCategories = useMemo(() => {
     const fixedReportNames = new Set(visibleStaticReportTabs.map((report) => normalizeReportKey(report.name)));
-    const createDynamicReports = ({ baseId, baseName, sourceFileName }) => ([
-      { suffix: '', label: 'DRR', metric: 'rejectionAndRework', summaryRows: drrSummaryRows },
-      { suffix: '-rejection', label: 'Rejection', metric: 'rejection', summaryRows: dynamicRejectionSummaryRows },
-      { suffix: '-rework', label: 'Rework', metric: 'rework', summaryRows: dynamicReworkSummaryRows }
-    ].map((item) => ({
-      id: `${baseId}${item.suffix}`,
-      type: 'drr',
-      metric: item.metric,
-      name: `${baseName} ${item.label}`,
-      sourceFileName,
-      descriptorColumns: [
-        { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
-        { key: 'partDetails', label: 'Part details', width: 120 },
-        { key: 'defectDetails', label: 'Defect Details', width: 180 },
-      ],
-      summaryRows: item.summaryRows,
-      totalColumns: [
-        { id: 'total', label: 'Total' },
-        { id: 'totalPercent', label: 'Total %' },
-      ],
-      rows: []
-    })));
-
-    return productCategories
-      .filter((category) => !fixedReportNames.has(normalizeReportKey(category.name)))
-      .map((category) => {
-        const categoryId = String(category._id);
-        const subReports = productSubcategories
-          .filter((subcategory) => String(subcategory.category?._id || subcategory.category || '') === categoryId)
-          .flatMap((subcategory) => {
-            const subcategoryId = String(subcategory._id);
-            return createDynamicReports({
-              baseId: `product-subcategory-${subcategoryId}`,
-              baseName: `${category.name} - ${subcategory.name}`,
-              sourceFileName: `${category.name} / ${subcategory.name}`
-            });
-          });
-
-        return {
-          id: `product-category-${categoryId}`,
-          name: category.name,
-          dynamic: true,
-          subReports: subReports.length ? subReports : createDynamicReports({
-            baseId: `product-category-${categoryId}-all`,
-            baseName: category.name,
-            sourceFileName: category.name
-          })
-        };
-      });
-  }, [productCategories, productSubcategories]);
+    return productCategories.filter((category) =>
+      !fixedReportNames.has(normalizeReportKey(category.name)) && !isGeneratedDashboardCategory(category)
+    );
+  }, [productCategories]);
   const dynamicMisCrsSubReports = useMemo(() => {
-    const fixedReportNames = new Set(visibleStaticReportTabs.map((report) => normalizeReportKey(report.name)));
     const reports = [];
-    productCategories
-      .filter((category) => !fixedReportNames.has(normalizeReportKey(category.name)))
+    reportableCategories
       .forEach((category) => {
         const categoryId = String(category._id);
         const subcategories = productSubcategories.filter((subcategory) =>
           String(subcategory.category?._id || subcategory.category || '') === categoryId
+          && !isGeneratedDashboardSubcategory(subcategory)
         );
         const targets = subcategories.length
           ? subcategories.map((subcategory) => ({
@@ -1637,31 +1624,77 @@ const AdminDashboard = ({
         });
       });
     return reports;
-  }, [productCategories, productSubcategories]);
+  }, [productSubcategories, reportableCategories]);
+  const dynamicCategoryTabs = useMemo(() => reportableCategories.map((category) => {
+    const categoryId = String(category._id);
+    const subcategories = productSubcategories.filter((subcategory) =>
+      String(subcategory.category?._id || subcategory.category || '') === categoryId
+      && !isGeneratedDashboardSubcategory(subcategory)
+    );
+    const createDynamicReports = ({ baseId, baseName, sourceFileName }) => ([
+      { suffix: '', label: 'DRR', metric: 'rejectionAndRework', summaryRows: drrSummaryRows },
+      { suffix: '-rejection', label: 'Rejection', metric: 'rejection', summaryRows: dynamicRejectionSummaryRows },
+      { suffix: '-rework', label: 'Rework', metric: 'rework', summaryRows: dynamicReworkSummaryRows }
+    ].map((item) => ({
+      id: `${baseId}${item.suffix}`,
+      sourceReportId: `${baseId}${item.suffix}`,
+      type: 'drr',
+      metric: item.metric,
+      name: `${baseName} ${item.label}`,
+      sourceFileName,
+      descriptorColumns: [
+        { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+        { key: 'partDetails', label: 'Part details', width: 120 },
+        { key: 'defectDetails', label: 'Defect Details', width: 180 },
+      ],
+      summaryRows: item.summaryRows,
+      totalColumns: [
+        { id: 'total', label: 'Total' },
+        { id: 'totalPercent', label: 'Total %' },
+      ],
+      rows: []
+    })));
+    const targets = subcategories.length
+      ? subcategories.map((subcategory) => ({
+          baseId: `product-subcategory-${String(subcategory._id)}`,
+          name: `${category.name} - ${subcategory.name}`,
+          sourceFileName: `${category.name} / ${subcategory.name}`
+        }))
+      : [{
+          baseId: `product-category-${categoryId}-all`,
+          name: category.name,
+          sourceFileName: category.name
+        }];
+
+    return {
+      id: `product-category-tab-${categoryId}`,
+      name: category.name,
+      dynamic: true,
+      subReports: targets.flatMap((target) => createDynamicReports({
+        baseId: target.baseId,
+        baseName: target.name,
+        sourceFileName: target.sourceFileName
+      }))
+    };
+  }), [productSubcategories, reportableCategories]);
   const staticReportTabsWithDynamicSheets = useMemo(() => availableStaticReportTabs.map((report) => {
     if (report.id === 'mis-quality-performance') {
       return {
         ...report,
-        subReports: [
-          ...report.subReports,
-          ...dynamicMisCrsSubReports.map((item) => item.mis)
-        ]
+        subReports: dynamicMisCrsSubReports.map((item) => item.mis)
       };
     }
     if (report.id === 'consolidated-rejection-status') {
       return {
         ...report,
-        subReports: [
-          ...report.subReports,
-          ...dynamicMisCrsSubReports.map((item) => item.crs)
-        ]
+        subReports: dynamicMisCrsSubReports.map((item) => item.crs)
       };
     }
     return report;
   }), [availableStaticReportTabs, dynamicMisCrsSubReports]);
   const dashboardReportTabs = useMemo(
-    () => [...staticReportTabsWithDynamicSheets, ...dynamicProductReportTabs],
-    [staticReportTabsWithDynamicSheets, dynamicProductReportTabs]
+    () => [...staticReportTabsWithDynamicSheets, ...dynamicCategoryTabs],
+    [dynamicCategoryTabs, staticReportTabsWithDynamicSheets]
   );
   const activeShellInspectionReport = shellMouldingInspectionReports.find((report) => report.id === activeShellInspectionId)
     || shellMouldingInspectionReports[0];
@@ -1858,8 +1891,19 @@ const AdminDashboard = ({
     () => getShellStageCounts(activeShellInspectionRows),
     [activeShellInspectionRows]
   );
+  const emptyDashboardSubReport = {
+    id: 'empty-dashboard-sub-report',
+    type: 'empty',
+    name: '',
+    sourceFileName: '',
+    descriptorColumns: [],
+    summaryRows: [],
+    totalColumns: [],
+    dayColumns: [],
+    rows: []
+  };
   const activeReport = dashboardReportTabs.find((report) => report.id === activeReportId) || dashboardReportTabs[0] || availableStaticReportTabs[0];
-  const activeSubReportBase = activeReport.subReports.find((report) => report.id === activeSubReportId) || activeReport.subReports[0];
+  const activeSubReportBase = activeReport.subReports.find((report) => report.id === activeSubReportId) || activeReport.subReports[0] || emptyDashboardSubReport;
   const isRejectionReport = activeSubReportBase.type === 'rejection';
   const isDrrReport = activeSubReportBase.type === 'drr';
   const rejectionDayColumns = useMemo(() => {
@@ -1885,13 +1929,15 @@ const AdminDashboard = ({
         ? backendReport.rows.map((row) => {
             const subQuestion = String(row.subQuestion || '').trim();
             const subOption = String(row.subOption || '').trim();
+            const subQuestionPath = normalizeSubQuestionPath(row.subQuestionPath, subQuestion, subOption);
             return {
               defectGroup: metricKey === 'rework' ? 'Rework' : 'Rejection',
               questionHeader: row.questionHeader || (metricKey === 'rework' ? 'Rework Reason' : 'Rejection Reason'),
               questionAnswer: row.questionAnswer || row.defectName,
               subQuestion,
               subOption,
-              ...(subQuestion && subOption ? { [subQuestionColumnKey(subQuestion)]: subOption } : {}),
+              subQuestionPath,
+              ...subQuestionPathValues(subQuestionPath),
               hasSubQuestion: hasQuestionnaireSubDetail(row),
               partDetails: row.partName || backendReport.partName || '',
               rejectionDetails: hasQuestionnaireSubDetail(row) && !subOption ? row.defectName : '',
@@ -1959,17 +2005,14 @@ const AdminDashboard = ({
       const firstQuestionHeader = (activeEditableDrrReport?.rows || [])
         .map((row) => String(row.questionHeader || '').trim())
         .find(Boolean);
-      const hasSubQuestionRows = (activeEditableDrrReport?.rows || []).some((row) => row.hasSubQuestion && !row.subOption);
       const subQuestionColumns = Array.from(new Set((activeEditableDrrReport?.rows || [])
-        .filter((row) => String(row.subOption || '').trim())
-        .map((row) => String(row.subQuestion || '').trim())
+        .flatMap((row) => normalizeSubQuestionPath(row.subQuestionPath, row.subQuestion, row.subOption).map((item) => item.question))
         .filter(Boolean)))
         .map((header) => ({ key: subQuestionColumnKey(header), label: header, width: 180 }));
       const dynamicDescriptorColumns = firstQuestionHeader
         ? [
             activeSubReportBase.descriptorColumns[1],
             { ...activeSubReportBase.descriptorColumns[0], label: firstQuestionHeader },
-            ...(hasSubQuestionRows || subQuestionColumns.length ? [activeSubReportBase.descriptorColumns[2]] : []),
             ...subQuestionColumns
           ].filter(Boolean)
         : activeSubReportBase.descriptorColumns;
@@ -1986,17 +2029,14 @@ const AdminDashboard = ({
     const firstQuestionHeader = (activeEditableRejectionReport?.rows || [])
       .map((row) => String(row.questionHeader || '').trim())
       .find(Boolean);
-    const hasSubQuestionRows = (activeEditableRejectionReport?.rows || []).some((row) => row.hasSubQuestion && !row.subOption);
     const subQuestionColumns = Array.from(new Set((activeEditableRejectionReport?.rows || [])
-      .filter((row) => String(row.subOption || '').trim())
-      .map((row) => String(row.subQuestion || '').trim())
+      .flatMap((row) => normalizeSubQuestionPath(row.subQuestionPath, row.subQuestion, row.subOption).map((item) => item.question))
       .filter(Boolean)))
       .map((header) => ({ key: subQuestionColumnKey(header), label: header, width: 180 }));
     const dynamicDescriptorColumns = firstQuestionHeader
       ? [
           { key: 'partDetails', label: 'Part details', width: 180 },
           { key: 'questionAnswer', label: firstQuestionHeader, width: 220 },
-          ...(hasSubQuestionRows || subQuestionColumns.length ? [{ key: 'rejectionDetails', label: 'Defect Details', width: 260 }] : []),
           ...subQuestionColumns
         ]
       : activeSubReportBase.descriptorColumns;
@@ -2085,15 +2125,6 @@ const AdminDashboard = ({
     () => ({ ...editableDrrReports, ...editableRejectionReports }),
     [editableDrrReports, editableRejectionReports]
   );
-  const activeDynamicSummaryReport = activeSubReportBase.sourceReportId
-    ? editableDrrReports[activeSubReportBase.sourceReportId]
-    : null;
-  const activeDynamicRejectionReport = activeSubReportBase.rejectionReportId
-    ? editableDrrReports[activeSubReportBase.rejectionReportId]
-    : null;
-  const activeDynamicSummaryRows = activeDynamicSummaryReport?.rows || [];
-  const activeDynamicSummaryTotals = activeDynamicSummaryReport?.totals || { output: 0, rejection: 0, rejectionPercent: 0 };
-  const activeDynamicRejectionTotals = activeDynamicRejectionReport?.totals || { rejection: 0, rejectionPercent: 0 };
   const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' })
     .format(new Date(reportYear, reportMonth - 1, 1));
   const selectedDayIndex = Math.max(0, Math.min(currentDayColumns.length - 1, reportDay - 1));
@@ -2135,7 +2166,7 @@ const AdminDashboard = ({
   const appendMisSheet = (workbook, usedSheetNames, subReport) => {
     if (subReport.sourceReportId) {
       const report = editableDrrReports[subReport.sourceReportId];
-      const reportRows = report?.rows || [];
+      const reportRows = getMisProcessRows(report);
       const reportTotals = report?.totals || {};
       const rows = [
         [`${subReport.name} - PARTWISE QUALITY PERFORMANCE REPORT`],
@@ -2154,21 +2185,21 @@ const AdminDashboard = ({
         { s: { r: 4, c: 8 }, e: { r: 4, c: 13 } }
       ];
       reportRows.forEach((row) => {
-        const dayOutput = toNumber(report?.days?.[selectedDayIndex]?.output);
-        const dayRejection = toNumber(row.days?.[selectedDayIndex]);
-        const monthOutput = toNumber(reportTotals.output);
-        const monthRejection = toNumber(row.total);
-        const processName = [row.questionAnswer, row.hasSubQuestion ? row.defectDetails : ''].filter(Boolean).join(' - ');
+        const selectedDay = row.days?.[selectedDayIndex] || {};
+        const dayOutput = toNumber(selectedDay.output);
+        const dayRejection = toNumber(selectedDay.rejection);
+        const monthOutput = toNumber(row.totalOutput ?? reportTotals.output);
+        const monthRejection = toNumber(row.totalRejection);
         rows.push([
-          row.partDetails || '',
-          processName || row.defectDetails || '',
+          row.partName || '',
+          row.processName || '',
           dayOutput,
           dayRejection,
           { t: 'n', f: `IFERROR(D${rows.length + 1}/C${rows.length + 1},0)`, z: '0.00%' },
           0,
           0,
-          row.partDetails || '',
-          processName || row.defectDetails || '',
+          row.partName || '',
+          row.processName || '',
           monthOutput,
           monthRejection,
           { t: 'n', f: `IFERROR(K${rows.length + 1}/J${rows.length + 1},0)`, z: '0.00%' },
@@ -2792,6 +2823,106 @@ const AdminDashboard = ({
   const keepQuickReportMenuOpen = () => {
     if (quickReportMenuCloseTimer.current) clearTimeout(quickReportMenuCloseTimer.current);
   };
+  const renderMisReportBlock = (subReport) => {
+    const report = editableDrrReports[subReport.sourceReportId];
+    const misRows = getMisProcessRows(report);
+    const totals = report?.totals || { output: 0 };
+    return (
+      <div key={subReport.id} className="space-y-4">
+        <div className="border border-slate-200 bg-white px-5 py-4 text-center dark:border-slate-700 dark:bg-slate-800">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+            {subReport.name} - PARTWISE QUALITY PERFORMANCE REPORT
+          </h2>
+        </div>
+        <section className="overflow-hidden border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800">
+          <div className="grid gap-0 xl:grid-cols-2">
+            {[
+              { label: `For the day - ${selectedDayLabel}`, period: 'day' },
+              { label: `For the month - ${monthLabel}`, period: 'month' }
+            ].map(({ label, period }) => (
+              <div key={`${subReport.id}-${period}`} className="min-w-0 border-slate-300 xl:border-r last:xl:border-r-0 dark:border-slate-700">
+                <div className="relative z-10 flex items-center justify-between border-b border-slate-300 bg-blue-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 className="font-bold text-slate-900 dark:text-white">{subReport.sourceFileName}</h3>
+                  <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 dark:bg-slate-900/70">
+                        {['Part', 'Process', 'Prodn.Qty', 'Rej.Qty', 'Rej%', 'Part Value (Rs)', 'Rej. Value / Helmet (Rs)'].map((header) => (
+                          <th key={header} className="border-b border-r border-slate-300 px-3 py-2 text-left font-semibold dark:border-slate-700">{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {misRows.map((row) => {
+                        const selectedDay = row.days?.[selectedDayIndex] || {};
+                        const output = period === 'day'
+                          ? toNumber(selectedDay.output)
+                          : toNumber(row.totalOutput ?? totals.output);
+                        const rejection = period === 'day'
+                          ? toNumber(selectedDay.rejection)
+                          : toNumber(row.totalRejection);
+                        const percent = output ? (rejection / output) * 100 : 0;
+                        return (
+                          <tr key={`${subReport.id}-${period}-${row.key}`}>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">{row.partName || '-'}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">{row.processName || '-'}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{output}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{rejection}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{formatPercent(percent)}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">0</td>
+                            <td className="border-b border-slate-200 px-3 py-2 text-right dark:border-slate-700">0</td>
+                          </tr>
+                        );
+                      })}
+                      {misRows.length === 0 && (
+                        <tr>
+                          <td colSpan="7" className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">No report rows found.</td>
+                        </tr>
+                      )}
+                      <tr className="bg-blue-50 font-bold dark:bg-blue-900/20">
+                        <td colSpan="6" className="border-r border-slate-300 px-3 py-2 text-right dark:border-slate-700">Total rejection Cost</td>
+                        <td className="px-3 py-2 text-right">0</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  };
+  const renderCrsReportBlock = (subReport) => {
+    const report = editableDrrReports[subReport.sourceReportId];
+    const rejectionReportForBlock = subReport.rejectionReportId ? editableDrrReports[subReport.rejectionReportId] : null;
+    const totals = report?.totals || {};
+    const rejectionTotals = rejectionReportForBlock?.totals || {};
+    return (
+      <div key={subReport.id} className="overflow-hidden border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <h3 className="border-b border-slate-300 bg-blue-100 px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+          {subReport.sourceFileName}
+        </h3>
+        <p className="border-b border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          Month Cumulative - {monthLabel}
+        </p>
+        {[
+          ['TOTAL PRODUCTION QTY', totals.output || 0],
+          ['TOTAL REJECTION & REWORK QTY', totals.rejection || 0],
+          ['TOTAL REJECTION & REWORK QTY %', formatPercent(totals.rejectionPercent || 0)],
+          ['TOTAL REJECTION QTY', rejectionTotals.rejection || 0],
+          ['TOTAL REJECTION %', formatPercent(rejectionTotals.rejectionPercent || 0)]
+        ].map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[1fr_110px] border-b border-slate-200 text-xs last:border-b-0 dark:border-slate-700">
+            <span className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+            <span className="border-l border-slate-200 px-3 py-2 text-right font-bold text-slate-900 dark:border-slate-700 dark:text-white">{value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -2949,6 +3080,7 @@ const AdminDashboard = ({
               ))}
             </div>
           )}
+          {activeReport.subReports.length > 0 && !['mis-quality-performance', 'consolidated-rejection-status'].includes(activeReport.id) && (
           <div className="flex gap-2 overflow-x-auto">
             {activeReport.subReports.map((subReport) => (
               <button
@@ -2969,6 +3101,7 @@ const AdminDashboard = ({
               </button>
             ))}
           </div>
+          )}
         </div>
       </div>
       ) : (
@@ -3147,129 +3280,34 @@ const AdminDashboard = ({
           onRemarksChange={isD1VmBaseFamily ? updateD1VmBaseRemarks : isVisorPdiirFamily ? updateVisorPdiirRemarks : updateShellInspectionRemarks}
           onSaveRow={isD1VmBaseFamily ? saveD1VmBaseRow : isVisorPdiirFamily ? saveVisorPdiirRow : saveShellInspectionRow}
         />
+      ) : activeSubReportBase.type === 'empty' ? (
+        <section className="border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+            No category reports found. Created categories and subcategories will appear here.
+          </p>
+        </section>
       ) : isMisReport ? (
         <div className="space-y-4">
-          <div className="border border-slate-200 bg-white px-5 py-4 text-center dark:border-slate-700 dark:bg-slate-800">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-              {activeSubReportBase.sourceReportId ? `${activeSubReportBase.name} - PARTWISE QUALITY PERFORMANCE REPORT` : 'HELMET - PARTWISE QUALITY PERFORMANCE REPORT'}
-            </h2>
-          </div>
-          {activeSubReportBase.sourceReportId ? (
-            <section className="overflow-hidden border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800">
-              <div className="grid gap-0 xl:grid-cols-2">
-                {[
-                  { label: `For the day - ${selectedDayLabel}`, period: 'day' },
-                  { label: `For the month - ${monthLabel}`, period: 'month' }
-                ].map(({ label, period }) => (
-                  <div key={period} className="min-w-0 border-slate-300 xl:border-r last:xl:border-r-0 dark:border-slate-700">
-                    <div className="relative z-10 flex items-center justify-between border-b border-slate-300 bg-blue-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
-                      <h3 className="font-bold text-slate-900 dark:text-white">{activeSubReportBase.sourceFileName}</h3>
-                      <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{label}</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-slate-900/70">
-                            {['Part', 'Process', 'Prodn.Qty', 'Rej.Qty', 'Rej%', 'Part Value (Rs)', 'Rej. Value / Helmet (Rs)'].map((header) => (
-                              <th key={header} className="border-b border-r border-slate-300 px-3 py-2 text-left font-semibold dark:border-slate-700">{header}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {activeDynamicSummaryRows.map((row) => {
-                            const output = period === 'day'
-                              ? toNumber(activeDynamicSummaryReport?.days?.[selectedDayIndex]?.output)
-                              : toNumber(activeDynamicSummaryTotals.output);
-                            const rejection = period === 'day'
-                              ? toNumber(row.days?.[selectedDayIndex])
-                              : toNumber(row.total);
-                            const percent = output ? (rejection / output) * 100 : 0;
-                            const processName = [row.questionAnswer, row.hasSubQuestion ? row.defectDetails : '']
-                              .filter(Boolean)
-                              .join(' - ');
-                            return (
-                              <tr key={`${period}-${row.drrRowKey}`}>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">{row.partDetails || '-'}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 dark:border-slate-700">{processName || row.defectDetails || '-'}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{output}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{rejection}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">{formatPercent(percent)}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-right dark:border-slate-700">0</td>
-                                <td className="border-b border-slate-200 px-3 py-2 text-right dark:border-slate-700">0</td>
-                              </tr>
-                            );
-                          })}
-                          {activeDynamicSummaryRows.length === 0 && (
-                            <tr>
-                              <td colSpan="7" className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">No report rows found.</td>
-                            </tr>
-                          )}
-                          <tr className="bg-blue-50 font-bold dark:bg-blue-900/20">
-                            <td colSpan="6" className="border-r border-slate-300 px-3 py-2 text-right dark:border-slate-700">Total rejection Cost</td>
-                            <td className="px-3 py-2 text-right">0</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : [1, 2, 3, 4].map((line) => (
-            <MisLineTable
-              key={line}
-              line={line}
-              reports={crsReports}
-              dayIndex={selectedDayIndex}
-              dayId={selectedDayId}
-              dayLabel={selectedDayLabel}
-              monthLabel={monthLabel}
-            />
-          ))}
+          {activeReport.subReports.length
+            ? activeReport.subReports.map(renderMisReportBlock)
+            : <section className="border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800"><p className="text-sm font-medium text-slate-600 dark:text-slate-300">No category reports found.</p></section>}
         </div>
       ) : isCrsReport ? (
         <section className="border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
           <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-              {activeSubReportBase.sourceReportId ? `${activeSubReportBase.name} - ${monthLabel}` : `Helmet - Consolidated Rejection Status - ${monthLabel}`}
+              Consolidated Rejection Status - {monthLabel}
             </h2>
           </div>
-          {activeSubReportBase.sourceReportId ? (
           <div className="p-4">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="overflow-hidden border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="border-b border-slate-300 bg-blue-100 px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
-                  {activeSubReportBase.sourceFileName}
-                </h3>
-                <p className="border-b border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  Month Cumulative - {monthLabel}
-                </p>
-                {[
-                  ['TOTAL PRODUCTION QTY', activeDynamicSummaryTotals.output || 0],
-                  ['TOTAL REJECTION & REWORK QTY', activeDynamicSummaryTotals.rejection || 0],
-                  ['TOTAL REJECTION & REWORK QTY %', formatPercent(activeDynamicSummaryTotals.rejectionPercent || 0)],
-                  ['TOTAL REJECTION QTY', activeDynamicRejectionTotals.rejection || 0],
-                  ['TOTAL REJECTION %', formatPercent(activeDynamicRejectionTotals.rejectionPercent || 0)]
-                ].map(([label, value]) => (
-                  <div key={label} className="grid grid-cols-[1fr_110px] border-b border-slate-200 text-xs last:border-b-0 dark:border-slate-700">
-                    <span className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-                    <span className="border-l border-slate-200 px-3 py-2 text-right font-bold text-slate-900 dark:border-slate-700 dark:text-white">{value}</span>
-                  </div>
-                ))}
+            {activeReport.subReports.length ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {activeReport.subReports.map(renderCrsReportBlock)}
               </div>
-            </div>
+            ) : (
+              <p className="py-8 text-center text-sm font-medium text-slate-600 dark:text-slate-300">No category reports found.</p>
+            )}
           </div>
-          ) : (
-          <div className="space-y-4 p-4">
-            {crsLayout.map((row, rowIndex) => (
-              <div key={`crs-row-${rowIndex}`} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {row.map((item) => (
-                  <CumulativeBlock key={item.title} item={item} reports={crsReports} monthLabel={monthLabel} />
-                ))}
-              </div>
-            ))}
-          </div>
-          )}
         </section>
       ) : isProductCategoryReport ? (
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
