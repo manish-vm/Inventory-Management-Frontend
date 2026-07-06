@@ -14,6 +14,7 @@ const Layout = ({ isSuperAdmin }) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isAdminDensity = isSuperAdmin || user?.role === 'admin' || user?.role === 'superadmin';
 
   // Get page title from path
   const getPageTitle = () => {
@@ -42,7 +43,7 @@ const Layout = ({ isSuperAdmin }) => {
     <div className="min-h-screen bg-surface-50 dark:bg-surface-900">
       <Sidebar isSuperAdmin={isSuperAdmin} />
       
-      <main className={`min-h-screen flex flex-col transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+      <main className={`min-h-screen flex flex-col transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${isAdminDensity ? 'admin-compact-ui' : ''} ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
         {/* Top Header Bar */}
         <header className={`fixed top-0 right-0 left-0 z-40 bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-700 transition-[left] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${isCollapsed ? 'lg:left-20' : 'lg:left-64'}`}>
           <div className="flex items-center justify-between px-4 lg:px-8 py-4">

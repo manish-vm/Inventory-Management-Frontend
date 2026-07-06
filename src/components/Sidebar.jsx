@@ -175,15 +175,15 @@ const Sidebar = ({ isSuperAdmin }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-4 py-5 space-y-1 overflow-y-auto">
           {navItems.map((item, index) => (
             <NavLink
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative ${
+                `flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 group relative ${
                   isActive
-                    ? 'bg-gradient-to-r from-primary-500/10 to-accent-500/10 text-primary-600 dark:text-primary-400'
+                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300'
                     : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100'
                 }`
               }
@@ -191,11 +191,13 @@ const Sidebar = ({ isSuperAdmin }) => {
             >
               {({ isActive }) => (
                 <>
-                  {/* Active indicator */}
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-primary-500 to-accent-500 rounded-r-full" />
-                  )}
-                  <item.icon className={`w-5 h-5 ${theme === 'dark' ? 'text-white' : 'text-surface-900'} drop-shadow-sm flex-shrink-0 group-hover:scale-110 transition-all`} />
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm'
+                      : 'text-surface-900 dark:text-surface-100'
+                  }`}>
+                    <item.icon className="h-5 w-5" />
+                  </span>
                   {!isCollapsed && (
                     <span className="animate-slideIn whitespace-nowrap font-medium text-sm">{item.label}</span>
                   )}

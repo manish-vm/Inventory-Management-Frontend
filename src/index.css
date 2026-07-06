@@ -338,6 +338,137 @@
   @apply hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors;
 }
 
+/* Compact admin dashboard density */
+.admin-compact-ui {
+  --admin-page-padding: clamp(0.75rem, 1vw, 1.25rem);
+  --admin-header-x-padding: clamp(1rem, 1.15vw, 1.5rem);
+  --admin-header-y-padding: clamp(0.5rem, 0.6vw, 0.75rem);
+  --admin-header-spacer: clamp(54px, 3.8vw, 62px);
+  --admin-font-base: clamp(12px, 0.72vw, 13px);
+  --admin-text-4xl: clamp(1.45rem, 1.45vw, 1.75rem);
+  --admin-text-3xl: clamp(1.3rem, 1.3vw, 1.5rem);
+  --admin-text-2xl: clamp(1.12rem, 1.1vw, 1.25rem);
+  --admin-text-xl: clamp(0.98rem, 0.95vw, 1.0625rem);
+  --admin-text-lg: clamp(0.86rem, 0.82vw, 0.9375rem);
+  --admin-text-base: clamp(0.75rem, 0.72vw, 0.8125rem);
+  --admin-text-sm: clamp(0.7rem, 0.66vw, 0.75rem);
+  --admin-text-xs: clamp(0.64rem, 0.6vw, 0.6875rem);
+  --admin-table-font: clamp(0.69rem, 0.66vw, 0.75rem);
+  --admin-table-header-font: clamp(0.64rem, 0.6vw, 0.6875rem);
+  --admin-cell-x-padding: clamp(0.5rem, 0.55vw, 0.75rem);
+  --admin-cell-y-padding: clamp(0.38rem, 0.42vw, 0.5rem);
+  --admin-report-day-width: clamp(58px, 3.45vw, 70px);
+  --admin-report-total-width: clamp(46px, 2.7vw, 54px);
+  --admin-report-percent-width: clamp(54px, 3.15vw, 64px);
+  --admin-report-row-height: clamp(36px, 2.15vw, 42px);
+  font-size: var(--admin-font-base);
+}
+
+.admin-compact-ui .flex-1.p-4,
+.admin-compact-ui .flex-1.lg\:p-8 {
+  padding: var(--admin-page-padding);
+}
+
+@media (min-width: 1024px) {
+  .admin-compact-ui .flex-1.lg\:p-8 {
+    padding: var(--admin-page-padding);
+  }
+}
+
+.admin-compact-ui header .px-4.lg\:px-8 {
+  padding-left: var(--admin-header-x-padding);
+  padding-right: var(--admin-header-x-padding);
+}
+
+.admin-compact-ui header .py-4 {
+  padding-top: var(--admin-header-y-padding);
+  padding-bottom: var(--admin-header-y-padding);
+}
+
+.admin-compact-ui .h-\[73px\] {
+  height: var(--admin-header-spacer);
+}
+
+.admin-compact-ui .text-4xl { font-size: var(--admin-text-4xl); line-height: 1.2; }
+.admin-compact-ui .text-3xl { font-size: var(--admin-text-3xl); line-height: 1.25; }
+.admin-compact-ui .text-2xl { font-size: var(--admin-text-2xl); line-height: 1.35; }
+.admin-compact-ui .text-xl { font-size: var(--admin-text-xl); line-height: 1.4; }
+.admin-compact-ui .text-lg { font-size: var(--admin-text-lg); line-height: 1.45; }
+.admin-compact-ui .text-base { font-size: var(--admin-text-base); line-height: 1.5; }
+.admin-compact-ui .text-sm { font-size: var(--admin-text-sm); line-height: 1.5; }
+.admin-compact-ui .text-xs { font-size: var(--admin-text-xs); line-height: 1.45; }
+
+.admin-compact-ui .gap-8 { gap: 1.25rem; }
+.admin-compact-ui .gap-6 { gap: 1rem; }
+.admin-compact-ui .gap-5 { gap: 0.875rem; }
+.admin-compact-ui .gap-4 { gap: 0.75rem; }
+.admin-compact-ui .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+.admin-compact-ui .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem;
+}
+
+.admin-compact-ui .p-8 { padding: 1.25rem; }
+.admin-compact-ui .p-6 { padding: 1rem; }
+.admin-compact-ui .p-5 { padding: 0.875rem; }
+.admin-compact-ui .p-4 { padding: 0.75rem; }
+.admin-compact-ui .px-6 { padding-left: 1rem; padding-right: 1rem; }
+.admin-compact-ui .px-5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.admin-compact-ui .px-4 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.admin-compact-ui .py-4 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.admin-compact-ui .py-3 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.admin-compact-ui .py-2\.5 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.admin-compact-ui .py-2 { padding-top: 0.4375rem; padding-bottom: 0.4375rem; }
+
+.admin-compact-ui table {
+  font-size: var(--admin-table-font);
+}
+
+.admin-compact-ui th,
+.admin-compact-ui td,
+.admin-compact-ui .table-container th,
+.admin-compact-ui .table-container td {
+  padding: var(--admin-cell-y-padding) var(--admin-cell-x-padding);
+  font-size: var(--admin-table-font);
+  line-height: 1.15rem;
+}
+
+.admin-compact-ui thead th,
+.admin-compact-ui .table-container th {
+  font-size: var(--admin-table-header-font);
+  line-height: 1rem;
+}
+
+.admin-compact-ui input,
+.admin-compact-ui select,
+.admin-compact-ui textarea,
+.admin-compact-ui button {
+  font-size: var(--admin-table-font);
+}
+
+.admin-compact-ui .w-10,
+.admin-compact-ui .h-10 {
+  width: 2rem;
+  height: 2rem;
+}
+
+.admin-compact-ui .w-9,
+.admin-compact-ui .h-9 {
+  width: 1.875rem;
+  height: 1.875rem;
+}
+
+.admin-compact-ui .w-8,
+.admin-compact-ui .h-8 {
+  width: 1.625rem;
+  height: 1.625rem;
+}
+
+.admin-compact-ui .rounded-2xl {
+  border-radius: 0.75rem;
+}
+
 /* Input styles */
 .input-field {
   @apply w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-white dark:bg-surface-800 text-surface-900 dark:text-surface-100 placeholder-surface-400 dark:placeholder-surface-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;

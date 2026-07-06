@@ -521,6 +521,15 @@ const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
 const subQuestionColumnKey = (value) => `subQuestion:${normalizeReportKey(value)}`;
+const clampColumnWidth = (width, min = 72, max = 190) => Math.min(max, Math.max(min, width));
+const estimateTextColumnWidth = (label, rows = [], key, { min = 72, max = 190 } = {}) => {
+  const values = [
+    label,
+    ...rows.map((row) => row?.[key])
+  ].map((value) => String(value || '').trim());
+  const longest = values.reduce((maxLength, value) => Math.max(maxLength, value.length), 0);
+  return clampColumnWidth(Math.ceil(longest * 7.5) + 34, min, max);
+};
 const normalizeSubQuestionPath = (path, fallbackQuestion = '', fallbackOption = '') => {
   const items = Array.isArray(path) ? path : [];
   const normalized = items
@@ -990,11 +999,14 @@ const applyEmployeeSheetAggregateToRejectionReport = (report, aggregateRows = []
 };
 
 const gridBorderClass = 'border-r border-b border-slate-300 dark:border-slate-700';
-const cellHeightClass = 'h-12 max-h-12 overflow-hidden whitespace-nowrap';
-const dayCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} px-1 py-2 text-center`;
-const totalCellClass = `w-16 min-w-16 max-w-16 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-950`;
-const totalPercentCellClass = `w-20 min-w-20 max-w-20 ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-1 py-2 text-center dark:bg-blue-950`;
-const reportRowClass = 'h-12';
+const reportDayColumnWidth = 'var(--admin-report-day-width)';
+const reportTotalColumnWidth = 'var(--admin-report-total-width)';
+const reportTotalPercentColumnWidth = 'var(--admin-report-percent-width)';
+const cellHeightClass = 'h-[var(--admin-report-row-height)] max-h-[var(--admin-report-row-height)] overflow-hidden whitespace-nowrap';
+const dayCellClass = `w-[var(--admin-report-day-width)] min-w-[var(--admin-report-day-width)] max-w-[var(--admin-report-day-width)] ${cellHeightClass} ${gridBorderClass} px-1 py-1.5 text-center`;
+const totalCellClass = `w-[var(--admin-report-total-width)] min-w-[var(--admin-report-total-width)] max-w-[var(--admin-report-total-width)] ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-0.5 py-1.5 text-center dark:bg-blue-950`;
+const totalPercentCellClass = `w-[var(--admin-report-percent-width)] min-w-[var(--admin-report-percent-width)] max-w-[var(--admin-report-percent-width)] ${cellHeightClass} ${gridBorderClass} bg-blue-100 px-0.5 py-1.5 text-center dark:bg-blue-950`;
+const reportRowClass = 'h-[var(--admin-report-row-height)]';
 
 const misLineRows = {
   1: [
@@ -2002,48 +2014,65 @@ const AdminDashboard = ({
   const activeEditableDrrReport = editableDrrReports[activeSubReportBase.id] || null;
   const activeSubReport = useMemo(() => {
     if (isDrrReport || activeSubReportBase.type === 'visor-drr') {
-      const firstQuestionHeader = (activeEditableDrrReport?.rows || [])
+      const reportRows = activeEditableDrrReport?.rows || [];
+      const firstQuestionHeader = reportRows
         .map((row) => String(row.questionHeader || '').trim())
         .find(Boolean);
-      const subQuestionColumns = Array.from(new Set((activeEditableDrrReport?.rows || [])
+      const partDetailsColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'partDetails');
+      const questionAnswerColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'assemblyProcess') || activeSubReportBase.descriptorColumns[0];
+      const subQuestionColumns = Array.from(new Set(reportRows
         .flatMap((row) => normalizeSubQuestionPath(row.subQuestionPath, row.subQuestion, row.subOption).map((item) => item.question))
         .filter(Boolean)))
-        .map((header) => ({ key: subQuestionColumnKey(header), label: header, width: 180 }));
+        .map((header) => {
+          const key = subQuestionColumnKey(header);
+          return { key, label: header, width: estimateTextColumnWidth(header, reportRows, key) };
+        });
       const dynamicDescriptorColumns = firstQuestionHeader
         ? [
-            activeSubReportBase.descriptorColumns[1],
-            { ...activeSubReportBase.descriptorColumns[0], label: firstQuestionHeader },
+            partDetailsColumn && {
+              ...partDetailsColumn,
+              width: estimateTextColumnWidth(partDetailsColumn.label, reportRows, partDetailsColumn.key, { min: 96, max: 150 })
+            },
+            questionAnswerColumn && {
+              ...questionAnswerColumn,
+              label: firstQuestionHeader,
+              width: estimateTextColumnWidth(firstQuestionHeader, reportRows, questionAnswerColumn.key)
+            },
             ...subQuestionColumns
           ].filter(Boolean)
         : activeSubReportBase.descriptorColumns;
       return {
         ...activeSubReportBase,
         descriptorColumns: dynamicDescriptorColumns,
-        rows: activeEditableDrrReport?.rows || []
+        rows: reportRows
       };
     }
     if (activeSubReportBase.id === 'supplier-rejection-inward-inspection') {
       return { ...activeSubReportBase, rows: supplierRows };
     }
     if (!isRejectionReport) return activeSubReportBase;
-    const firstQuestionHeader = (activeEditableRejectionReport?.rows || [])
+    const reportRows = activeEditableRejectionReport?.rows || [];
+    const firstQuestionHeader = reportRows
       .map((row) => String(row.questionHeader || '').trim())
       .find(Boolean);
-    const subQuestionColumns = Array.from(new Set((activeEditableRejectionReport?.rows || [])
+    const subQuestionColumns = Array.from(new Set(reportRows
       .flatMap((row) => normalizeSubQuestionPath(row.subQuestionPath, row.subQuestion, row.subOption).map((item) => item.question))
       .filter(Boolean)))
-      .map((header) => ({ key: subQuestionColumnKey(header), label: header, width: 180 }));
+      .map((header) => {
+        const key = subQuestionColumnKey(header);
+        return { key, label: header, width: estimateTextColumnWidth(header, reportRows, key) };
+      });
     const dynamicDescriptorColumns = firstQuestionHeader
       ? [
-          { key: 'partDetails', label: 'Part details', width: 180 },
-          { key: 'questionAnswer', label: firstQuestionHeader, width: 220 },
+          { key: 'partDetails', label: 'Part details', width: estimateTextColumnWidth('Part details', reportRows, 'partDetails', { min: 96, max: 150 }) },
+          { key: 'questionAnswer', label: firstQuestionHeader, width: estimateTextColumnWidth(firstQuestionHeader, reportRows, 'questionAnswer') },
           ...subQuestionColumns
         ]
       : activeSubReportBase.descriptorColumns;
     return {
       ...activeSubReportBase,
       descriptorColumns: dynamicDescriptorColumns,
-      rows: activeEditableRejectionReport?.rows || [],
+      rows: reportRows,
       dayColumns: rejectionDayColumns
     };
   }, [activeEditableDrrReport?.rows, activeEditableRejectionReport?.rows, activeSubReportBase, isDrrReport, isRejectionReport, rejectionDayColumns, supplierRows]);
@@ -3356,17 +3385,23 @@ const AdminDashboard = ({
           <p className="text-sm text-slate-500 dark:text-slate-400">Source: {activeSubReport.sourceFileName}</p>
         </div>
 
-        <div className="h-[calc(100vh-250px)] min-h-[420px] overflow-auto">
+        <div className="h-[clamp(360px,calc(100vh-220px),calc(100vh-160px))] min-h-[min(420px,calc(100vh-220px))] overflow-auto">
           <table className="min-w-max table-fixed border-separate border-spacing-0 text-sm">
             <colgroup>
               {activeSubReport.descriptorColumns.map((column) => (
                 <col key={`descriptor-col-${column.key}`} style={{ width: column.width, minWidth: column.width }} />
               ))}
               {reportDayColumns.map((column) => (
-                <col key={`day-col-${column.id}`} style={{ width: 64, minWidth: 64 }} />
+                <col key={`day-col-${column.id}`} style={{ width: reportDayColumnWidth, minWidth: reportDayColumnWidth }} />
               ))}
               {activeSubReport.totalColumns.map((column) => (
-                <col key={`total-col-${column.id}`} style={{ width: column.id === 'totalPercent' ? 80 : 64, minWidth: column.id === 'totalPercent' ? 80 : 64 }} />
+                <col
+                  key={`total-col-${column.id}`}
+                  style={{
+                    width: column.id === 'totalPercent' ? reportTotalPercentColumnWidth : reportTotalColumnWidth,
+                    minWidth: column.id === 'totalPercent' ? reportTotalPercentColumnWidth : reportTotalColumnWidth
+                  }}
+                />
               ))}
             </colgroup>
             <thead className="bg-blue-100 dark:bg-slate-900">
@@ -3418,25 +3453,7 @@ const AdminDashboard = ({
                         row.isPercent ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'
                       } dark:bg-slate-800`}
                     >
-                      {isRejectionReport && row.metric === 'output' ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.getValue(column, activeEditableRejectionReport)}
-                          onChange={(event) => updateOutputOverride(column.id, event.target.value)}
-                          className={editableCellClass}
-                        />
-                      ) : ((isDrrReport || activeSubReportBase.type === 'visor-drr') && row.metric === 'output') ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.getValue(column, getSummaryReport(row))}
-                          onChange={(event) => updateDrrOutputOverride(column.id, event.target.value)}
-                          className={editableCellClass}
-                        />
-                      ) : (
-                        row.getValue(column, getSummaryReport(row))
-                      )}
+                      {row.getValue(column, getSummaryReport(row))}
                     </td>
                   ))}
                   <td className={`${totalCellClass} font-semibold text-slate-900 dark:text-slate-100`}>
@@ -3492,24 +3509,11 @@ const AdminDashboard = ({
                   ))}
                   {reportDayColumns.map((column, dayIndex) => (
                     <td key={`${activeSubReport.id}-${column.id}-${index}`} className={`${dayCellClass} text-slate-700 dark:text-slate-300`}>
-                      {isRejectionReport ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.days?.[dayIndex]?.rejection || ''}
-                          onChange={(event) => updateRowOverride(row, column.id, event.target.value)}
-                          className={editableCellClass}
-                        />
-                      ) : (isDrrReport || activeSubReportBase.type === 'visor-drr') ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.days?.[dayIndex] || ''}
-                          onChange={(event) => updateDrrOverride(row, column.id, event.target.value)}
-                          onBlur={(event) => saveBopValue(row, column, event.target.value)}
-                          className={editableCellClass}
-                        />
-                      ) : ''}
+                      {isRejectionReport
+                        ? row.days?.[dayIndex]?.rejection ?? ''
+                        : (isDrrReport || activeSubReportBase.type === 'visor-drr')
+                          ? row.days?.[dayIndex] ?? ''
+                          : ''}
                     </td>
                   ))}
                   <td className={`${totalCellClass} text-slate-900 dark:text-slate-100`}>
