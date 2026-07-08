@@ -1,7 +1,7 @@
 import axios from 'axios';
-const API_URL = "https://inventory-pro-backend-1.onrender.com/api";
+//const API_URL = "https://inventory-pro-backend-1.onrender.com/api";
 //const API_URL = "http://localhost:5000/api";
-//const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
+const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -313,7 +313,10 @@ export const inspectionAPI = {
   getMisDashboard: (params) => api.get('/inspection/admin/mis-dashboard', { params }),
   getMisTaxonomy: () => api.get('/inspection/admin/mis-dashboard/taxonomy'),
   syncMisTaxonomy: () => api.post('/inspection/admin/mis-dashboard/sync-taxonomy'),
-  getAdminResponseById: (id) => api.get(`/inspection/admin/responses/${id}`)
+  getAdminResponseById: (id) => api.get(`/inspection/admin/responses/${id}`),
+  getInspectorPendingSubmissions: () => api.get('/inspection/inspector/pending-submissions'),
+  submitInspectorVerification: (data) => api.post('/inspection/inspector/verifications', data),
+  getInspectorVerificationLogs: () => api.get('/inspection/inspector/verifications')
 };
 
 export const misOperationsAPI = {

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ChevronDown, PackageSearch } from 'lucide-react';
 import { inspectionAPI } from '../../api/api';
+import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import QRScanner from '../../components/employeeScanner/QRScanner';
 import InspectionResponseSection from '../../components/employeeScanner/InspectionResponseSection';
 import ProductInfoCard from '../../components/employeeScanner/ProductInfoCard';
@@ -57,6 +59,8 @@ const deriveSelectedCounts = (values = {}) => {
 };
 
 const QRScannerPage = () => {
+  const { user } = useAuth();
+  const { themeFactory } = useTheme();
   const [search, setSearch] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -127,7 +131,7 @@ const QRScannerPage = () => {
         setSuggestions(response.data || []);
       } catch (error) {
         setSuggestions([]);
-        setSuggestionsError(error.response?.data?.message || 'Unable to load assigned products');
+        setSuggestionsError(!user?.assignedRole ? 'No role has been assigned yet' : (error.response?.data?.message || 'Unable to load assigned products'));
       } finally {
         setSuggestionsLoading(false);
       }
@@ -343,14 +347,14 @@ const QRScannerPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className={`min-h-screen ${themeFactory.classFor('page')}`}>
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-lg bg-slate-950 p-6 text-white shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-wide text-sky-200">
+        <div className={`rounded-lg p-6 shadow-sm ${themeFactory.classFor('hero')}`}>
+          <p className={`text-sm font-semibold uppercase tracking-wide ${themeFactory.classFor('heroEyebrow')}`}>
             Manufacturing Execution System
           </p>
           <h1 className="mt-2 text-2xl font-bold">Product-Based Inspection</h1>
-          <p className="mt-1 max-w-3xl text-slate-200">
+          <p className={`mt-1 max-w-3xl ${themeFactory.classFor('heroBody')}`}>
             Enter the product name, choose your working stage, and submit accepted, rejected, and rework quantities after external inspection.
           </p>
         </div>
@@ -416,7 +420,7 @@ const QRScannerPage = () => {
                   </div>
                 ) : suggestions.length === 0 ? (
                   <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                    {search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your role.'}
+                    {!user?.assignedRole ? 'No role has been assigned yet' : (search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your role.')}
                   </div>
                 ) : suggestions.map((item) => (
                     <button

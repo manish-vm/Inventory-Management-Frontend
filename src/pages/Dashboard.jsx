@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, Download, FileSpreadsheet, Search, User } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 import * as XLSX from 'xlsx-js-style';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -719,16 +720,29 @@ const getRejectionDayValue = (report, column, metric) => {
 };
 
 const getMisProcessRows = (report) => {
-  if (Array.isArray(report?.processRows) && report.processRows.length) return report.processRows;
+  if (Array.isArray(report?.processRows) && report.processRows.length) {
+    const rowsByPart = new Map((report?.rows || []).map((row) => [
+      normalizeReportKey(row.partName || row.partDetails),
+      row
+    ]));
+    return report.processRows.map((row) => {
+      const matchingRow = rowsByPart.get(normalizeReportKey(row.partName));
+      const correctedProcessName = matchingRow?.assemblyProcess || matchingRow?.processName || row.processName;
+      return {
+        ...row,
+        processName: correctedProcessName
+      };
+    });
+  }
   return (report?.rows || []).map((row) => ({
     key: row.drrRowKey || row.defectCode || `${row.partDetails || row.partName}-${row.assemblyProcess || row.processName}`,
     partName: row.partDetails || row.partName || '',
     processName: row.assemblyProcess || row.processName || row.questionAnswer || row.defectDetails || '',
     days: (row.days || []).map((value, index) => ({
-      output: report?.days?.[index]?.output || 0,
+      output: toNumber(row.outputDays?.[index] ?? row.daysOutput?.[index] ?? row.output ?? 0),
       rejection: toNumber(value)
     })),
-    totalOutput: report?.totals?.output || 0,
+    totalOutput: toNumber(row.totalOutput ?? row.output ?? 0),
     totalRejection: row.total || 0
   }));
 };
@@ -797,6 +811,15 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
     : 0;
   return {
     rows: editableRows,
+    processRows: (backendReport?.processRows || []).map((row) => ({
+      ...row,
+      days: columns.map((column, dayIndex) => ({
+        output: toNumber(row.days?.[dayIndex]?.output),
+        rejection: toNumber(row.days?.[dayIndex]?.rejection)
+      })),
+      totalOutput: toNumber(row.totalOutput),
+      totalRejection: toNumber(row.totalRejection)
+    })),
     days,
     daysById: days.reduce((acc, day, index) => {
       acc[columns[index].id] = day;
@@ -1184,11 +1207,18 @@ const getMisMetric = (reports, rowConfig, dayIndex, dayId) => {
     const matchingRows = (report.rows || []).filter((row) =>
       normalizeReportKey(row.partDetails).includes(normalizeReportKey(detailFilter))
     );
+    const matchingProcessRows = (report.processRows || []).filter((row) =>
+      normalizeReportKey(row.partName).includes(normalizeReportKey(detailFilter))
+    );
     const dayRejection = matchingRows.reduce((sum, row) => sum + toNumber(row.days?.[dayIndex]), 0);
     return {
-      dayOutput: selectedDay.output || 0,
+      dayOutput: matchingProcessRows.length
+        ? matchingProcessRows.reduce((sum, row) => sum + toNumber(row.days?.[dayIndex]?.output), 0)
+        : dayRejection,
       dayRejection,
-      monthOutput: report.totals?.output || 0,
+      monthOutput: matchingProcessRows.length
+        ? matchingProcessRows.reduce((sum, row) => sum + toNumber(row.totalOutput), 0)
+        : matchingRows.reduce((sum, row) => sum + toNumber(row.total), 0),
       monthRejection: matchingRows.reduce((sum, row) => sum + toNumber(row.total), 0)
     };
   }
@@ -3544,6 +3574,10 @@ const Dashboard = (props = {}) => {
 
   if (props.allowedReportIds || isAdmin) {
     return <AdminDashboard {...props} />;
+  }
+
+  if (user?.role === 'employee' || user?.role === 'inspector') {
+    return <Navigate to="/app/employee/scanner" replace />;
   }
 
   return <UserDashboard user={user} />;

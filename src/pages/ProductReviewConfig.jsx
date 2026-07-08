@@ -100,15 +100,18 @@ const groupedProcessDefects = (rows = []) => {
     if (row.assemblyProcess || row.defectGroup) currentProcess = String(row.assemblyProcess || row.defectGroup).trim();
     if (row.partDetails) currentPart = String(row.partDetails).trim();
     const process = currentProcess || 'Unspecified';
+    const partDetails = currentPart;
     const defectType = String(row.defectDetails || row.rejectionDetails || row.partDetails || currentPart || '').trim();
     if (!defectType) return;
-    if (!groups.has(process)) groups.set(process, new Set());
-    groups.get(process).add(defectType);
+    if (!groups.has(process)) groups.set(process, new Map());
+    if (!groups.get(process).has(defectType)) {
+      groups.get(process).set(defectType, { defectType, partDetails });
+    }
   });
 
   return Array.from(groups.entries()).map(([assemblyProcess, defects]) => ({
     assemblyProcess,
-    defects: Array.from(defects)
+    defects: Array.from(defects.values())
   }));
 };
 
@@ -177,11 +180,12 @@ const ProductReviewConfig = () => {
                 optionsLocked: true,
                 optionsSource: 'dashboard-report-sheet',
                 options: group.defects.map((defect) => ({
-                  optionId: `${questionId}-${processKey}-${toKey(defect)}`,
-                  label: defect,
-                  value: defect,
+                  optionId: `${questionId}-${processKey}-${toKey(defect.defectType)}`,
+                  label: defect.defectType,
+                  value: defect.defectType,
                   assemblyProcess: group.assemblyProcess,
-                  defectType: defect,
+                  partDetails: defect.partDetails,
+                  defectType: defect.defectType,
                   subQuestions: []
                 }))
               }

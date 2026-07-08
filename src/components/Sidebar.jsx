@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -22,7 +22,8 @@ import {
   Workflow,
   Scan,
   PieChart,
-  UserCheck
+  UserCheck,
+  ClipboardCheck
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -35,6 +36,7 @@ import DefectDetailManager from './DefectDetailManager';
 
 const Sidebar = ({ isSuperAdmin }) => {
   const { user, logout, isAdmin, isSuperAdmin: isSA, isEmployee } = useAuth();
+  const navigate = useNavigate();
   const { theme } = useTheme();
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
@@ -81,7 +83,9 @@ const Sidebar = ({ isSuperAdmin }) => {
 
   {/* Admin gets full access */}
   const adminNavItems = [
-    { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/app/admin-dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/app/dashboard', icon: LayoutDashboard, label: 'Report Management' },
+    { path: '/app/inspector-management', icon: ClipboardCheck, label: 'Inspector Management' },
     { path: '/app/products', icon: Package, label: 'Products' },
     { path: '/app/manufacturing-config', icon: Workflow, label: 'Manufacturing Config' },
     { path: '/app/qr-generator', icon: QrCode, label: 'QR Generator' },
@@ -110,9 +114,14 @@ const Sidebar = ({ isSuperAdmin }) => {
   };
   // Employee gets profile with analytics, products (read-only), invoices, and production
   const employeeNavItems = [
-    { path: '/app/employee', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/app/employee/scanner', icon: Scan, label: 'QR Scanner' },
-    { path: '/app/employee/scan-logs', icon: FileText, label: 'Scan Logs' },
+    ...(user?.role === 'inspector' ? [] : [{ path: '/app/employee/scanner', icon: Scan, label: 'QR Scanner' }]),
+    ...(user?.role === 'inspector' ? [
+      { path: '/app/inspector-verification', icon: ClipboardCheck, label: 'Inspector Verification', end: true },
+      { path: '/app/inspector-verification/scan-logs', icon: FileText, label: 'Scan Logs' },
+    ] : [
+      { path: '/app/employee/scan-logs', icon: FileText, label: 'Scan Logs' },
+    ]),
+    ...(user?.role === 'inspector' ? [] : [{ path: '/app/employee-profile', icon: LayoutDashboard, label: 'Profile' }]),
   ];
 
   let navItems;
@@ -180,6 +189,7 @@ const Sidebar = ({ isSuperAdmin }) => {
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.end || item.path === '/app/employee' || item.path.endsWith('/dashboard')}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 group relative ${
                   isActive
@@ -277,7 +287,18 @@ const Sidebar = ({ isSuperAdmin }) => {
         {/* User Info & Theme Toggle */}
         <div className="p-4 border-t border-surface-100 dark:border-surface-800">
           <div className="flex items-center justify-between mb-3">
-            <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center w-full' : ''}`}>
+            <button
+              type="button"
+              onClick={() => user?.role === 'inspector' && navigate('/app/employee-profile')}
+              className={`flex items-center gap-3 rounded-lg text-left transition-colors ${
+                isCollapsed ? 'justify-center w-full p-0' : 'w-full p-1 -m-1'
+              } ${
+                user?.role === 'inspector'
+                  ? 'cursor-pointer hover:bg-surface-100 dark:hover:bg-surface-800'
+                  : 'cursor-default'
+              }`}
+              aria-label={user?.role === 'inspector' ? 'Open inspector profile' : undefined}
+            >
               <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 transition-colors flex items-center justify-center shadow-soft flex-shrink-0 text-white drop-shadow-sm">
                 <span className="text-white font-semibold">
                   {user?.name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase()}
@@ -293,7 +314,7 @@ const Sidebar = ({ isSuperAdmin }) => {
                   </span>
                 </div>
               )}
-            </div>
+            </button>
           </div>
           
           {!isCollapsed && (

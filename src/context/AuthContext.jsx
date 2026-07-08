@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
   // Memoize computed values
   const isSuperAdmin = useMemo(() => user?.role === 'superadmin', [user]);
   const isAdmin = useMemo(() => user?.role === 'admin', [user]);
-  const isEmployee = useMemo(() => user?.role === 'employee', [user]);
+  const isEmployee = useMemo(() => user?.role === 'employee' || user?.role === 'inspector', [user]);
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -59,8 +59,8 @@ export const AuthProvider = ({ children }) => {
       navigate('/superadmin/dashboard');
     } else if (userData.role === 'admin') {
       navigate('/app/dashboard');
-    } else if (userData.role === 'employee') {
-      navigate('/app/employee');
+    } else if (userData.role === 'employee' || userData.role === 'inspector') {
+      navigate('/app/employee/scanner');
     }
     
     return userData;

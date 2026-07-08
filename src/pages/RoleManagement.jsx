@@ -14,6 +14,11 @@ const stateFor = (ids, selected) => {
   return { checked: ids.length > 0 && count === ids.length, indeterminate: count > 0 && count < ids.length };
 };
 
+const roleTypeLabels = {
+  employee: 'Employee',
+  inspector: 'Inspector'
+};
+
 const TreeCheckbox = ({ tree, selected, setSelected, expanded, setExpanded }) => {
   const toggleMany = (ids, shouldSelect) => setSelected((previous) => {
     const next = new Set(previous);
@@ -77,7 +82,7 @@ const TreeCheckbox = ({ tree, selected, setSelected, expanded, setExpanded }) =>
   </div>;
 };
 
-const RoleDrawer = ({ open, role, tree, loadingTree, onClose, onSaved }) => {
+const RoleDrawer = ({ open, role, tree, loadingTree, roleFor, onClose, onSaved }) => {
   const [roleName, setRoleName] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [expanded, setExpanded] = useState({});
@@ -114,7 +119,7 @@ const RoleDrawer = ({ open, role, tree, loadingTree, onClose, onSaved }) => {
     const subcategoryIds = tree.flatMap((item) => (item.subcategories || []).map((subcategory) => subcategory.id).filter(Boolean));
     const productIds = tree.flatMap((item) => (item.subcategories || []).flatMap((subcategory) => subcategory.products.map((product) => product.id)));
     const stageIds = tree.flatMap((item) => (item.subcategories || []).flatMap((subcategory) => subcategory.products.flatMap((product) => product.stages.map((stage) => stage.id))));
-    const payload = { roleName: roleName.trim(), categories: categoryIds.filter((id) => selected.has(id)), subcategories: subcategoryIds.filter((id) => selected.has(id)), products: productIds.filter((id) => selected.has(id)), stages: stageIds.filter((id) => selected.has(id)) };
+    const payload = { roleName: roleName.trim(), roleFor, categories: categoryIds.filter((id) => selected.has(id)), subcategories: subcategoryIds.filter((id) => selected.has(id)), products: productIds.filter((id) => selected.has(id)), stages: stageIds.filter((id) => selected.has(id)) };
     setSaving(true);
     try {
       if (role?._id) await roleAPI.update(role._id, payload); else await roleAPI.create(payload);
@@ -128,7 +133,7 @@ const RoleDrawer = ({ open, role, tree, loadingTree, onClose, onSaved }) => {
     <button type="button" aria-label="Close role drawer" onClick={onClose} className={`absolute inset-0 bg-slate-950/45 transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0'}`} />
     <aside className={`absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl transition-transform duration-300 ease-out dark:bg-slate-800 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
       <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-700">
-        <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">{role?._id ? 'Edit Role' : 'Create Role'}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Select categories, subcategories, products, and stages.</p></div>
+        <div><h2 className="text-xl font-bold text-slate-900 dark:text-white">{role?._id ? 'Edit Role' : `Create ${roleTypeLabels[roleFor]} Role`}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Select categories, subcategories, products, and stages.</p></div>
         <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-700"><X className="h-5 w-5" /></button>
       </div>
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -187,6 +192,7 @@ const RoleViewModal = ({ role, loading, onClose }) => {
 
 const RoleManagement = () => {
   const [roles, setRoles] = useState([]);
+  const [activeTab, setActiveTab] = useState('employee');
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingTree, setLoadingTree] = useState(false);
@@ -217,15 +223,23 @@ const RoleManagement = () => {
       setDeletingRoleId(null);
     }
   };
-  const filtered = roles.filter((role) => role.roleName.toLowerCase().includes(search.toLowerCase()));
+  const filtered = roles.filter((role) => (role.roleFor || 'employee') === activeTab && role.roleName.toLowerCase().includes(search.toLowerCase()));
+  const activeLabel = roleTypeLabels[activeTab];
 
   return <div className="space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-bold text-slate-900 dark:text-white">Role Management</h1><p className="text-slate-500 dark:text-slate-400">Create roles and assign category, product, and stage access.</p></div><button onClick={createRole} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-primary-700"><Plus className="h-5 w-5" />Create Role</button></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-bold text-slate-900 dark:text-white">Role Management</h1><p className="text-slate-500 dark:text-slate-400">Create employee and inspector roles with category, product, and stage access.</p></div><button onClick={createRole} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-primary-700"><Plus className="h-5 w-5" />Create {activeLabel} Role</button></div>
+    <div className="inline-flex rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-600 dark:bg-slate-800">
+      {['employee', 'inspector'].map((tab) => (
+        <button key={tab} type="button" onClick={() => { setActiveTab(tab); setActiveRole(null); setSearch(''); }} className={`rounded-lg px-4 py-2 text-sm font-medium ${activeTab === tab ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
+          {roleTypeLabels[tab]}
+        </button>
+      ))}
+    </div>
     <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
       <div className="border-b border-slate-200 p-4 dark:border-slate-700"><div className="relative max-w-md"><Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search roles..." className="w-full rounded-xl border border-slate-300 bg-transparent py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:text-white" /></div></div>
-      {loading ? <div className="flex h-56 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div> : error ? <div className="p-10 text-center text-red-600">{error}<button onClick={loadRoles} className="ml-2 underline">Retry</button></div> : filtered.length === 0 ? <div className="flex flex-col items-center py-16 text-slate-500"><ShieldCheck className="mb-3 h-10 w-10 text-slate-300" /><p>{search ? 'No matching roles found.' : 'No roles created yet.'}</p></div> : <div className="divide-y divide-slate-200 dark:divide-slate-700">{filtered.map((role) => <div key={role._id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/40"><button onClick={() => viewRoleDetails(role._id)} className="flex min-w-0 flex-1 items-center gap-4 text-left"><div className="rounded-xl bg-primary-50 p-2.5 text-primary-600 dark:bg-primary-900/30"><ShieldCheck className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="font-semibold text-slate-900 dark:text-white">{role.roleName}</p><p className="text-sm text-slate-500">{role.categories?.length || 0} categories · {role.subcategories?.length || 0} subcategories · {role.products?.length || 0} products · {role.stages?.length || 0} stages</p></div></button><button onClick={() => editRole(role._id)} title="Edit role" aria-label={`Edit ${role.roleName}`} className="rounded-lg p-2 text-slate-400 hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-900/30"><Pencil className="h-4 w-4" /></button><button onClick={() => deleteRole(role)} disabled={deletingRoleId === role._id} title="Delete role" aria-label={`Delete ${role.roleName}`} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-900/30">{deletingRoleId === role._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button></div>)}</div>}
+      {loading ? <div className="flex h-56 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div> : error ? <div className="p-10 text-center text-red-600">{error}<button onClick={loadRoles} className="ml-2 underline">Retry</button></div> : filtered.length === 0 ? <div className="flex flex-col items-center py-16 text-slate-500"><ShieldCheck className="mb-3 h-10 w-10 text-slate-300" /><p>{search ? 'No matching roles found.' : `No ${activeLabel.toLowerCase()} roles created yet.`}</p></div> : <div className="divide-y divide-slate-200 dark:divide-slate-700">{filtered.map((role) => <div key={role._id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/40"><button onClick={() => viewRoleDetails(role._id)} className="flex min-w-0 flex-1 items-center gap-4 text-left"><div className="rounded-xl bg-primary-50 p-2.5 text-primary-600 dark:bg-primary-900/30"><ShieldCheck className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900 dark:text-white">{role.roleName}</p><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">{roleTypeLabels[role.roleFor || 'employee']}</span></div><p className="text-sm text-slate-500">{role.categories?.length || 0} categories · {role.subcategories?.length || 0} subcategories · {role.products?.length || 0} products · {role.stages?.length || 0} stages</p></div></button><button onClick={() => editRole(role._id)} title="Edit role" aria-label={`Edit ${role.roleName}`} className="rounded-lg p-2 text-slate-400 hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-900/30"><Pencil className="h-4 w-4" /></button><button onClick={() => deleteRole(role)} disabled={deletingRoleId === role._id} title="Delete role" aria-label={`Delete ${role.roleName}`} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-900/30">{deletingRoleId === role._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button></div>)}</div>}
     </div>
-    <RoleDrawer open={drawerOpen} role={activeRole} tree={tree} loadingTree={loadingTree} onClose={() => setDrawerOpen(false)} onSaved={() => { setDrawerOpen(false); setLoading(true); loadRoles(); }} />
+    <RoleDrawer open={drawerOpen} role={activeRole} tree={tree} loadingTree={loadingTree} roleFor={activeRole?.roleFor || activeTab} onClose={() => setDrawerOpen(false)} onSaved={() => { setDrawerOpen(false); setLoading(true); loadRoles(); }} />
     <RoleViewModal role={viewRole} loading={viewLoading} onClose={() => { setViewRole(null); setViewLoading(false); }} />
   </div>;
 };
