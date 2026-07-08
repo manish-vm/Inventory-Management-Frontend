@@ -23,7 +23,9 @@ const Login = () => {
 
   useEffect(() => {
     setMounted(true);
-    if (user) navigate('/app/dashboard');
+    if (user?.role === 'superadmin') navigate('/superadmin/dashboard');
+    else if (user?.role === 'employee' || user?.role === 'inspector') navigate('/app/employee/scanner');
+    else if (user) navigate('/app/dashboard');
   }, [user, navigate]);
 
   const validateForm = () => {

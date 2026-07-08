@@ -22,7 +22,13 @@ import { useAuth } from '../context/AuthContext';
 
 
 
-const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
+const roleLabels = {
+  employee: 'Employee',
+  inspector: 'Inspector'
+};
+
+const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
+  const label = roleLabels[personType] || 'Employee';
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     phone: employee?.phone || '',
@@ -76,7 +82,7 @@ const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
       <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-            {employee ? 'Edit Employee' : 'Add Employee'}
+            {employee ? `Edit ${label}` : `Add ${label}`}
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
             <X className="w-5 h-5" />
@@ -100,7 +106,7 @@ const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-                placeholder="Enter employee name"
+                placeholder={`Enter ${label.toLowerCase()} name`}
                 required
               />
             </div>
@@ -157,14 +163,14 @@ const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Employee Role
+              Assigned Role
             </label>
             <select value={formData.assignedRole} onChange={(e) => setFormData({ ...formData, assignedRole: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none">
               <option value="">No role assigned</option>
               {roles.map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
             </select>
-            <p className="text-xs text-slate-500 mt-1">Optional. The admin can assign or change the employee role later.</p>
-            {roles.length === 0 && <p className="text-xs text-amber-500 mt-1">No roles are available yet. You can create the employee now and assign a role later.</p>}
+            <p className="text-xs text-slate-500 mt-1">Optional. The admin can assign or change this role later.</p>
+            {roles.length === 0 && <p className="text-xs text-amber-500 mt-1">No roles are available yet. You can create this {label.toLowerCase()} now and assign a role later.</p>}
           </div>
 
           {/* Login Access Section */}
@@ -176,8 +182,8 @@ const EmployeeModal = ({ employee, onClose, onSave, roles }) => {
             
             <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
               <div>
-                <p className="font-medium text-slate-900 dark:text-white">Allow Employee Login</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Employee can login with email and password</p>
+                <p className="font-medium text-slate-900 dark:text-white">Allow {label} Login</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{label} can login with email and password</p>
               </div>
               <button
                 type="button"
@@ -243,6 +249,7 @@ const AdminEmployees = () => {
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState('employee');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -252,7 +259,7 @@ const AdminEmployees = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, activeTab]);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -274,6 +281,7 @@ const AdminEmployees = () => {
 
 
       let data = response.data;
+      data = data.filter(e => (e.role || 'employee') === activeTab);
       
       // Apply search filter
       if (search) {
@@ -301,15 +309,16 @@ const AdminEmployees = () => {
   const handleSave = async (formData) => {
     try {
       setError('');
+      const dataToSend = { ...formData, role: activeTab };
       if (editingEmployee) {
-        await employeeAPI.updateEmployee(editingEmployee._id, formData);
+        await employeeAPI.updateEmployee(editingEmployee._id, dataToSend);
 
 
-        setSuccess('Employee updated successfully');
+        setSuccess(`${roleLabels[activeTab]} updated successfully`);
       } else {
-        await employeeAPI.createEmployee(formData);
+        await employeeAPI.createEmployee(dataToSend);
 
-        setSuccess('Employee created successfully');
+        setSuccess(`${roleLabels[activeTab]} created successfully`);
       }
       setShowModal(false);
       setEditingEmployee(null);
@@ -326,6 +335,18 @@ const AdminEmployees = () => {
     }
   };
 
+  const handleToggleStatus = async (id) => {
+    try {
+      setError('');
+      await employeeAPI.toggleEmployeeStatus(id);
+      setSuccess(`${roleLabels[activeTab]} status updated successfully`);
+      fetchEmployees();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || `Failed to update ${roleLabels[activeTab].toLowerCase()} status`);
+      setTimeout(() => setError(''), 3000);
+    }
+  };
 
   const handleDelete = async (id) => {
     const employee = employees.find(e => e._id === id);
@@ -334,7 +355,7 @@ const AdminEmployees = () => {
       setError('');
       await employeeAPI.deleteEmployee(id);
 
-      setSuccess('Employee deleted successfully');
+      setSuccess(`${roleLabels[activeTab]} deleted successfully`);
       fetchEmployees();
       
       // Auto-hide success message after 3 seconds
@@ -349,6 +370,7 @@ const AdminEmployees = () => {
 
   const activeEmployees = employees.filter(e => e.isActive).length;
   const inactiveEmployees = employees.length - activeEmployees;
+  const activeLabel = roleLabels[activeTab];
 
   return (
     <div className="space-y-6">
@@ -356,7 +378,7 @@ const AdminEmployees = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Employees</h1>
-          <p className="text-slate-500 dark:text-slate-400">Manage your employee database</p>
+          <p className="text-slate-500 dark:text-slate-400">Manage employees and inspectors</p>
         </div>
         <button
           onClick={() => {
@@ -366,8 +388,30 @@ const AdminEmployees = () => {
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl"
         >
           <Plus className="w-5 h-5" />
-          Add Employee
+          Add {activeLabel}
         </button>
+      </div>
+
+      <div className="inline-flex rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-600 dark:bg-slate-800">
+        {['employee', 'inspector'].map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => {
+              setActiveTab(tab);
+              setEditingEmployee(null);
+              setSearch('');
+              setStatusFilter('all');
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              activeTab === tab
+                ? 'bg-primary-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+            }`}
+          >
+            {roleLabels[tab]}
+          </button>
+        ))}
       </div>
 
       {/* Error/Success Messages */}
@@ -387,7 +431,7 @@ const AdminEmployees = () => {
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Total Employees</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Total {activeLabel}s</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">{employees.length}</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
@@ -457,14 +501,14 @@ const AdminEmployees = () => {
         ) : employees.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-500 dark:text-slate-400">
             <Users className="w-12 h-12 mb-4" />
-            <p>No employees found</p>
+            <p>No {activeLabel.toLowerCase()}s found</p>
           </div>
         ) : (
 <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-700/50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Employee</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">{activeLabel}</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Phone</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Email</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Address</th>
@@ -564,7 +608,8 @@ const AdminEmployees = () => {
       {showModal && (
         <EmployeeModal
           employee={editingEmployee}
-          roles={roles}
+          roles={roles.filter((role) => (role.roleFor || 'employee') === activeTab)}
+          personType={activeTab}
           onClose={() => {
             setShowModal(false);
             setEditingEmployee(null);

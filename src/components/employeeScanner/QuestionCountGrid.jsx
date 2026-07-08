@@ -58,6 +58,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
             ? option.label || option.value || optionKey
             : textOf(question) || option.defectType || option.defectDetail || current.defectDetail || '',
           assemblyProcess: option.assemblyProcess || question.assemblyProcess || current.assemblyProcess || '',
+          partDetails: option.partDetails || question.partDetails || current.partDetails || '',
           defectType: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
             ? option.label || option.value || optionKey
             : textOf(question) || option.defectType || option.defectDetail || current.defectType || ''

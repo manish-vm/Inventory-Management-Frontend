@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Square } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useTheme } from '../../context/ThemeContext';
 
 const QRScanner = ({ onDetected }) => {
+  const { themeFactory } = useTheme();
   const scannerRef = useRef(null);
   const regionId = 'employee-product-qr-reader';
   const [running, setRunning] = useState(false);
@@ -46,7 +48,7 @@ const QRScanner = ({ onDetected }) => {
   };
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <section className={`rounded-lg border p-5 shadow-sm ${themeFactory.classFor('surface')}`}>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Live Camera QR Scanner</h2>
@@ -64,14 +66,14 @@ const QRScanner = ({ onDetected }) => {
         </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-lg bg-slate-950">
+      <div className={`relative overflow-hidden rounded-lg ${themeFactory.classFor('scannerPreview')}`}>
         <div id={regionId} className="min-h-[300px] w-full" />
         {!running && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-slate-300">
+          <div className={`absolute inset-0 flex items-center justify-center ${themeFactory.classFor('scannerInactiveOverlay')}`}>
             Camera preview inactive
           </div>
         )}
-        <div className="pointer-events-none absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 border-blue-400 shadow-[0_0_0_9999px_rgba(15,23,42,0.45)]" />
+        <div className={`pointer-events-none absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 ${themeFactory.classFor('scannerFrame')}`} />
       </div>
       {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
     </section>

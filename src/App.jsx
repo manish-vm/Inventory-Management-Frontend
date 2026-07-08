@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import Products from './pages/Products';
 import Billing from './pages/Billing';
 import Invoices from './pages/Invoices';
@@ -29,11 +30,19 @@ import OperatorDashboard from './pages/OperatorDashboard';
 import Analytics from './pages/Analytics';
 
 import ProductReviewConfig from './pages/ProductReviewConfig';
-import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+import InspectorVerification from './pages/InspectorVerification';
+import InspectorManagement from './pages/InspectorManagement';
 import QRScannerPage from './pages/employee/QRScannerPage';
 import ScanLogsPage from './pages/employee/ScanLogsPage';
 import ProductTraceabilityPage from './pages/employee/ProductTraceabilityPage';
 import AdminResponsesPage from './pages/admin/AdminResponsesPage';
+
+const defaultPathForUser = (user) => {
+  if (user?.role === 'superadmin') return '/superadmin/dashboard';
+  if (user?.role === 'inspector') return '/app/inspector-verification';
+  if (user?.role === 'employee') return '/app/employee/scanner';
+  return '/app/dashboard';
+};
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -54,7 +63,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   // If allowedRoles is specified, check if user's role is in the allowed list
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // Redirect to dashboard if user's role is not allowed
-    return <Navigate to="/app/dashboard" replace />;
+    return <Navigate to={defaultPathForUser(user)} replace />;
   }
 
   return children;
@@ -96,11 +105,7 @@ const PublicRoute = ({ children }) => {
   }
 
   if (user) {
-    // Redirect based on role
-    if (user.role === 'superadmin') {
-      return <Navigate to="/superadmin/dashboard" replace />;
-    }
-    return <Navigate to="/app/dashboard" replace />;
+    return <Navigate to={defaultPathForUser(user)} replace />;
   }
 
   return children;
@@ -115,6 +120,11 @@ const PlaceholderPage = ({ title }) => (
     </div>
   </div>
 );
+
+const EmployeeIndexRedirect = () => {
+  const { user } = useAuth();
+  return <Navigate to={defaultPathForUser(user)} replace />;
+};
 
 function AppRoutes() {
   return (
@@ -161,7 +171,7 @@ function AppRoutes() {
 
       {/* Protected Routes */}
       <Route path="/employee/scanner" element={
-        <ProtectedRoute allowedRoles={['employee', 'admin']}>
+        <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
           <QRScannerPage />
         </ProtectedRoute>
       } />
@@ -178,6 +188,11 @@ function AppRoutes() {
         
         {/* All authenticated users can access dashboard */}
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="admin-dashboard" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
         
         {/* Billing */}
         <Route path="billing" element={
@@ -188,28 +203,28 @@ function AppRoutes() {
         
         {/* Employee profile with analytics - only for employees */}
         <Route path="employee-profile" element={
-          <ProtectedRoute allowedRoles={['employee']}>
+          <ProtectedRoute allowedRoles={['employee', 'inspector']}>
             <EmployeeProfile />
           </ProtectedRoute>
         } />
         
         {/* Admin and Employee can access products */}
         <Route path="products" element={
-          <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <ProtectedRoute allowedRoles={['admin', 'employee', 'inspector']}>
             <Products />
           </ProtectedRoute>
         } />
         
         {/* Admin and Employee can access invoices */}
         <Route path="invoices" element={
-          <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <ProtectedRoute allowedRoles={['admin', 'employee', 'inspector']}>
             <Invoices />
           </ProtectedRoute>
         } />
         
         {/* Refund Requests - accessible by all authenticated users */}
         <Route path="refund-requests" element={
-          <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <ProtectedRoute allowedRoles={['admin', 'employee', 'inspector']}>
             <RefundRequests />
           </ProtectedRoute>
         } />
@@ -253,7 +268,7 @@ function AppRoutes() {
            </ProtectedRoute>
          } />
          <Route path="qr-generator" element={
-           <ProtectedRoute allowedRoles={['admin', 'employee']}>
+           <ProtectedRoute allowedRoles={['admin', 'employee', 'inspector']}>
              <QRGenerator />
            </ProtectedRoute>
          } />
@@ -263,7 +278,7 @@ function AppRoutes() {
            </ProtectedRoute>
          } />
          <Route path="operator" element={
-           <ProtectedRoute allowedRoles={['admin', 'employee']}>
+           <ProtectedRoute allowedRoles={['admin', 'employee', 'inspector']}>
              <OperatorDashboard />
            </ProtectedRoute>
          } />
@@ -277,28 +292,43 @@ function AppRoutes() {
              <AdminResponsesPage />
            </ProtectedRoute>
          } />
+         <Route path="inspector-management" element={
+           <ProtectedRoute allowedRoles={['admin']}>
+             <InspectorManagement />
+           </ProtectedRoute>
+         } />
          <Route path="admin/traceability/:id" element={
            <ProtectedRoute allowedRoles={['admin']}>
              <ProductTraceabilityPage admin />
            </ProtectedRoute>
          } />
          <Route path="employee" element={
-           <ProtectedRoute allowedRoles={['employee', 'admin']}>
-             <EmployeeDashboard />
+           <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
+             <EmployeeIndexRedirect />
            </ProtectedRoute>
          } />
          <Route path="employee/scanner" element={
-           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+           <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
              <QRScannerPage />
            </ProtectedRoute>
          } />
          <Route path="employee/scan-logs" element={
-           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+           <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
              <ScanLogsPage />
            </ProtectedRoute>
          } />
+         <Route path="inspector-verification" element={
+           <ProtectedRoute allowedRoles={['inspector', 'admin']}>
+             <InspectorVerification />
+           </ProtectedRoute>
+         } />
+         <Route path="inspector-verification/scan-logs" element={
+           <ProtectedRoute allowedRoles={['inspector', 'admin']}>
+             <InspectorVerification initialTab="logs" />
+           </ProtectedRoute>
+         } />
          <Route path="employee/traceability/:id" element={
-           <ProtectedRoute allowedRoles={['employee', 'admin']}>
+           <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
              <ProductTraceabilityPage />
            </ProtectedRoute>
          } />

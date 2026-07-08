@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
 import GlobalModals from './GlobalModals';
@@ -6,12 +6,13 @@ import AIChatbot from './AIChatbot';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { useState } from 'react';
-import { Search, Menu, X, Bell, User } from 'lucide-react';
+import { Search, Menu, X } from 'lucide-react';
 
 const Layout = ({ isSuperAdmin }) => {
   const { user } = useAuth();
   const { isCollapsed } = useSidebar();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdminDensity = isSuperAdmin || user?.role === 'admin' || user?.role === 'superadmin';
@@ -34,6 +35,11 @@ const Layout = ({ isSuperAdmin }) => {
       '/superadmin/dealers': 'Dealer Management',
       '/superadmin/plans': 'Subscription Plans',
       '/superadmin/logs': 'Activity Logs',
+      '/app/employee/scanner': 'QR Scanner',
+      '/app/employee/scan-logs': 'Scan Logs',
+      '/app/employee-profile': 'My Profile',
+      '/app/inspector-verification': 'Inspector Verification',
+      '/app/inspector-verification/scan-logs': 'Scan Logs',
     };
     return titles[path] || 'Inventory Pro';
   };
@@ -100,7 +106,16 @@ const Layout = ({ isSuperAdmin }) => {
               
               {/* User Profile Dropdown */}
               {user && (
-                <div className="hidden lg:flex items-center gap-3 pl-3 border-l border-surface-200 dark:border-surface-700">
+                <button
+                  type="button"
+                  onClick={() => user.role === 'inspector' && navigate('/app/employee-profile')}
+                  className={`hidden lg:flex items-center gap-3 rounded-lg py-1 pl-3 pr-1 border-l border-surface-200 text-left transition-colors dark:border-surface-700 ${
+                    user.role === 'inspector'
+                      ? 'cursor-pointer hover:bg-surface-100 dark:hover:bg-surface-800'
+                      : 'cursor-default'
+                  }`}
+                  aria-label={user.role === 'inspector' ? 'Open inspector profile' : undefined}
+                >
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 transition-colors flex items-center justify-center shadow-soft text-white drop-shadow-sm">
                     <span className="text-white font-semibold text-sm">
                       {user.name?.charAt(0).toUpperCase() || user.username?.charAt(0).toUpperCase()}
@@ -114,7 +129,7 @@ const Layout = ({ isSuperAdmin }) => {
                       {user.role}
                     </p>
                   </div>
-                </div>
+                </button>
               )}
             </div>
           </div>
