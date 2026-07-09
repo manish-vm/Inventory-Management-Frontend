@@ -171,6 +171,8 @@ const fillMergedDrrValues = (rows) => {
   });
 };
 
+const stageDescriptorColumn = { key: 'stageName', label: 'Stage', width: 150 };
+
 const rejectionSummaryRows = [
   {
     label: 'TOTAL OUTPUT',
@@ -251,6 +253,7 @@ const reportTabs = [
           name: drrReport.subReportName,
           sourceFileName: drrReport.sourceFileName,
           descriptorColumns: [
+            stageDescriptorColumn,
             { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
             { key: 'partDetails', label: 'Part details', width: 120 },
             { key: 'defectDetails', label: 'Defect Details', width: 180 },
@@ -270,8 +273,9 @@ const reportTabs = [
           name: rejectionReport.subReportName,
           sourceFileName: rejectionReport.sourceFileName,
           descriptorColumns: line >= 3
-            ? [{ key: 'rejectionDetails', label: 'Defects', width: 640 }]
+            ? [stageDescriptorColumn, { key: 'rejectionDetails', label: 'Defects', width: 640 }]
             : [
+                stageDescriptorColumn,
                 { key: 'defectGroup', label: 'Defects', width: 220 },
                 { key: 'rejectionDetails', label: 'Rejection Details', width: 420 },
               ],
@@ -290,8 +294,9 @@ const reportTabs = [
           name: `D${line} - Helmet Assembly Rework`,
           sourceFileName: `${rejectionReport.sourceFileName} / Rework`,
           descriptorColumns: line >= 3
-            ? [{ key: 'rejectionDetails', label: 'Defects', width: 640 }]
+            ? [stageDescriptorColumn, { key: 'rejectionDetails', label: 'Defects', width: 640 }]
             : [
+                stageDescriptorColumn,
                 { key: 'defectGroup', label: 'Defects', width: 220 },
                 { key: 'rejectionDetails', label: 'Rework Details', width: 420 },
               ],
@@ -315,6 +320,7 @@ const reportTabs = [
       name: report.subReportName,
       sourceFileName: report.sourceFileName,
       descriptorColumns: [
+        stageDescriptorColumn,
         { key: 'assemblyProcess', label: 'Visor moulding Process', width: 220 },
         { key: 'partDetails', label: 'Part details', width: 180 },
         { key: 'defectDetails', label: 'Defect Details', width: 260 },
@@ -356,6 +362,7 @@ const reportTabs = [
       name: report.subReportName,
       sourceFileName: report.sourceFileName,
       descriptorColumns: [
+        stageDescriptorColumn,
         { key: 'assemblyProcess', label: group.processLabel, width: 220 },
         { key: 'partDetails', label: 'Part details', width: 180 },
         { key: 'defectDetails', label: 'Defect Details', width: 260 },
@@ -404,6 +411,7 @@ const reportTabs = [
       name: report.subReportName,
       sourceFileName: report.sourceFileName,
       descriptorColumns: [
+        stageDescriptorColumn,
         { key: 'assemblyProcess', label: group.processLabel, width: 220 },
         { key: 'partDetails', label: 'Part details', width: 180 },
         { key: 'defectDetails', label: 'Defect Details', width: 260 },
@@ -521,7 +529,6 @@ const dayColumns = Array.from({ length: 31 }, (_, index) => {
 const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
-const subQuestionColumnKey = (value) => `subQuestion:${normalizeReportKey(value)}`;
 const clampColumnWidth = (width, min = 72, max = 190) => Math.min(max, Math.max(min, width));
 const estimateTextColumnWidth = (label, rows = [], key, { min = 72, max = 190 } = {}) => {
   const values = [
@@ -542,10 +549,29 @@ const normalizeSubQuestionPath = (path, fallbackQuestion = '', fallbackOption = 
   if (normalized.length) return normalized;
   return fallbackQuestion && fallbackOption ? [{ question: fallbackQuestion, option: fallbackOption }] : [];
 };
-const subQuestionPathValues = (path) => path.reduce((values, item) => ({
-  ...values,
-  [subQuestionColumnKey(item.question)]: item.option
-}), {});
+
+const joinUniqueDetails = (values) => {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = normalizeReportKey(value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(', ');
+};
+const buildDefectDetailsText = (row, subQuestionPath = []) => {
+  const parentAnswer = String(row?.questionAnswer || '').trim();
+  const nestedAnswers = subQuestionPath.map((item) => item.option);
+  const detail = String(row?.defectName || row?.defectDetails || row?.rejectionDetails || '').trim();
+  return joinUniqueDetails([
+    ...nestedAnswers,
+    detail && normalizeReportKey(detail) !== normalizeReportKey(parentAnswer) ? detail : ''
+  ]);
+};
 const getRejectionRowKey = (row) => normalizeReportKey([
   row?.questionHeader,
   row?.questionAnswer,
@@ -761,17 +787,18 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
     const subQuestion = String(backendRow.subQuestion || '').trim();
     const subOption = String(backendRow.subOption || '').trim();
     const subQuestionPath = normalizeSubQuestionPath(backendRow.subQuestionPath, subQuestion, subOption);
+    const defectDetails = buildDefectDetailsText(backendRow, subQuestionPath);
     return {
       questionHeader: backendRow.questionHeader || '',
       questionAnswer: backendRow.questionAnswer || '',
       subQuestion,
       subOption,
       subQuestionPath,
-      ...subQuestionPathValues(subQuestionPath),
       hasSubQuestion: hasQuestionnaireSubDetail(backendRow),
+      stageName: backendRow.stageName || '',
       assemblyProcess: backendRow.questionAnswer || backendRow.assemblyProcess || backendReport.processName || '',
       partDetails: backendRow.partName || backendReport.partName || '',
-      defectDetails: hasQuestionnaireSubDetail(backendRow) && !subOption ? (backendRow.defectName || 'Unspecified') : '',
+      defectDetails: defectDetails || backendRow.defectName || 'Unspecified',
       drrRowKey: rowKey,
       days,
       total: days.reduce((sum, value) => sum + value, 0)
@@ -1685,6 +1712,7 @@ const AdminDashboard = ({
       name: `${baseName} ${item.label}`,
       sourceFileName,
       descriptorColumns: [
+        stageDescriptorColumn,
         { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
         { key: 'partDetails', label: 'Part details', width: 120 },
         { key: 'defectDetails', label: 'Defect Details', width: 180 },
@@ -1972,6 +2000,7 @@ const AdminDashboard = ({
             const subQuestion = String(row.subQuestion || '').trim();
             const subOption = String(row.subOption || '').trim();
             const subQuestionPath = normalizeSubQuestionPath(row.subQuestionPath, subQuestion, subOption);
+            const rejectionDetails = buildDefectDetailsText(row, subQuestionPath);
             return {
               defectGroup: metricKey === 'rework' ? 'Rework' : 'Rejection',
               questionHeader: row.questionHeader || (metricKey === 'rework' ? 'Rework Reason' : 'Rejection Reason'),
@@ -1979,10 +2008,10 @@ const AdminDashboard = ({
               subQuestion,
               subOption,
               subQuestionPath,
-              ...subQuestionPathValues(subQuestionPath),
               hasSubQuestion: hasQuestionnaireSubDetail(row),
+              stageName: row.stageName || '',
               partDetails: row.partName || backendReport.partName || '',
-              rejectionDetails: hasQuestionnaireSubDetail(row) && !subOption ? row.defectName : '',
+              rejectionDetails: rejectionDetails || row.defectName || 'Unspecified',
               days: row.days.map((value, index) => ({ day: index + 1, rejection: value })),
               total: row.total
             };
@@ -2048,17 +2077,16 @@ const AdminDashboard = ({
       const firstQuestionHeader = reportRows
         .map((row) => String(row.questionHeader || '').trim())
         .find(Boolean);
+      const stageColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'stageName');
       const partDetailsColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'partDetails');
       const questionAnswerColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'assemblyProcess') || activeSubReportBase.descriptorColumns[0];
-      const subQuestionColumns = Array.from(new Set(reportRows
-        .flatMap((row) => normalizeSubQuestionPath(row.subQuestionPath, row.subQuestion, row.subOption).map((item) => item.question))
-        .filter(Boolean)))
-        .map((header) => {
-          const key = subQuestionColumnKey(header);
-          return { key, label: header, width: estimateTextColumnWidth(header, reportRows, key) };
-        });
+      const defectDetailsColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'defectDetails');
       const dynamicDescriptorColumns = firstQuestionHeader
         ? [
+            stageColumn && {
+              ...stageColumn,
+              width: estimateTextColumnWidth(stageColumn.label, reportRows, stageColumn.key, { min: 110, max: 180 })
+            },
             partDetailsColumn && {
               ...partDetailsColumn,
               width: estimateTextColumnWidth(partDetailsColumn.label, reportRows, partDetailsColumn.key, { min: 96, max: 150 })
@@ -2068,7 +2096,11 @@ const AdminDashboard = ({
               label: firstQuestionHeader,
               width: estimateTextColumnWidth(firstQuestionHeader, reportRows, questionAnswerColumn.key)
             },
-            ...subQuestionColumns
+            defectDetailsColumn && {
+              ...defectDetailsColumn,
+              label: 'Defect Details',
+              width: estimateTextColumnWidth('Defect Details', reportRows, defectDetailsColumn.key, { min: 180, max: 360 })
+            }
           ].filter(Boolean)
         : activeSubReportBase.descriptorColumns;
       return {
@@ -2085,18 +2117,12 @@ const AdminDashboard = ({
     const firstQuestionHeader = reportRows
       .map((row) => String(row.questionHeader || '').trim())
       .find(Boolean);
-    const subQuestionColumns = Array.from(new Set(reportRows
-      .flatMap((row) => normalizeSubQuestionPath(row.subQuestionPath, row.subQuestion, row.subOption).map((item) => item.question))
-      .filter(Boolean)))
-      .map((header) => {
-        const key = subQuestionColumnKey(header);
-        return { key, label: header, width: estimateTextColumnWidth(header, reportRows, key) };
-      });
     const dynamicDescriptorColumns = firstQuestionHeader
       ? [
+          { key: 'stageName', label: 'Stage', width: estimateTextColumnWidth('Stage', reportRows, 'stageName', { min: 110, max: 180 }) },
           { key: 'partDetails', label: 'Part details', width: estimateTextColumnWidth('Part details', reportRows, 'partDetails', { min: 96, max: 150 }) },
           { key: 'questionAnswer', label: firstQuestionHeader, width: estimateTextColumnWidth(firstQuestionHeader, reportRows, 'questionAnswer') },
-          ...subQuestionColumns
+          { key: 'rejectionDetails', label: 'Defect Details', width: estimateTextColumnWidth('Defect Details', reportRows, 'rejectionDetails', { min: 180, max: 360 }) }
         ]
       : activeSubReportBase.descriptorColumns;
     return {
