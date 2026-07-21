@@ -158,7 +158,7 @@ const ModelModal = ({ model, brands, onClose, onSave, loading }) => {
 };
 
 const BrandModelManager = ({ onClose }) => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState('brands'); // 'brands' | 'models'
 
   const [brands, setBrands] = useState([]);
@@ -203,8 +203,13 @@ const BrandModelManager = ({ onClose }) => {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    const activeBrands = await fetchBrands();
-    await fetchModels(activeBrands);
+    setLoading(true);
+    try {
+      const activeBrands = await fetchBrands();
+      await fetchModels(activeBrands);
+    } finally {
+      setLoading(false);
+    }
   }, [fetchBrands, fetchModels]);
 
   useEffect(() => {
@@ -374,7 +379,13 @@ const BrandModelManager = ({ onClose }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {brands.length === 0 ? (
+                    {loading ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-10 text-center text-slate-500 dark:text-slate-400">
+                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary-600" />
+                        </td>
+                      </tr>
+                    ) : brands.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="px-6 py-10 text-center text-slate-500 dark:text-slate-400">
                           No brands loaded yet.
@@ -462,7 +473,13 @@ const BrandModelManager = ({ onClose }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {models.length === 0 ? (
+                    {loading ? (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center text-slate-500 dark:text-slate-400">
+                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary-600" />
+                        </td>
+                      </tr>
+                    ) : models.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-6 py-10 text-center text-slate-500 dark:text-slate-400">
                           No models loaded yet.

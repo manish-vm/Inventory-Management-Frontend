@@ -1,5 +1,54 @@
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL + '/api';
+const GET_CACHE_TTL = 2 * 60 * 1000;
+const GET_CACHE_PREFIX = 'inventoryApiCache:';
+const getCache = new Map();
+const inflightGets = new Map();
+
+const stableStringify = (value) => {
+  if (!value || typeof value !== 'object') return JSON.stringify(value ?? null);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+};
+
+const getCacheKey = (url, config = {}) => {
+  const token = localStorage.getItem('token') || 'public';
+  return `${token.slice(-16)}:${url}:${stableStringify(config.params)}`;
+};
+
+const getSessionCache = (key) => {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(GET_CACHE_PREFIX + key));
+    if (!cached || Date.now() - cached.savedAt > GET_CACHE_TTL) return null;
+    return cached.response;
+  } catch {
+    return null;
+  }
+};
+
+const setSessionCache = (key, response) => {
+  try {
+    sessionStorage.setItem(GET_CACHE_PREFIX + key, JSON.stringify({
+      savedAt: Date.now(),
+      response: {
+        data: response.data,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        config: response.config
+      }
+    }));
+  } catch {
+    // Storage can fail in private mode or when quota is full; memory cache still works.
+  }
+};
+
+const toCachedAxiosResponse = (cached) => ({
+  ...cached,
+  config: { ...(cached.config || {}), fromCache: true },
+  request: null
+});
+
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -28,6 +77,59 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+api.interceptors.response.use((response) => {
+  if (response.config?.method && response.config.method !== 'get') {
+    getCache.clear();
+    inflightGets.clear();
+    Object.keys(sessionStorage)
+      .filter((key) => key.startsWith(GET_CACHE_PREFIX))
+      .forEach((key) => sessionStorage.removeItem(key));
+  }
+  return response;
+});
+
+const uncachedGet = api.get.bind(api);
+api.get = (url, config = {}) => {
+  if (config.skipCache) {
+    const { skipCache, ...requestConfig } = config;
+    return uncachedGet(url, requestConfig);
+  }
+
+  const key = getCacheKey(url, config);
+  const cached = getCache.get(key);
+  if (cached && Date.now() - cached.savedAt <= GET_CACHE_TTL) {
+    return Promise.resolve(toCachedAxiosResponse(cached.response));
+  }
+
+  const sessionCached = getSessionCache(key);
+  if (sessionCached) {
+    getCache.set(key, { savedAt: Date.now(), response: sessionCached });
+    return Promise.resolve(toCachedAxiosResponse(sessionCached));
+  }
+
+  if (inflightGets.has(key)) return inflightGets.get(key);
+
+  const request = uncachedGet(url, config)
+    .then((response) => {
+      const cacheableResponse = {
+        data: response.data,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        config: response.config
+      };
+      getCache.set(key, { savedAt: Date.now(), response: cacheableResponse });
+      setSessionCache(key, cacheableResponse);
+      return response;
+    })
+    .finally(() => {
+      inflightGets.delete(key);
+    });
+
+  inflightGets.set(key, request);
+  return request;
+};
 
 // Auth APIs
 export const authAPI = {

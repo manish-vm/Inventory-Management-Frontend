@@ -1573,6 +1573,9 @@ const AdminDashboard = ({
   const [dashboardProducts, setDashboardProducts] = useState([]);
   const [supplierRows, setSupplierRows] = useState([]);
   const [quickReportMenu, setQuickReportMenu] = useState(null);
+  const [categoryDataLoading, setCategoryDataLoading] = useState(true);
+  const [reportDataLoading, setReportDataLoading] = useState(true);
+  const reportsStillLoading = categoryDataLoading || reportDataLoading;
   const quickReportMenuCloseTimer = useRef(null);
   const [shellInspectionEntries, setShellInspectionEntries] = useState({});
   const [visorPdiirEntries, setVisorPdiirEntries] = useState({});
@@ -1584,6 +1587,7 @@ const AdminDashboard = ({
 
   useEffect(() => {
     let isMounted = true;
+    setCategoryDataLoading(true);
 
     Promise.all([
       productAPI.getCategories(),
@@ -1601,6 +1605,9 @@ const AdminDashboard = ({
         setProductCategories([]);
         setProductSubcategories([]);
         setDashboardProducts([]);
+      })
+      .finally(() => {
+        if (isMounted) setCategoryDataLoading(false);
       });
 
     return () => {
@@ -1610,6 +1617,7 @@ const AdminDashboard = ({
 
   useEffect(() => {
     let isMounted = true;
+    setReportDataLoading(true);
 
     Promise.all([
       api.get('/inspection/admin/rejection-report', { params: { month: reportMonth, year: reportYear } }),
@@ -1689,6 +1697,9 @@ const AdminDashboard = ({
           setEmployeeSheetAggregates({});
           setSupplierRows([]);
         }
+      })
+      .finally(() => {
+        if (isMounted) setReportDataLoading(false);
       });
 
     return () => {
@@ -3081,7 +3092,11 @@ const AdminDashboard = ({
                           </tr>
                         );
                       })}
-                      {misRows.length === 0 && (
+                      {reportDataLoading ? (
+                        <tr>
+                          <td colSpan="7" className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">Loading report rows...</td>
+                        </tr>
+                      ) : misRows.length === 0 && (
                         <tr>
                           <td colSpan="7" className="px-3 py-8 text-center text-slate-500 dark:text-slate-400">No report rows found.</td>
                         </tr>
@@ -3486,16 +3501,19 @@ const AdminDashboard = ({
           onSaveRow={isD1VmBaseFamily ? saveD1VmBaseRow : isVisorPdiirFamily ? saveVisorPdiirRow : saveShellInspectionRow}
         />
       ) : activeSubReportBase.type === 'empty' ? (
-        <section className="border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800">
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-            No category reports found. Created categories and subcategories will appear here.
-          </p>
+        <section className="flex min-h-[320px] items-center justify-center border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800">
+          <div>
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600" />
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+              Loading category reports...
+            </p>
+          </div>
         </section>
       ) : isMisReport ? (
         <div className="space-y-4">
           {activeReport.subReports.length
             ? activeReport.subReports.map(renderMisReportBlock)
-            : <section className="border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800"><p className="text-sm font-medium text-slate-600 dark:text-slate-300">No category reports found.</p></section>}
+            : <section className="border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800"><p className="text-sm font-medium text-slate-600 dark:text-slate-300">{reportsStillLoading ? 'Loading category reports...' : 'No category reports found.'}</p></section>}
         </div>
       ) : isCrsReport ? (
         <section className="border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
@@ -3510,7 +3528,7 @@ const AdminDashboard = ({
                 {activeReport.subReports.map(renderCrsReportBlock)}
               </div>
             ) : (
-              <p className="py-8 text-center text-sm font-medium text-slate-600 dark:text-slate-300">No category reports found.</p>
+              <p className="py-8 text-center text-sm font-medium text-slate-600 dark:text-slate-300">{reportsStillLoading ? 'Loading category reports...' : 'No category reports found.'}</p>
             )}
           </div>
         </section>
@@ -3548,7 +3566,11 @@ const AdminDashboard = ({
               </tbody>
             </table>
           </div>
-          {filteredRows.length === 0 && (
+          {categoryDataLoading ? (
+            <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+              Loading products...
+            </div>
+          ) : filteredRows.length === 0 && (
             <div className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
               No products found for this category.
             </div>

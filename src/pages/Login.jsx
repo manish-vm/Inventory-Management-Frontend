@@ -68,6 +68,8 @@ const Login = () => {
         autoPlay
         muted
         loop
+        playsInline
+        preload="none"
         className="video-bg brightness-50 opacity-40"
       >
         <source src="https://res.cloudinary.com/dgobbuvqf/video/upload/turn-this-image-into-an-animation-in-a-factory-inv_t3kzvw.mp4?_s=vp-3.7.2" type="video/mp4" />

@@ -1,43 +1,50 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SidebarProvider } from './context/SidebarContext';
 import Layout from './components/Layout';
-import HomePage from './pages/HomePage';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import Products from './pages/Products';
-import Billing from './pages/Billing';
-import Invoices from './pages/Invoices';
-import RefundRequests from './pages/RefundRequests';
-import Reports from './pages/Reports';
-import SuperAdminDashboard from './pages/SuperAdminDashboard';
-import AdminManagement from './pages/AdminManagement';
-import DealerManagement from './pages/DealerManagement';
-import SubscriptionPlans from './pages/SubscriptionPlans';
-import ActivityLogs from './pages/ActivityLogs';
-import Messages from './pages/Messages';
-import MessageInbox from './pages/Inbox';
-import AdminMessages from './pages/AdminMessages';
-import AdminEmployees from './pages/AdminEmployees';
-import RoleManagement from './pages/RoleManagement';
-import EmployeeProfile from './pages/EmployeeProfile';
-import ProductMaster from './pages/ProductMaster';
-import QRGenerator from './pages/QRGenerator';
-import ManufacturingConfig from './pages/ManufacturingConfig';
-import OperatorDashboard from './pages/OperatorDashboard';
-import Analytics from './pages/Analytics';
 
-import ProductReviewConfig from './pages/ProductReviewConfig';
-import InspectorVerification from './pages/InspectorVerification';
-import InspectorManagement from './pages/InspectorManagement';
-import QRScannerPage from './pages/employee/QRScannerPage';
-import FinalInspectionPage from './pages/employee/FinalInspectionPage';
-import ScanLogsPage from './pages/employee/ScanLogsPage';
-import ProductTraceabilityPage from './pages/employee/ProductTraceabilityPage';
-import AdminResponsesPage from './pages/admin/AdminResponsesPage';
-import Attendance from './pages/Attendance';
+const HomePage = lazy(() => import('./pages/HomePage'));
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Products = lazy(() => import('./pages/Products'));
+const Billing = lazy(() => import('./pages/Billing'));
+const Invoices = lazy(() => import('./pages/Invoices'));
+const RefundRequests = lazy(() => import('./pages/RefundRequests'));
+const Reports = lazy(() => import('./pages/Reports'));
+const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
+const AdminManagement = lazy(() => import('./pages/AdminManagement'));
+const DealerManagement = lazy(() => import('./pages/DealerManagement'));
+const SubscriptionPlans = lazy(() => import('./pages/SubscriptionPlans'));
+const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
+const Messages = lazy(() => import('./pages/Messages'));
+const MessageInbox = lazy(() => import('./pages/Inbox'));
+const AdminMessages = lazy(() => import('./pages/AdminMessages'));
+const AdminEmployees = lazy(() => import('./pages/AdminEmployees'));
+const RoleManagement = lazy(() => import('./pages/RoleManagement'));
+const EmployeeProfile = lazy(() => import('./pages/EmployeeProfile'));
+const ProductMaster = lazy(() => import('./pages/ProductMaster'));
+const QRGenerator = lazy(() => import('./pages/QRGenerator'));
+const ManufacturingConfig = lazy(() => import('./pages/ManufacturingConfig'));
+const OperatorDashboard = lazy(() => import('./pages/OperatorDashboard'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const ProductReviewConfig = lazy(() => import('./pages/ProductReviewConfig'));
+const InspectorVerification = lazy(() => import('./pages/InspectorVerification'));
+const InspectorManagement = lazy(() => import('./pages/InspectorManagement'));
+const QRScannerPage = lazy(() => import('./pages/employee/QRScannerPage'));
+const FinalInspectionPage = lazy(() => import('./pages/employee/FinalInspectionPage'));
+const ScanLogsPage = lazy(() => import('./pages/employee/ScanLogsPage'));
+const ProductTraceabilityPage = lazy(() => import('./pages/employee/ProductTraceabilityPage'));
+const AdminResponsesPage = lazy(() => import('./pages/admin/AdminResponsesPage'));
+const Attendance = lazy(() => import('./pages/Attendance'));
+
+const PageLoader = () => (
+  <div className="min-h-[40vh] flex items-center justify-center">
+    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+  </div>
+);
 
 const defaultPathForUser = (user) => {
   if (user?.role === 'superadmin') return '/superadmin/dashboard';
@@ -130,7 +137,8 @@ const EmployeeIndexRedirect = () => {
 
 function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
       {/* Public Routes - Unified Login */}
       <Route 
         path="/"
@@ -361,7 +369,8 @@ function AppRoutes() {
 
       {/* Catch all - redirect to dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 

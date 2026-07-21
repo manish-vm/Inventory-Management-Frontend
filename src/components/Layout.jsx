@@ -1,12 +1,13 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
-import GlobalModals from './GlobalModals';
-import AIChatbot from './AIChatbot';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
-import { useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Search, Menu, X } from 'lucide-react';
+
+const GlobalModals = lazy(() => import('./GlobalModals'));
+const AIChatbot = lazy(() => import('./AIChatbot'));
 
 const Layout = ({ isSuperAdmin }) => {
   const { user } = useAuth();
@@ -15,7 +16,18 @@ const Layout = ({ isSuperAdmin }) => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loadDeferredUi, setLoadDeferredUi] = useState(false);
   const isAdminDensity = isSuperAdmin || user?.role === 'admin' || user?.role === 'superadmin';
+
+  useEffect(() => {
+    const load = () => setLoadDeferredUi(true);
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(load, { timeout: 2500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timeout = window.setTimeout(load, 1800);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   // Get page title from path
   const getPageTitle = () => {
@@ -141,11 +153,19 @@ const Layout = ({ isSuperAdmin }) => {
         {/* Main Content */}
         <div className="flex-1 p-4 lg:p-8">
           <Outlet />
-          <GlobalModals />
+          {loadDeferredUi && (
+            <Suspense fallback={null}>
+              <GlobalModals />
+            </Suspense>
+          )}
         </div>
 
       </main>
-      <AIChatbot />
+      {loadDeferredUi && (
+        <Suspense fallback={null}>
+          <AIChatbot />
+        </Suspense>
+      )}
     </div>
     </>
   );

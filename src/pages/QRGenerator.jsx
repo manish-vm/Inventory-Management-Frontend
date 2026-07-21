@@ -23,7 +23,7 @@ const QRGenerator = () => {
   const [products, setProducts] = useState([]);
   const [manufacturingConfigs, setManufacturingConfigs] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [generatedQR, setGeneratedQR] = useState(null);
   
   const [formData, setFormData] = useState({

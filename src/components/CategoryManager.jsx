@@ -181,6 +181,7 @@ const CategoryManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState(''); // 'category' or 'subcategory'
   const [saving, setSaving] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -203,10 +204,18 @@ const CategoryManager = () => {
 
   useEffect(() => {
     if (showPopup) {
-      fetchCategories();
-      fetchSubcategories();
+      fetchInitialData();
     }
   }, [showPopup]);
+
+  const fetchInitialData = async () => {
+    setLoadingData(true);
+    try {
+      await Promise.all([fetchCategories(), fetchSubcategories()]);
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -359,7 +368,12 @@ const CategoryManager = () => {
                 </button>
               </div>
               
-              {categories.length === 0 ? (
+              {loadingData ? (
+                <div className="text-center py-16 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary-600 mx-auto mb-3" />
+                  <p className="text-slate-500 dark:text-slate-400">Loading categories...</p>
+                </div>
+              ) : categories.length === 0 ? (
                 <div className="text-center py-16 bg-slate-50 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                   <Tag className="w-16 h-16 text-slate-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">No categories yet</h3>
@@ -449,7 +463,12 @@ const CategoryManager = () => {
                 </button>
               </div>
               
-              {subcategories.length === 0 ? (
+              {loadingData ? (
+                <div className="text-center py-16 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary-600 mx-auto mb-3" />
+                  <p className="text-slate-500 dark:text-slate-400">Loading subcategories...</p>
+                </div>
+              ) : subcategories.length === 0 ? (
                 <div className="text-center py-16 bg-slate-50 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                   <Layers className="w-16 h-16 text-slate-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">No subcategories yet</h3>
