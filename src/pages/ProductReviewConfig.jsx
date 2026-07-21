@@ -35,6 +35,8 @@ import {
 
 const defaultConfig = {
   acceptedRouteStage: '',
+  okQuestionnaireEnabled: false,
+  okQuestions: [],
   rejectionQuestionnaireEnabled: false,
   rejectionQuestions: [],
   reworkQuestionnaireEnabled: false,
@@ -119,11 +121,13 @@ const ProductReviewConfig = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
+  const modeFromParam = params.configurationMode;
+  const configurationMode = modeFromParam === 'finalStages' || location.state?.configurationMode === 'finalStages' ? 'finalStages' : 'stages';
   const stageKey = params.stageId || params.stageNumber;
   const currentStageNumber = Number(params.stageNumber || location.state?.stage?.stageNumber || stageKey || 1);
   const productReviewKey = location.state?.configId
-    ? `${location.state.configId}-${currentStageNumber}`
-    : `${location.state?.productName || location.state?.code || location.state?.code || 'stage'}-${currentStageNumber}`;
+    ? `${location.state.configId}-${configurationMode}-${currentStageNumber}`
+    : `${location.state?.productName || location.state?.code || location.state?.code || 'stage'}-${configurationMode}-${currentStageNumber}`;
   const code = location.state?.code || location.state?.code || location.state?.productId || '';
   const productName = location.state?.productName || location.state?.productDescription || location.state?.code || location.state?.code || 'Selected Product';
 
@@ -137,6 +141,8 @@ const ProductReviewConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingQuestionnaire, setSavingQuestionnaire] = useState('');
+  const [savedRejectionSnapshot, setSavedRejectionSnapshot] = useState(null);
+  const [savedReworkSnapshot, setSavedReworkSnapshot] = useState(null);
 
   const currentStage = useMemo(
     () =>
@@ -221,12 +227,21 @@ const ProductReviewConfig = () => {
       const response = await api.get(`/stage-review-config/${encodeURIComponent(productReviewKey)}`);
       const data = response.data?.data || response.data;
       if (data) {
+        const isFinalMode = configurationMode === 'finalStages';
         setConfig((prev) => ({
           ...defaultConfig,
           ...prev,
           ...data,
-          rejectionQuestionnaireEnabled: Boolean(data.rejectionQuestionnaireEnabled || data.rejectionQuestions?.length),
-          rejectionQuestions: applyReportOptionsToRejectionQuestions(data.rejectionQuestions || []),
+          okQuestionnaireEnabled: isFinalMode
+            ? Boolean(data.okQuestionnaireEnabled && data.okQuestions?.length)
+            : Boolean(data.okQuestionnaireEnabled || data.okQuestions?.length),
+          okQuestions: normalizeQuestions(data.okQuestions || []),
+          rejectionQuestionnaireEnabled: isFinalMode
+            ? Boolean(data.rejectionQuestionnaireEnabled && data.rejectionQuestions?.length)
+            : Boolean(data.rejectionQuestionnaireEnabled || data.rejectionQuestions?.length),
+          rejectionQuestions: isFinalMode
+            ? normalizeQuestions(data.rejectionQuestions || [])
+            : applyReportOptionsToRejectionQuestions(data.rejectionQuestions || []),
           reworkQuestionnaireEnabled: Boolean(data.reworkQuestionnaireEnabled || data.reworkQuestions?.length || prev.reworkQuestions?.length),
           reworkQuestions: normalizeQuestions(data.reworkQuestions?.length ? data.reworkQuestions : prev.reworkQuestions || [])
         }));
@@ -274,20 +289,32 @@ const ProductReviewConfig = () => {
       const matched =
         configs.find((item) => item._id === location.state?.configId) ||
         configs.find((item) => item.productName === location.state?.productName);
-      if (matched?.stages?.length) {
-        setStages(matched.stages);
-        const matchedStage = matched.stages.find((stage) => Number(stage.stageNumber) === currentStageNumber);
+      const selectedStages = configurationMode === 'finalStages' ? (matched?.finalStages || []) : (matched?.stages || []);
+      if (selectedStages.length) {
+        setStages(selectedStages);
+        const matchedStage = selectedStages.find((stage) => Number(stage.stageNumber) === currentStageNumber);
         const savedQuestions = matchedStage?.reviewForm?.questions || [];
+        const savedOkQuestions = matchedStage?.reviewForm?.okForm?.questions || [];
         const savedRejectionQuestions = matchedStage?.reviewForm?.rejectionForm?.questions || [];
         const savedReworkQuestions = matchedStage?.reviewForm?.reworkForm?.questions || [];
-        if (savedQuestions.length > 0 || savedRejectionQuestions.length > 0 || savedReworkQuestions.length > 0) {
+        const hasFinalQuestions = savedOkQuestions.length > 0 || savedRejectionQuestions.length > 0;
+        const hasStandardQuestions = savedQuestions.length > 0 || savedRejectionQuestions.length > 0 || savedReworkQuestions.length > 0;
+        if ((configurationMode === 'finalStages' && hasFinalQuestions) || (configurationMode !== 'finalStages' && hasStandardQuestions)) {
           setConfig((prev) => ({
             ...prev,
-            rejectionQuestionnaireEnabled: Boolean(savedRejectionQuestions.length || savedQuestions.length),
-            rejectionQuestions: applyReportOptionsToRejectionQuestions(savedRejectionQuestions.length ? savedRejectionQuestions : savedQuestions),
+            okQuestionnaireEnabled: Boolean(savedOkQuestions.length),
+            okQuestions: normalizeQuestions(savedOkQuestions),
+            rejectionQuestionnaireEnabled: configurationMode === 'finalStages'
+              ? Boolean(savedRejectionQuestions.length)
+              : Boolean(savedRejectionQuestions.length || savedQuestions.length),
+            rejectionQuestions: configurationMode === 'finalStages'
+              ? normalizeQuestions(savedRejectionQuestions)
+              : applyReportOptionsToRejectionQuestions(savedRejectionQuestions.length ? savedRejectionQuestions : savedQuestions),
             reworkQuestionnaireEnabled: Boolean(savedReworkQuestions.length),
             reworkQuestions: normalizeQuestions(savedReworkQuestions)
           }));
+          setSavedRejectionSnapshot(JSON.stringify(configurationMode === 'finalStages' ? normalizeQuestions(savedRejectionQuestions) : applyReportOptionsToRejectionQuestions(savedRejectionQuestions.length ? savedRejectionQuestions : savedQuestions)));
+          setSavedReworkSnapshot(JSON.stringify(normalizeQuestions(savedReworkQuestions)));
         }
       }
     } catch (error) {
@@ -303,21 +330,21 @@ const ProductReviewConfig = () => {
   const persistConfig = async (successMessage = 'Product review configuration saved') => {
     try {
       await api.post(`/stage-review-config/${encodeURIComponent(productReviewKey)}`, config);
-      if (location.state?.configId) {
+    if (location.state?.configId) {
         const nextStages = stages.map((stage) =>
           Number(stage.stageNumber) === currentStageNumber
-            ? {
-                ...stage,
-                reviewForm: {
-                  formId: `stage-${stage.stageNumber}-admin`,
-                  formName: `${stage.stageName} Inspection Form`,
-                  questions: stage.reviewForm?.questions || [],
-                  rejectionForm: {
-                    formId: `stage-${stage.stageNumber}-rejection-admin`,
-                    formName: `${stage.stageName} Rejection Analysis Form`,
-                    questions: config.rejectionQuestions || []
-                  },
-                  reworkForm: {
+          ? {
+              ...stage,
+              reviewForm: {
+                formId: `stage-${stage.stageNumber}-admin`,
+                formName: `${stage.stageName} Inspection Form`,
+                questions: configurationMode === 'finalStages' ? [] : (stage.reviewForm?.questions || []),
+                rejectionForm: {
+                  formId: `stage-${stage.stageNumber}-rejection-admin`,
+                  formName: configurationMode === 'finalStages' ? `${stage.stageName} Not OK Form` : `${stage.stageName} Rejection Analysis Form`,
+                  questions: config.rejectionQuestions || []
+                },
+                reworkForm: {
                     formId: `stage-${stage.stageNumber}-rework-admin`,
                     formName: `${stage.stageName} Rework Analysis Form`,
                     questions: config.reworkQuestions || []
@@ -331,10 +358,13 @@ const ProductReviewConfig = () => {
         );
 
         await manufacturingConfigAPI.saveReviewForms(location.state.configId, {
+          target: configurationMode,
           stages: nextStages
         });
       }
       toast.success(successMessage);
+      setSavedRejectionSnapshot(JSON.stringify(config.rejectionQuestions));
+      setSavedReworkSnapshot(JSON.stringify(config.reworkQuestions));
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to save product review configuration');
       throw error;
@@ -353,7 +383,12 @@ const ProductReviewConfig = () => {
   const saveQuestionnaire = async (type) => {
     setSavingQuestionnaire(type);
     try {
-      await persistConfig(type === 'rework' ? 'Rework questionnaire saved' : 'Rejection questionnaire saved');
+      const messageMap = {
+        ok: 'OK questionnaire saved',
+        rejection: configurationMode === 'finalStages' ? 'Not OK questionnaire saved' : 'Rejection questionnaire saved',
+        rework: 'Rework questionnaire saved'
+      };
+      await persistConfig(messageMap[type] || 'Questionnaire saved');
     } finally {
       setSavingQuestionnaire('');
     }
@@ -422,7 +457,9 @@ const ProductReviewConfig = () => {
               {productName} - {currentStage.stageName}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-500">
-              Configure inspection, rejection, and rework questionnaires for this product stage.
+              {configurationMode === 'finalStages'
+                ? 'Configure Not OK questionnaire and routing for this final stage.'
+                : 'Configure inspection, rejection, and rework questionnaires for this product stage.'}
             </p>
           </div>
           <button
@@ -436,7 +473,7 @@ const ProductReviewConfig = () => {
           </button>
         </div>
 
-        <ReviewAnalyticsCard analytics={analytics} />
+        <ReviewAnalyticsCard analytics={analytics} configurationMode={configurationMode} />
 
         <div className="space-y-6">
           <ReviewRoutingSection
@@ -444,6 +481,7 @@ const ProductReviewConfig = () => {
             setConfig={setConfig}
             currentStage={currentStage}
             stages={stages}
+            configurationMode={configurationMode}
             onCreateQuestionnaire={enableQuestionnaire}
             onCreateReworkQuestionnaire={enableReworkQuestionnaire}
           />
@@ -456,17 +494,21 @@ const ProductReviewConfig = () => {
               setConfig((prev) => ({
                 ...prev,
                 rejectionQuestionnaireEnabled: true,
-                rejectionQuestions: applyReportOptionsToRejectionQuestions(questions)
+                rejectionQuestions: configurationMode === 'finalStages' ? questions : applyReportOptionsToRejectionQuestions(questions)
               }))
             }
-            autoOptionGroups={rejectionOptionGroups}
+            autoOptionGroups={configurationMode === 'finalStages' ? [] : rejectionOptionGroups}
             onSave={() => saveQuestionnaire('rejection')}
             saving={savingQuestionnaire === 'rejection'}
-            saveLabel="Save Rejection Questionnaire"
-            onCopy={() => copyQuestionnaireToPairedType('rejection')}
-            copyLabel="Copy to Rework"
+            canSave={JSON.stringify(config.rejectionQuestions) !== savedRejectionSnapshot}
+            title={configurationMode === 'finalStages' ? 'Not OK Questionnaire Builder' : 'Rejection Questionnaire Builder'}
+            emptyMessage={configurationMode === 'finalStages' ? 'No Not OK questions configured yet.' : 'No rejection questions configured yet.'}
+            saveLabel={configurationMode === 'finalStages' ? 'Save Not OK Questionnaire' : 'Save Rejection Questionnaire'}
+            onCopy={configurationMode === 'finalStages' ? undefined : () => copyQuestionnaireToPairedType('rejection')}
+            copyLabel={configurationMode === 'finalStages' ? '' : 'Copy to Rework'}
           />
 
+          {configurationMode !== 'finalStages' && (
           <RejectionQuestionBuilder
             enabled={showReworkBuilder}
             onEnable={enableReworkQuestionnaire}
@@ -478,21 +520,25 @@ const ProductReviewConfig = () => {
                 reworkQuestions: questions
               }))
             }
-            title="Rework Questionnaire Builder"
+            title={configurationMode === 'finalStages' ? 'Not OK Questionnaire Builder' : 'Rework Questionnaire Builder'}
             emptyMessage="No rework questions configured yet."
             onSave={() => saveQuestionnaire('rework')}
             saving={savingQuestionnaire === 'rework'}
-            saveLabel="Save Rework Questionnaire"
-            onCopy={() => copyQuestionnaireToPairedType('rework')}
-            copyLabel="Copy to Reject"
+            canSave={JSON.stringify(config.reworkQuestions) !== savedReworkSnapshot}
+            saveLabel={configurationMode === 'finalStages' ? 'Save Not OK Questionnaire' : 'Save Rework Questionnaire'}
+            onCopy={configurationMode === 'finalStages' ? undefined : () => copyQuestionnaireToPairedType('rework')}
+            copyLabel={configurationMode === 'finalStages' ? '' : 'Copy to Reject'}
           />
+          )}
 
           {config.rejectionQuestionnaireEnabled && config.rejectionQuestions.length > 0 && (
             <section className="rounded-lg border border-red-200 bg-red-50/60 p-5 dark:border-red-900 dark:bg-red-900/10">
               <div className="mb-4">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Rejection Shop Floor Preview</h2>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {configurationMode === 'finalStages' ? 'Not OK Shop Floor Preview' : 'Rejection Shop Floor Preview'}
+                </h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Conditional sub-questions expand here as rejection answers are selected.
+                  Conditional sub-questions expand here as {configurationMode === 'finalStages' ? 'not OK' : 'rejection'} answers are selected.
                 </p>
               </div>
               <EmployeeReviewRenderer
@@ -503,7 +549,7 @@ const ProductReviewConfig = () => {
             </section>
           )}
 
-          {config.reworkQuestionnaireEnabled && config.reworkQuestions.length > 0 && (
+          {configurationMode !== 'finalStages' && config.reworkQuestionnaireEnabled && config.reworkQuestions.length > 0 && (
             <section className="rounded-lg border border-amber-200 bg-amber-50/60 p-5 dark:border-amber-900 dark:bg-amber-900/10">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Rework Shop Floor Preview</h2>

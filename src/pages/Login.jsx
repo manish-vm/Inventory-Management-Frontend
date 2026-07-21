@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import AuthTabs from '../components/auth/AuthTabs';
 import '../index.css'; // Ensure styles loaded
 
 const Login = () => {
-  const [activeRole, setActiveRole] = useState('admin');
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
@@ -51,14 +49,6 @@ const Login = () => {
     }
   };
 
-  const roleConfig = {
-    employee: { title: 'Employee Dashboard', subtitle: 'Manage daily operations' },
-    admin: { title: 'Admin Panel', subtitle: 'Full system management' },
-    superadmin: { title: 'SuperAdmin Console', subtitle: 'Complete platform control' }
-  };
-
-  const config = roleConfig[activeRole];
-
   if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -94,34 +84,21 @@ const Login = () => {
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 py-12 sm:px-6 lg:px-8">
         {/* Product Logo */}
         
-
-        {/* Role Navigation */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="w-full max-w-xl mb-8"
-        >
-          <AuthTabs activeRole={activeRole} onChange={setActiveRole} />
-        </motion.div>
-
         {/* Role Title */}
         <motion.h1
-          key={`title-${activeRole}`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent mb-4 text-center"
         >
-          {config.title}
+          Inventory Management
         </motion.h1>
         <motion.p
-          key={`subtitle-${activeRole}`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="text-slate-300 text-lg mb-12 text-center max-w-md"
         >
-          {config.subtitle}
+          Secure access for your team to manage daily operations.
         </motion.p>
 
         {/* Glassmorphism Form Card */}
@@ -218,7 +195,7 @@ const Login = () => {
             </button>
 
             <div className="text-center pt-4 border-t border-white/20 text-slate-400 text-xs italic">
-              Contact admin for {config.title.toLowerCase()} access
+              Contact admin for account access
             </div>
           </form>
         </motion.div>

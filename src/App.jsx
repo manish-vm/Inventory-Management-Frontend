@@ -33,9 +33,11 @@ import ProductReviewConfig from './pages/ProductReviewConfig';
 import InspectorVerification from './pages/InspectorVerification';
 import InspectorManagement from './pages/InspectorManagement';
 import QRScannerPage from './pages/employee/QRScannerPage';
+import FinalInspectionPage from './pages/employee/FinalInspectionPage';
 import ScanLogsPage from './pages/employee/ScanLogsPage';
 import ProductTraceabilityPage from './pages/employee/ProductTraceabilityPage';
 import AdminResponsesPage from './pages/admin/AdminResponsesPage';
+import Attendance from './pages/Attendance';
 
 const defaultPathForUser = (user) => {
   if (user?.role === 'superadmin') return '/superadmin/dashboard';
@@ -287,9 +289,14 @@ function AppRoutes() {
              <Analytics />
            </ProtectedRoute>
          } />
-         <Route path="admin/responses" element={
+        <Route path="admin/responses" element={
            <ProtectedRoute allowedRoles={['admin']}>
              <AdminResponsesPage />
+           </ProtectedRoute>
+         } />
+         <Route path="attendance" element={
+           <ProtectedRoute allowedRoles={['admin', 'employee', 'inspector']}>
+             <Attendance />
            </ProtectedRoute>
          } />
          <Route path="inspector-management" element={
@@ -312,11 +319,16 @@ function AppRoutes() {
              <QRScannerPage />
            </ProtectedRoute>
          } />
-         <Route path="employee/scan-logs" element={
-           <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
-             <ScanLogsPage />
-           </ProtectedRoute>
-         } />
+          <Route path="employee/scan-logs" element={
+            <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
+              <ScanLogsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="employee/final-inspection" element={
+            <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
+              <FinalInspectionPage />
+            </ProtectedRoute>
+          } />
          <Route path="inspector-verification" element={
            <ProtectedRoute allowedRoles={['inspector', 'admin']}>
              <InspectorVerification />
@@ -340,7 +352,7 @@ function AppRoutes() {
         } />
 
         {/* Manufacturing stage -> product review (question preview/config) */}
-        <Route path="manufacturing-config/stages/:stageNumber/product-review" element={
+        <Route path="manufacturing-config/stages/:stageNumber/product-review/:configurationMode?" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <ProductReviewConfig />
           </ProtectedRoute>

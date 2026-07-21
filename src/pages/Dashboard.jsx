@@ -83,6 +83,70 @@ const drrSummaryRows = [
   },
 ];
 
+const okCountSummaryRows = [
+  {
+    label: 'Day wise Total Production',
+    metric: 'output',
+    getValue: (column, report) => report?.daysById?.[column.id]?.output ?? 0,
+    total: (report) => report?.totals?.output ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise OK Count',
+    getValue: (column, report) => report?.daysById?.[column.id]?.ok ?? 0,
+    total: (report) => report?.totals?.ok ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise OK %',
+    getValue: (column, report) => {
+      const day = report?.daysById?.[column.id];
+      const output = day?.output ?? 0;
+      const ok = day?.ok ?? 0;
+      return output ? formatPercent((ok / output) * 100) : '0.00%';
+    },
+    total: (report) => {
+      const output = report?.totals?.output ?? 0;
+      const ok = report?.totals?.ok ?? 0;
+      return output ? formatPercent((ok / output) * 100) : '0.00%';
+    },
+    totalPercent: '',
+    isPercent: true,
+  },
+];
+
+const notOkCountSummaryRows = [
+  {
+    label: 'Day wise Total Production',
+    metric: 'output',
+    getValue: (column, report) => report?.daysById?.[column.id]?.output ?? 0,
+    total: (report) => report?.totals?.output ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Not OK Count',
+    getValue: (column, report) => report?.daysById?.[column.id]?.notOk ?? 0,
+    total: (report) => report?.totals?.notOk ?? 0,
+    totalPercent: '',
+  },
+  {
+    label: 'Day Wise Not OK %',
+    getValue: (column, report) => {
+      const day = report?.daysById?.[column.id];
+      const output = day?.output ?? 0;
+      const notOk = day?.notOk ?? 0;
+      return output ? formatPercent((notOk / output) * 100) : '0.00%';
+    },
+    total: (report) => {
+      const output = report?.totals?.output ?? 0;
+      const notOk = report?.totals?.notOk ?? 0;
+      return output ? formatPercent((notOk / output) * 100) : '0.00%';
+    },
+    totalPercent: '',
+    isPercent: true,
+  },
+];
+
 const dynamicRejectionSummaryRows = [
   {
     label: 'Day wise Total Production',
@@ -306,6 +370,46 @@ const reportTabs = [
             { id: 'totalPercent', label: '%' },
           ],
           rows: rejectionReport.rows,
+        },
+        {
+          id: `d${line}-helmet-assembly-ok`,
+          line,
+          type: 'drr',
+          metric: 'ok',
+          name: `D${line} - Helmet Assembly OK`,
+          sourceFileName: `${drrReport.sourceFileName} / OK`,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: okCountSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: [],
+        },
+        {
+          id: `d${line}-helmet-assembly-not-ok`,
+          line,
+          type: 'drr',
+          metric: 'notOk',
+          name: `D${line} - Helmet Assembly Not OK`,
+          sourceFileName: `${drrReport.sourceFileName} / Not OK`,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: notOkCountSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: [],
         }
       ]),
     ],
@@ -816,6 +920,8 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
         ? backendDay?.rejectionAndRework ?? rejected + toNumber(backendDay?.rework)
         : backendDay?.rejection;
     const rework = toNumber(backendDay?.rework ?? 0);
+    const ok = toNumber(backendDay?.ok ?? 0);
+    const notOk = toNumber(backendDay?.notOk ?? 0);
     const rejection = hasRowOverrides ? rowRejection : toNumber(backendRejection ?? rowRejection);
     return {
       output,
@@ -823,12 +929,14 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
       rejection,
       rejectionPercent: output ? Number(((rejection / output) * 100).toFixed(2)) : 0,
       rework,
-      reworkPercent: output ? Number(((rework / output) * 100).toFixed(2)) : 0
+      reworkPercent: output ? Number(((rework / output) * 100).toFixed(2)) : 0,
+      ok,
+      notOk
     };
   });
   const totals = days.reduce(
-    (acc, day) => ({ output: acc.output + day.output, rejection: acc.rejection + day.rejection, rework: acc.rework + day.rework }),
-    { output: 0, rejection: 0, rework: 0 }
+    (acc, day) => ({ output: acc.output + day.output, rejection: acc.rejection + day.rejection, rework: acc.rework + day.rework, ok: acc.ok + day.ok, notOk: acc.notOk + day.notOk }),
+    { output: 0, rejection: 0, rework: 0, ok: 0, notOk: 0 }
   );
   totals.rejectionPercent = totals.output
     ? Number(((totals.rejection / totals.output) * 100).toFixed(2))
@@ -887,9 +995,11 @@ const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = [], metr
     (acc, day) => ({
       output: acc.output + day.output,
       rejection: acc.rejection + day.rejection,
-      rework: acc.rework + toNumber(day.rework)
+      rework: acc.rework + toNumber(day.rework),
+      ok: acc.ok + toNumber(day.ok),
+      notOk: acc.notOk + toNumber(day.notOk)
     }),
-    { output: 0, rejection: 0, rework: 0 }
+    { output: 0, rejection: 0, rework: 0, ok: 0, notOk: 0 }
   );
   totals.rejectionPercent = totals.output ? Number(((totals.rejection / totals.output) * 100).toFixed(2)) : 0;
   totals.reworkPercent = totals.output ? Number(((totals.rework / totals.output) * 100).toFixed(2)) : 0;
@@ -967,7 +1077,9 @@ const buildEditableRejectionReport = (report, overrides, dayColumnsForReport) =>
       day: Number(column.id.slice(-2)) || index + 1,
       output,
       rejection,
-      rejectionPercent: output ? Number(((rejection / output) * 100).toFixed(2)) : 0
+      rejectionPercent: output ? Number(((rejection / output) * 100).toFixed(2)) : 0,
+      ok: toNumber(baseDay.ok),
+      notOk: toNumber(baseDay.notOk)
     };
   });
 
@@ -1703,7 +1815,9 @@ const AdminDashboard = ({
     const createDynamicReports = ({ baseId, baseName, sourceFileName }) => ([
       { suffix: '', label: 'DRR', metric: 'rejectionAndRework', summaryRows: drrSummaryRows },
       { suffix: '-rejection', label: 'Rejection', metric: 'rejection', summaryRows: dynamicRejectionSummaryRows },
-      { suffix: '-rework', label: 'Rework', metric: 'rework', summaryRows: dynamicReworkSummaryRows }
+      { suffix: '-rework', label: 'Rework', metric: 'rework', summaryRows: dynamicReworkSummaryRows },
+      { suffix: '-ok', label: 'OK', metric: 'ok', summaryRows: okCountSummaryRows },
+      { suffix: '-not-ok', label: 'Not OK', metric: 'notOk', summaryRows: notOkCountSummaryRows }
     ].map((item) => ({
       id: `${baseId}${item.suffix}`,
       sourceReportId: `${baseId}${item.suffix}`,
@@ -2024,20 +2138,26 @@ const AdminDashboard = ({
             day: day.day,
             output: day.output,
             rejection: day[metricKey],
-            rejectionPercent: day.output ? Number(((day[metricKey] || 0) / day.output * 100).toFixed(2)) : 0
+            rejectionPercent: day.output ? Number(((day[metricKey] || 0) / day.output * 100).toFixed(2)) : 0,
+            ok: day.ok,
+            notOk: day.notOk
           })),
           daysById: backendReport.days.reduce((acc, day) => {
             acc[`day-${String(day.day).padStart(2, '0')}`] = {
               output: day.output,
               rejection: day[metricKey],
-              rejectionPercent: day.output ? Number(((day[metricKey] || 0) / day.output * 100).toFixed(2)) : 0
+              rejectionPercent: day.output ? Number(((day[metricKey] || 0) / day.output * 100).toFixed(2)) : 0,
+              ok: day.ok,
+              notOk: day.notOk
             };
             return acc;
           }, {}),
           totals: {
             output: backendReport.totals.output,
             rejection: backendReport.totals[metricKey],
-            rejectionPercent: backendReport.totals.output ? Number(((backendReport.totals[metricKey] || 0) / backendReport.totals.output * 100).toFixed(2)) : 0
+            rejectionPercent: backendReport.totals.output ? Number(((backendReport.totals[metricKey] || 0) / backendReport.totals.output * 100).toFixed(2)) : 0,
+            ok: backendReport.totals.ok,
+            notOk: backendReport.totals.notOk
           }
         } : {}),
         rows: backendRows

@@ -1,7 +1,5 @@
 import axios from 'axios';
-//const API_URL = "https://inventory-pro-backend-1.onrender.com/api";
-//const API_URL = "http://localhost:5000/api";
-const API_URL = "https://inventory-management-backend-k76m.onrender.com/api";
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 // Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
@@ -116,7 +114,7 @@ export const productAPI = {
 export const roleAPI = {
   getAll: () => api.get('/roles'),
   getById: (id) => api.get(`/roles/${id}`),
-  getPermissionTree: () => api.get('/roles/permission-tree'),
+  getPermissionTree: (stageType = 'stages') => api.get(`/roles/permission-tree?stageType=${stageType}`),
   create: (data) => api.post('/roles', data),
   update: (id, data) => api.put(`/roles/${id}`, data),
   delete: (id) => api.delete(`/roles/${id}`),
@@ -193,6 +191,13 @@ export const employeeAPI = {
   updateSalesTarget: (id, target) => api.put(`/employees/target/${id}`, { target }),
   resetSalesCount: (id) => api.post(`/employees/reset-count/${id}`),
   getEmployeeProfile: () => api.get('/employees/profile'),
+};
+
+export const attendanceAPI = {
+  getMyAttendance: (params) => api.get('/attendance/me', { params }),
+  checkIn: () => api.post('/attendance/check-in'),
+  checkOut: () => api.post('/attendance/check-out'),
+  getAdminOverview: (params) => api.get('/attendance/admin/overview', { params }),
 };
 
 // Notification APIs
@@ -299,7 +304,7 @@ export const inspectionAPI = {
   getDashboard: () => api.get('/inspection/employee/dashboard'),
   scan: (qrId) => api.post('/inspection/employee/scan', { qrId }),
   searchProducts: (params) => api.get('/employees/products/search', { params }),
-  lookupBatchProduct: (key) => api.get(`/employees/batch-product/${encodeURIComponent(key)}`),
+  lookupBatchProduct: (key, params) => api.get(`/employees/batch-product/${encodeURIComponent(key)}`, { params }),
   lookupProduct: (code) => api.get(`/employees/product/${encodeURIComponent(code)}`),
   submitEmployeeResponse: (data) => api.post('/employees/inspection-response', data),
   getProductHistory: (itemId) => api.get(`/employees/product-history/${encodeURIComponent(itemId)}`),

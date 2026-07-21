@@ -13,6 +13,10 @@ const normalizeCount = (v) => {
 /**
  * Renders questionnaire UI where every answer type can capture a quantity.
  * Choice fields capture count per selected option; free-form fields capture one count per answer.
+ *
+ * KEY BEHAVIOUR:
+ * - If an option has NO sub-questions → count input is displayed DIRECTLY (always visible, no checkbox needed).
+ * - If an option HAS sub-questions  → a checkbox/radio toggle is shown; ticking it reveals the sub-fields.
  */
 const QuestionCountGrid = ({ forms = [], values, onChange }) => {
   const commitChange = (updater) => {
@@ -177,11 +181,34 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           {question.required && <span className="text-red-500"> *</span>}
         </label>
 
+        {/* ── MULTI-SELECT (checkbox) ────────────────────────────────────────────
+            Rule:
+            • Option has NO sub-questions → show count input directly (always visible).
+            • Option HAS sub-questions    → show checkbox; sub-fields appear when ticked.
+        ──────────────────────────────────────────────────────────────────────── */}
         {hasOptions && !isSingle && (
           <div className="space-y-3">
             {options.map((option) => {
               const optionKey = optionValue(option);
+              const hasSubQuestions = (option.subQuestions || []).length > 0;
               const checked = selected.includes(optionKey);
+
+              // ── Option WITHOUT sub-questions: always show count directly ──────
+              if (!hasSubQuestions) {
+                return (
+                  <div
+                    key={optionKey}
+                    className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/30"
+                  >
+                    <div className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {option.label || option.value}
+                    </div>
+                    <div>{renderOptionDetails(optionKey, option)}</div>
+                  </div>
+                );
+              }
+
+              // ── Option WITH sub-questions: checkbox toggles nested fields ─────
               return (
                 <div key={optionKey} className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/30">
                   <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
@@ -198,11 +225,6 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                     />
                     <div className="flex-1">
                       <div className="font-medium">{option.label || option.value}</div>
-                      {checked && !(option.subQuestions || []).length && (
-                        <div className="mt-2">
-                          {renderOptionDetails(optionKey, option)}
-                        </div>
-                      )}
                       {renderChildQuestions(option, optionKey)}
                     </div>
                   </label>
@@ -212,11 +234,32 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           </div>
         )}
 
+        {/* ── SINGLE-SELECT (radio) ─────────────────────────────────────────────
+            Same rule: no sub-questions → count directly; sub-questions → radio gating.
+        ──────────────────────────────────────────────────────────────────────── */}
         {hasOptions && isSingle && !isSelect && (
           <div className="space-y-2">
             {options.map((option) => {
               const optionKey = optionValue(option);
+              const hasSubQuestions = (option.subQuestions || []).length > 0;
               const checked = selected.includes(optionKey);
+
+              // ── Option WITHOUT sub-questions: always show count directly ──────
+              if (!hasSubQuestions) {
+                return (
+                  <div
+                    key={optionKey}
+                    className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/30"
+                  >
+                    <div className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {option.label || option.value}
+                    </div>
+                    <div>{renderOptionDetails(optionKey, option)}</div>
+                  </div>
+                );
+              }
+
+              // ── Option WITH sub-questions: radio toggles nested fields ────────
               return (
                 <div key={optionKey} className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/30">
                   <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
@@ -229,11 +272,6 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                     />
                     <div className="flex-1">
                       <div className="font-medium">{option.label || option.value}</div>
-                      {checked && !(option.subQuestions || []).length && (
-                        <div className="mt-2">
-                          {renderOptionDetails(optionKey, option)}
-                        </div>
-                      )}
                       {renderChildQuestions(option, optionKey)}
                     </div>
                   </label>
@@ -243,6 +281,11 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           </div>
         )}
 
+        {/* ── DROPDOWN (select) ─────────────────────────────────────────────────
+            Dropdown always shows a <select>. After selection:
+            • Has sub-questions → render sub-question tree.
+            • No sub-questions  → render count input directly.
+        ──────────────────────────────────────────────────────────────────────── */}
         {hasOptions && isSelect && (
           <div className="space-y-3">
             <select
@@ -269,6 +312,9 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           </div>
         )}
 
+        {/* ── NO OPTIONS (free-form / plain parent question) ────────────────────
+            Show count + input directly, no toggle needed.
+        ──────────────────────────────────────────────────────────────────────── */}
         {!hasOptions && (
           <div className="space-y-3">
             {isSubQuestion ? (
