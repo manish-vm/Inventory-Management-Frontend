@@ -251,7 +251,6 @@ const Billing = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-
   // Auto-focus barcode input on mount and when not searching
   useEffect(() => {
     if (!search && barcodeInputRef.current) {

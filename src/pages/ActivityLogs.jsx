@@ -21,6 +21,7 @@ const ActivityLogs = () => {
   }, [pagination.currentPage, filters]);
 
   const fetchLogs = async () => {
+    setLoading(true);
     try {
       const params = {
         page: pagination.currentPage,

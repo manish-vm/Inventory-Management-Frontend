@@ -40,7 +40,7 @@ const ProductMaster = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   /* NEW */
   const [showStageSelector, setShowStageSelector] = useState(false);

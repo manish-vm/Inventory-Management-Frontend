@@ -231,7 +231,24 @@ const QuestionnaireResponseList = ({ items = [], emptyText = '-', tone = 'slate'
   );
 };
 
-const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selected, setSelected }) => {
+const TableLoadingRow = ({ colSpan = 10, text = 'Loading records...' }) => (
+  <tr>
+    <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-500">
+      {text}
+    </td>
+  </tr>
+);
+
+const RecordsLoadingPanel = ({ text = 'Loading records...' }) => (
+  <div className="flex min-h-[320px] items-center justify-center rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="text-center">
+      <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600" />
+      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{text}</p>
+    </div>
+  </div>
+);
+
+const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selected, setSelected, loading }) => {
   const [tableView, setTableView] = useState('summary');
   const exportRows = () => {
     downloadCsv(
@@ -316,10 +333,12 @@ const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selec
           <TabButton active={tableView === 'summary'} onClick={() => setTableView('summary')}>Summary Table</TabButton>
           <TabButton active={tableView === 'details'} onClick={() => setTableView('details')}>Details Table</TabButton>
         </div>
-        {tableView === 'summary' ? (
-          <SummaryTable rows={rows} setSelected={setSelected} />
+        {loading ? (
+          <RecordsLoadingPanel text="Loading inspection responses..." />
+        ) : tableView === 'summary' ? (
+          <SummaryTable rows={rows} setSelected={setSelected} loading={loading} />
         ) : (
-          <OptionDetailsTable rows={rows} setSelected={setSelected} />
+          <OptionDetailsTable rows={rows} setSelected={setSelected} loading={loading} />
         )}
       </section>
 
@@ -328,7 +347,7 @@ const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selec
   );
 };
 
-const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
+const ReportManagement = ({ rows, analytics, selected, setSelected, loading }) => {
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState('ACCEPTED');
   const [tableView, setTableView] = useState('summary');
@@ -455,10 +474,12 @@ const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
           <TabButton active={tableView === 'summary'} onClick={() => setTableView('summary')}>Summary Table</TabButton>
           <TabButton active={tableView === 'details'} onClick={() => setTableView('details')}>Details Table</TabButton>
         </div>
-        {tableView === 'summary' ? (
-          <DetailedStatusTable rows={reportRows} status={status} setSelected={setSelected} />
+        {loading ? (
+          <RecordsLoadingPanel text="Loading report data..." />
+        ) : tableView === 'summary' ? (
+          <DetailedStatusTable rows={reportRows} status={status} setSelected={setSelected} loading={loading} />
         ) : (
-          <OptionDetailsTable rows={reportRows} status={status} setSelected={setSelected} useReportOverall />
+          <OptionDetailsTable rows={reportRows} status={status} setSelected={setSelected} useReportOverall loading={loading} />
         )}
       </section>
 
@@ -467,7 +488,7 @@ const ReportManagement = ({ rows, analytics, selected, setSelected }) => {
   );
 };
 
-const SummaryTable = ({ rows, setSelected }) => (
+const SummaryTable = ({ rows, setSelected, loading }) => (
   <div className="overflow-x-auto">
     <table className="w-full min-w-[1450px] table-fixed">
       <colgroup>
@@ -539,10 +560,12 @@ const SummaryTable = ({ rows, setSelected }) => (
             </td>
           </tr>
         ))}
-        {rows.length === 0 && (
+        {loading ? (
+          <TableLoadingRow colSpan={13} />
+        ) : rows.length === 0 && (
           <tr>
             <td colSpan={13} className="px-4 py-8 text-center text-slate-500">
-              No inspection responses found.
+              No loaded inspection responses match the current filters.
             </td>
           </tr>
         )}
@@ -551,7 +574,7 @@ const SummaryTable = ({ rows, setSelected }) => (
   </div>
 );
 
-const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = false }) => {
+const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = false, loading }) => {
   const detailRows = rows.flatMap((row) => {
     const statuses = status ? [status] : ['REJECTED', 'REWORK'];
     return statuses.flatMap((resultStatus) => {
@@ -621,7 +644,9 @@ const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = fals
               <td className="whitespace-nowrap px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
             </tr>
           ))}
-          {detailRows.length === 0 && (
+          {loading ? (
+            <TableLoadingRow colSpan={11} />
+          ) : detailRows.length === 0 && (
             <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-500">No option or defect details found.</td></tr>
           )}
         </tbody>
@@ -630,7 +655,7 @@ const OptionDetailsTable = ({ rows, status, setSelected, useReportOverall = fals
   );
 };
 
-const DetailedStatusTable = ({ rows, status, setSelected }) => (
+const DetailedStatusTable = ({ rows, status, setSelected, loading }) => (
   <div className="overflow-x-auto">
     <table className="w-full min-w-[1350px] table-fixed">
       <colgroup>
@@ -686,7 +711,9 @@ const DetailedStatusTable = ({ rows, status, setSelected }) => (
             <td className="px-4 py-3 text-sm">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '-'}</td>
           </tr>
         ))}
-        {rows.length === 0 && (
+        {loading ? (
+          <TableLoadingRow colSpan={11} />
+        ) : rows.length === 0 && (
           <tr>
             <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
               No report data found for this filter.
@@ -821,8 +848,11 @@ const AdminResponsesPage = () => {
   const [selected, setSelected] = useState(null);
   const [filters, setFilters] = useState({ search: '', result: '' });
   const [activeTab, setActiveTab] = useState('inspection');
+  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const load = async () => {
+    setLoading(true);
     try {
       const [response, productsResponse] = await Promise.all([
         inspectionAPI.getAdminResponses(filters),
@@ -843,6 +873,9 @@ const AdminResponsesPage = () => {
       setProductCategoryMap(nextCategoryMap);
     } catch (error) {
       toast.error('Failed to load inspection responses');
+    } finally {
+      setHasLoaded(true);
+      setLoading(false);
     }
   };
 
@@ -852,6 +885,10 @@ const AdminResponsesPage = () => {
   }, []);
 
   const rows = useMemo(() => normalizeRows(responses, productCategoryMap), [productCategoryMap, responses]);
+
+  if (!hasLoaded || loading) {
+    return <RecordsLoadingPanel text="Loading inspection responses..." />;
+  }
 
   return (
     <div className="space-y-6">
@@ -873,9 +910,10 @@ const AdminResponsesPage = () => {
           load={load}
           selected={selected}
           setSelected={setSelected}
+          loading={loading}
         />
       ) : (
-        <ReportManagement rows={rows} analytics={analytics} selected={selected} setSelected={setSelected} />
+        <ReportManagement rows={rows} analytics={analytics} selected={selected} setSelected={setSelected} loading={loading} />
       )}
     </div>
   );

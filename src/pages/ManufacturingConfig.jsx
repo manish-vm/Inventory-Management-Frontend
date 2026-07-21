@@ -39,7 +39,7 @@ const ManufacturingConfig = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingConfig, setEditingConfig] = useState(null);
   const [formMode, setFormMode] = useState('stages');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Track which config is selected for the edit choice modal
   const [editChoiceModalConfig, setEditChoiceModalConfig] = useState(null);

@@ -7,7 +7,7 @@ const ScanLogsPage = () => {
   const [details, setDetails] = useState([]);
   const [activeTab, setActiveTab] = useState('summary');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const load = async () => {
