@@ -19,6 +19,7 @@ const RejectionQuestionBuilder = ({
   onSave,
   saving = false,
   saveLabel = 'Save Questionnaire',
+  canSave = true,
   autoOptionGroups = [],
   onCopy,
   copyLabel = ''
@@ -93,7 +94,7 @@ const RejectionQuestionBuilder = ({
         <button
           type="button"
           onClick={onSave}
-          disabled={saving}
+          disabled={saving || !canSave}
           className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
         >
           {saving ? 'Saving...' : saveLabel}

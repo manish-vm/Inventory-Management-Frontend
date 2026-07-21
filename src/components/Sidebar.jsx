@@ -23,7 +23,9 @@ import {
   Scan,
   PieChart,
   UserCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  Clock3,
+  ShieldCheck
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +40,7 @@ const Sidebar = ({ isSuperAdmin }) => {
   const { user, logout, isAdmin, isSuperAdmin: isSA, isEmployee } = useAuth();
   const navigate = useNavigate();
   const { theme } = useTheme();
+  console.log('[Sidebar] user:', user);
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const { isCollapsed, setIsCollapsed } = useSidebar();
@@ -93,6 +96,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     // { path: '/app/refund-requests', icon: RefreshCcw, label: 'Refund Requests', badge: pendingRefundCount },
     // { path: '/app/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/app/admin-employees', icon: Users, label: 'Employees' },
+    { path: '/app/attendance', icon: Clock3, label: 'Attendance' },
     { path: '/app/role-management', icon: UserCheck, label: 'Role Management' },
     { path: '/app/admin/responses', icon: FileText, label: 'Responses' },
     // { path: '/app/reports', icon: BarChart3, label: 'Reports' },
@@ -121,6 +125,8 @@ const Sidebar = ({ isSuperAdmin }) => {
     ] : [
       { path: '/app/employee/scan-logs', icon: FileText, label: 'Scan Logs' },
     ]),
+    ...(user?.assignedFinalStageRole ? [{ path: '/app/employee/final-inspection', icon: ShieldCheck, label: 'Final Inspection' }] : []),
+    { path: '/app/attendance', icon: Clock3, label: 'Attendance' },
     ...(user?.role === 'inspector' ? [] : [{ path: '/app/employee-profile', icon: LayoutDashboard, label: 'Profile' }]),
   ];
 

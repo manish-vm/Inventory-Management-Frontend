@@ -14,16 +14,41 @@ const LABELS = {
   pending: 'Pending'
 };
 
-const ReviewAnalyticsCard = ({ analytics }) => {
-  const totals = {
-    totalItems: Number(analytics?.totalItems || analytics?.total || 0),
-    accepted: Number(analytics?.accepted || 0),
-    rejected: Number(analytics?.rejected || 0),
-    rework: Number(analytics?.rework || 0),
-    pending: Number(analytics?.pending || 0)
-  };
+const ReviewAnalyticsCard = ({ analytics, configurationMode = 'stages' }) => {
+  const totals = configurationMode === 'finalStages'
+    ? {
+        totalItems: Number(analytics?.totalItems || analytics?.total || 0),
+        ok: Number(analytics?.ok || analytics?.accepted || 0),
+        notOk: Number(analytics?.notOk || 0),
+        pending: Number(analytics?.pending || 0)
+      }
+    : {
+        totalItems: Number(analytics?.totalItems || analytics?.total || 0),
+        accepted: Number(analytics?.accepted || 0),
+        rejected: Number(analytics?.rejected || 0),
+        rework: Number(analytics?.rework || 0),
+        pending: Number(analytics?.pending || 0)
+      };
   const total = totals.totalItems;
   const percent = (value, key) => (key === 'totalItems' ? 100 : total > 0 ? Math.round((value / total) * 100) : 0);
+
+  const labels = configurationMode === 'finalStages'
+    ? {
+        totalItems: 'Total Items',
+        ok: 'Total Products OK',
+        notOk: 'Total Products Not OK',
+        pending: 'Pending'
+      }
+    : LABELS;
+
+  const colors = configurationMode === 'finalStages'
+    ? {
+        totalItems: 'bg-slate-500',
+        ok: 'bg-emerald-500',
+        notOk: 'bg-red-500',
+        pending: 'bg-blue-500'
+      }
+    : COLORS;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -44,7 +69,7 @@ const ReviewAnalyticsCard = ({ analytics }) => {
             <div key={key} className="rounded-lg bg-slate-50 p-4 dark:bg-slate-900/60">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{LABELS[key]}</p>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{labels[key]}</p>
                   <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">{value}</p>
                 </div>
                 <span className="rounded-full bg-white px-2 py-1 text-sm font-semibold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">
@@ -52,7 +77,7 @@ const ReviewAnalyticsCard = ({ analytics }) => {
                 </span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                <div className={`h-full rounded-full ${COLORS[key]}`} style={{ width: `${pct}%` }} />
+                <div className={`h-full rounded-full ${colors[key]}`} style={{ width: `${pct}%` }} />
               </div>
             </div>
           );

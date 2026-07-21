@@ -35,8 +35,9 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
     email: employee?.email || '',
     address: employee?.address || '',
     password: '',
-    canLogin: employee?.canLogin || false,
+    canLogin: true,
     assignedRole: employee?.assignedRole?._id || employee?.assignedRole || '',
+    assignedFinalStageRole: employee?.assignedFinalStageRole?._id || employee?.assignedFinalStageRole || '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -54,8 +55,12 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
       setError('Phone number is required');
       return;
     }
-    if (formData.canLogin && !employee && !formData.password) {
-      setError('Password is required when login access is enabled');
+    if (!formData.email.trim()) {
+      setError('Email is required');
+      return;
+    }
+    if (!employee && !formData.password) {
+      setError('Password is required');
       return;
     }
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -66,6 +71,7 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
     try {
       // Only send password if it's filled (for new employees or password changes)
       const dataToSend = { ...formData };
+      delete dataToSend.canLogin;
       if (employee && !formData.password) {
         delete dataToSend.password;
       }
@@ -141,6 +147,7 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
                 placeholder="Enter email address"
+                required
               />
             </div>
           </div>
@@ -163,14 +170,26 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Assigned Role
+              Assigned Role <span className="text-xs text-slate-400">(Stages)</span>
             </label>
             <select value={formData.assignedRole} onChange={(e) => setFormData({ ...formData, assignedRole: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none">
               <option value="">No role assigned</option>
-              {roles.map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
+              {roles.filter((role) => (role.roleFor || 'employee') === 'employee').map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
             </select>
-            <p className="text-xs text-slate-500 mt-1">Optional. The admin can assign or change this role later.</p>
-            {roles.length === 0 && <p className="text-xs text-amber-500 mt-1">No roles are available yet. You can create this {label.toLowerCase()} now and assign a role later.</p>}
+            <p className="text-xs text-slate-500 mt-1">Controls access to regular stages.</p>
+            {roles.filter((role) => (role.roleFor || 'employee') === 'employee').length === 0 && <p className="text-xs text-amber-500 mt-1">No stages roles available. Create one in Role Management first.</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Final Stages Role
+            </label>
+            <select value={formData.assignedFinalStageRole} onChange={(e) => setFormData({ ...formData, assignedFinalStageRole: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="">No final stages role</option>
+              {roles.filter((role) => role.roleFor === 'finalStages').map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">Optional. Controls access to final stages.</p>
+            {roles.filter((role) => role.roleFor === 'finalStages').length === 0 && <p className="text-xs text-amber-500 mt-1">No final stages roles available. Create one in Role Management first.</p>}
           </div>
 
           {/* Login Access Section */}
@@ -512,7 +531,8 @@ const AdminEmployees = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Phone</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Email</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Address</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Role</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Stage Role</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Final Role</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Status</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">Actions</th>
                 </tr>
@@ -550,7 +570,12 @@ const AdminEmployees = () => {
                     </td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
                       <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                        {employee.assignedRole?.roleName || 'No role assigned'}
+                        {employee.assignedRole?.roleName || 'No role'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${employee.assignedFinalStageRole ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                        {employee.assignedFinalStageRole?.roleName || 'No role'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -608,7 +633,7 @@ const AdminEmployees = () => {
       {showModal && (
         <EmployeeModal
           employee={editingEmployee}
-          roles={roles.filter((role) => (role.roleFor || 'employee') === activeTab)}
+          roles={activeTab === 'employee' ? roles : roles.filter((role) => (role.roleFor || 'employee') === activeTab)}
           personType={activeTab}
           onClose={() => {
             setShowModal(false);

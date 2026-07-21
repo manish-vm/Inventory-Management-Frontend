@@ -58,7 +58,7 @@ const deriveSelectedCounts = (values = {}) => {
   return optionTotal + freeFormTotal;
 };
 
-const QRScannerPage = () => {
+const FinalInspectionPage = () => {
   const { user } = useAuth();
   const { themeFactory } = useTheme();
   const [search, setSearch] = useState('');
@@ -73,8 +73,7 @@ const QRScannerPage = () => {
   const [reworkValues, setReworkValues] = useState({});
   const [counts, setCounts] = useState({ accepted: 0, rejected: 0, rework: 0 });
   const [activeQuantityMode, setActiveQuantityMode] = useState(null);
-  const [selectedInspectionType, setSelectedInspectionType] = useState(null); // 'rejected' | 'rework' | null
-
+  const [selectedInspectionType, setSelectedInspectionType] = useState(null);
 
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
@@ -110,7 +109,6 @@ const QRScannerPage = () => {
     Number(totalRejectedDerived || 0) +
     Number(totalReworkDerived || 0);
 
-
   const quantityError =
     !isOpenIntakeStage && totalEntered > availableCount
       ? `Accepted + Rejected + Rework counts cannot exceed the available quantity.`
@@ -120,8 +118,6 @@ const QRScannerPage = () => {
 
   useEffect(() => {
     const q = search.trim();
-
-    // The search input always remains product-only, including after a product is loaded.
     const handle = setTimeout(async () => {
       if (!q && !dropdownOpen) {
         setSuggestions([]);
@@ -131,11 +127,11 @@ const QRScannerPage = () => {
       try {
         setSuggestionsLoading(true);
         setSuggestionsError('');
-        const response = await inspectionAPI.searchProducts({ q });
+        const response = await inspectionAPI.searchProducts({ q, finalStage: true });
         setSuggestions(response.data || []);
       } catch (error) {
         setSuggestions([]);
-        setSuggestionsError(!user?.assignedRole ? 'No role has been assigned yet' : (error.response?.data?.message || 'Unable to load assigned products'));
+        setSuggestionsError(!user?.assignedFinalStageRole ? 'No final stage role has been assigned yet' : (error.response?.data?.message || 'Unable to load assigned products'));
       } finally {
         setSuggestionsLoading(false);
       }
@@ -160,7 +156,7 @@ const QRScannerPage = () => {
     if (!key) return;
     setLoading(true);
     try {
-      const response = await inspectionAPI.lookupBatchProduct(key);
+      const response = await inspectionAPI.lookupBatchProduct(key, { finalStage: true });
       setLookupData(response.data);
 
       const backendCurrentStageNumber =
@@ -220,42 +216,28 @@ const QRScannerPage = () => {
     }
 
     try {
-      const [inspectionRes, rejectionRes, reworkRes] = await Promise.all([
+      const [rejectionRes, reworkRes] = await Promise.all([
         inspectionAPI.getFormsByStage(stageNumber, {
           code: product.code,
           productName: product.productName,
-          formType: 'inspection'
+          formType: 'rejection',
+          finalStage: true
         }),
         inspectionAPI.getFormsByStage(stageNumber, {
           code: product.code,
           productName: product.productName,
-          formType: 'rejection'
-        }),
-        inspectionAPI.getFormsByStage(stageNumber, {
-          code: product.code,
-          productName: product.productName,
-          formType: 'rework'
+          formType: 'rework',
+          finalStage: true
         })
       ]);
 
       setLookupData((current) => {
         const next = {
           ...current,
-          forms: inspectionRes.data || [],
+          forms: [],
           rejectionForms: rejectionRes.data || current?.rejectionForms || [],
           reworkForms: reworkRes.data || current?.reworkForms || []
         };
-
-        // Debugging requirements
-        console.log('Stage Data', {
-          stageNumber,
-          rejectionForms: next.rejectionForms,
-          reworkForms: next.reworkForms
-        });
-        console.log('Rejection Form', next.rejectionForms);
-        console.log('Rework Form', next.reworkForms);
-
-
         return next;
       });
 
@@ -282,7 +264,6 @@ const QRScannerPage = () => {
       return;
     }
 
-
     if (totalRejectedDerived > 0 && missingDefectDetailForCount(rejectionValues)) {
       toast.error('Enter a reject count for the selected reason details');
       return;
@@ -292,7 +273,6 @@ const QRScannerPage = () => {
       toast.error('Enter a rework count for the selected reason details');
       return;
     }
-
 
     setSubmitting(true);
     try {
@@ -311,16 +291,16 @@ const QRScannerPage = () => {
         partName: selectedStage.partName || product.partDescription || product.productName || '',
         acceptedCount: lookupData?.forms?.length && Object.keys(inspectionValues).length ? totalAcceptedDerived : Number(counts.accepted || 0),
         rejectedCount: totalRejectedDerived > 0 ? totalRejectedDerived : Number(counts.rejected || 0),
-        reworkCount: totalReworkDerived > 0 ? totalReworkDerived : Number(counts.rework || 0),
+        reworkCount: 0,
         inspectionFormResponses: Object.values(inspectionValues),
         rejectionFormResponses: Object.values(rejectionValues),
-        reworkFormResponses: Object.values(reworkValues),
-
+        reworkFormResponses: [],
+        finalStage: true,
         remarks,
         submittedAt: new Date().toISOString()
       });
 
-      toast.success('Batch inspection submitted');
+      toast.success('Final inspection submitted');
       setInspectionValues({});
       setRejectionValues({});
       setReworkValues({});
@@ -329,7 +309,7 @@ const QRScannerPage = () => {
       setSelectedInspectionType(null);
       await loadProduct(product.productName || product.code, { showToast: false });
     } catch (error) {
-      toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to submit inspection');
+      toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to submit final inspection');
     } finally {
       setSubmitting(false);
     }
@@ -354,9 +334,9 @@ const QRScannerPage = () => {
           <p className={`text-sm font-semibold uppercase tracking-wide ${themeFactory.classFor('heroEyebrow')}`}>
             Manufacturing Execution System
           </p>
-          <h1 className="mt-2 text-2xl font-bold">Product-Based Inspection</h1>
+          <h1 className="mt-2 text-2xl font-bold">Final Inspection</h1>
           <p className={`mt-1 max-w-3xl ${themeFactory.classFor('heroBody')}`}>
-            Enter the product name, choose your working stage, and submit accepted, rejected, and rework quantities after external inspection.
+            Enter the product name, choose your working stage, and submit final inspection results.
           </p>
         </div>
 
@@ -389,11 +369,8 @@ const QRScannerPage = () => {
               }}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter') return;
-
-
                 const q = search.trim();
                 if (!q) return;
-
                 loadProduct(q);
               }}
               placeholder="Search or select product"
@@ -421,7 +398,7 @@ const QRScannerPage = () => {
                   </div>
                 ) : suggestions.length === 0 ? (
                   <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                    {!user?.assignedRole ? 'No role has been assigned yet' : (search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your role.')}
+                    {!user?.assignedFinalStageRole ? 'No final stage role has been assigned yet' : (search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your final stage role.')}
                   </div>
                 ) : suggestions.map((item) => (
                     <button
@@ -450,11 +427,10 @@ const QRScannerPage = () => {
             onClick={() => {
               const q = search.trim();
               if (!q) return;
-
               loadProduct(q);
             }}
             disabled={loading}
-            className="mt-3 rounded-lg bg-sky-700 px-5 py-2 font-medium text-white hover:bg-sky-800 disabled:opacity-60"
+            className="mt-3 rounded-lg bg-emerald-700 px-5 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
           >
             {loading ? 'Searching...' : 'Proceed'}
           </button>
@@ -489,18 +465,18 @@ const QRScannerPage = () => {
                     aria-pressed={isSelected}
                     className={`rounded-lg border p-3 text-left text-sm transition ${
                       isSelected
-                        ? 'border-sky-700 bg-sky-700 text-white shadow-md ring-2 ring-sky-300 ring-offset-2 dark:border-sky-400 dark:bg-sky-600 dark:ring-sky-700 dark:ring-offset-slate-800'
+                        ? 'border-emerald-700 bg-emerald-700 text-white shadow-md ring-2 ring-emerald-300 ring-offset-2 dark:border-emerald-400 dark:bg-emerald-600 dark:ring-emerald-700 dark:ring-offset-slate-800'
                         : stage.selectable
-                          ? 'border-slate-300 bg-white text-slate-800 hover:border-sky-500 hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-sky-500 dark:hover:bg-sky-900/20'
+                          ? 'border-slate-300 bg-white text-slate-800 hover:border-emerald-500 hover:bg-emerald-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20'
                         : 'border-slate-200 bg-slate-100 text-slate-400 opacity-45 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-500'
                     } disabled:cursor-not-allowed`}
                   >
-                    <span className={`block text-xs uppercase ${isSelected ? 'text-sky-100' : 'text-slate-500'}`}>
+                    <span className={`block text-xs uppercase ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
                       Stage {stage.stageNumber}{isSelected ? ' - Selected' : ''}
                     </span>
                     <span className="font-semibold">{stage.stageName}</span>
                     {Number(stage.stageNumber) > 1 && stage.availableCount !== undefined && (
-                      <span className={`mt-1 block text-xs ${isSelected ? 'text-sky-100' : 'text-slate-500'}`}>
+                      <span className={`mt-1 block text-xs ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
                         {Number(stage.availableCount || 0)} available
                       </span>
                     )}
@@ -532,14 +508,8 @@ const QRScannerPage = () => {
               onChangeInspection={setInspectionValues}
               onChangeRejection={setRejectionValues}
               onChangeRework={setReworkValues}
+              finalStage={true}
             />
-
-            {/** Dynamic rejection/rework forms are managed via derived totals.
-             * Clicking the Rejected/Rework quantity tiles inside InspectionResponseSection will activate the mode.
-             * This page renders the grids when there is at least one selection/count OR derived totals are non-zero.
-             */}
-
-
           </>
         )}
       </div>
@@ -547,4 +517,4 @@ const QRScannerPage = () => {
   );
 };
 
-export default QRScannerPage;
+export default FinalInspectionPage;

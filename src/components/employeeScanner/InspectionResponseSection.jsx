@@ -8,6 +8,11 @@ const fields = [
   { key: 'rework', label: 'Rework Items', icon: RotateCcw, tone: 'amber' }
 ];
 
+const finalFields = [
+  { key: 'accepted', label: 'OK Items', icon: CheckCircle2, tone: 'emerald' },
+  { key: 'rejected', label: 'Not OK Items', icon: XCircle, tone: 'red' }
+];
+
 const toneClasses = {
   emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300',
   red: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300',
@@ -28,24 +33,23 @@ const InspectionResponseSection = ({
   derivedTotals,
   selectedInspectionType,
   setSelectedInspectionType,
+  inspectionForms = [],
   rejectionForms = [],
   reworkForms = [],
+  valuesWrapperInspection = {},
   valuesWrapperRejection = {},
   valuesWrapperRework = {},
+  onChangeInspection,
   onChangeRejection,
-  onChangeRework
+  onChangeRework,
+  finalStage = false
 }) => {
-  const [activeMode, setActiveMode] = useState(null); // 'accepted' | 'rejected' | 'rework'
+  const [activeMode, setActiveMode] = useState(null);
+  const activeFields = finalStage ? finalFields : fields;
 
+  const acceptedDerived = Number(derivedTotals?.accepted || 0);
   const rejectedDerived = Number(derivedTotals?.rejected || 0);
   const reworkDerived = Number(derivedTotals?.rework || 0);
-
-  // Required debug logs
-  useEffect(() => {
-    console.log('Rejection Form', rejectionForms);
-    console.log('Rework Form', reworkForms);
-  }, [rejectionForms, reworkForms]);
-
 
   useEffect(() => {
     if (!activeMode) return;
@@ -57,17 +61,19 @@ const InspectionResponseSection = ({
     return counts?.[activeMode] ?? 0;
   }, [activeMode, counts]);
 
+  const sectionTitle = finalStage ? 'Final Quantity Breakdown' : 'Quantity Breakdown';
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Quantity Breakdown</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{sectionTitle}</h2>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {fields.map((field) => {
+      <div className={`grid gap-4 ${finalStage ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
+        {activeFields.map((field) => {
           const Icon = field.icon;
           const value = Number(counts?.[field.key] || 0);
-          const derivedLabel = field.key === 'rejected' ? rejectedDerived : field.key === 'rework' ? reworkDerived : value;
+          const derivedLabel = field.key === 'accepted' && inspectionForms?.length ? acceptedDerived : field.key === 'rejected' ? rejectedDerived : field.key === 'rework' ? reworkDerived : value;
           const active = activeMode === field.key;
 
           return (
@@ -78,13 +84,15 @@ const InspectionResponseSection = ({
                 const nextMode = activeMode === field.key ? null : field.key;
                 setActiveMode(nextMode);
                 if (field.key === 'accepted') {
-                  setSelectedInspectionType(null);
-                  setCounts((prev) => {
-                    const next = { ...prev };
-                    const current = Number(next[field.key] || 0);
-                    if (current <= 0) next[field.key] = 1;
-                    return next;
-                  });
+                  setSelectedInspectionType(inspectionForms?.length ? 'accepted' : null);
+                  if (!inspectionForms?.length) {
+                    setCounts((prev) => {
+                      const next = { ...prev };
+                      const current = Number(next[field.key] || 0);
+                      if (current <= 0) next[field.key] = 1;
+                      return next;
+                    });
+                  }
                 } else if (field.key === 'rejected') {
                   setSelectedInspectionType('rejected');
                 } else if (field.key === 'rework') {
@@ -108,9 +116,22 @@ const InspectionResponseSection = ({
         })}
       </div>
 
+      {selectedInspectionType === 'accepted' && inspectionForms && inspectionForms.length > 0 && (
+          <div className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300 mt-4 p-4 rounded-lg">
+          <h3 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">{finalStage ? 'OK details' : 'Accepted details'}</h3>
+            <div className="space-y-4">
+              <QuestionCountGrid
+                forms={inspectionForms}
+                values={valuesWrapperInspection}
+                onChange={onChangeInspection}
+              />
+            </div>
+        </div>
+      )}
+
       {selectedInspectionType === 'rejected' && (
           <div className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300 mt-4 p-4 rounded-lg">
-          <h3 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-300">Rejected reasons</h3>
+          <h3 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-300">{finalStage ? 'Not OK reasons' : 'Rejected reasons'}</h3>
 
           {rejectionForms && rejectionForms.length > 0 ? (
             <div className="space-y-4">
@@ -123,7 +144,7 @@ const InspectionResponseSection = ({
           ) : (
 
             <div className="rounded-md border border-dashed border-red-300 bg-red-50/30 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/10 dark:text-red-200">
-              No rejection form configured for this stage.
+              No {finalStage ? 'Not OK' : 'rejection'} form configured for this stage.
             </div>
           )}
 
@@ -131,7 +152,7 @@ const InspectionResponseSection = ({
         </div>
       )}
 
-      {selectedInspectionType === 'rework' && (
+      {!finalStage && selectedInspectionType === 'rework' && (
         <div className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300 mt-4 p-4 rounded-lg">
           <h3 className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-300">Rework reasons</h3>
 
@@ -152,9 +173,9 @@ const InspectionResponseSection = ({
       )}
 
 
-      {activeMode === 'accepted' && (
+      {activeMode === 'accepted' && (!inspectionForms || inspectionForms.length === 0) && (
         <div className="border-emerald-200 bg-emerald-100 text-emerald-500 dark:border-emerald-900 dark:bg-emerald-800/20 dark:text-emerald-300 mt-5 p-4 rounded-lg">
-          <div className="mb-2 text-sm font-semibold  dark:text-green-500">Accepted quantity</div>
+          <div className="mb-2 text-sm font-semibold dark:text-green-500">{finalStage ? 'OK quantity' : 'Accepted quantity'}</div>
           <input
             type="number"
             min="0"
@@ -194,10 +215,10 @@ const InspectionResponseSection = ({
         onClick={() => {
           if (!submitting) onSubmit();
         }}
-        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-sky-700 px-5 py-2.5 font-medium text-white hover:bg-sky-800 disabled:opacity-60 disabled:cursor-not-allowed"
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 font-medium text-white hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <Send className="h-4 w-4" />
-        {submitting ? 'Submitting...' : 'Submit Inspection'}
+        {submitting ? 'Submitting...' : 'Submit Final Inspection'}
       </button>
     </section>
   );

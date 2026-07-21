@@ -1,27 +1,34 @@
-import { useEffect, useState } from 'react';
-import { ArrowRight, Edit, Plus, PlusCircle, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, ChevronDown, Edit, Plus, PlusCircle, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { manufacturingConfigAPI, processingStageAPI, productAPI } from '../api/api';
 
 import toast from 'react-hot-toast';
 
-const generateId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
-
 const getWorkflowType = (stages = []) => `${Math.max(stages.length, 1)}-step`;
 
-const renumberStages = (stages = []) =>
+const renumberStages = (stages = [], startIndex = 1) =>
   stages.map((stage, index) => ({
     ...stage,
-    stageNumber: index + 1,
-    stageName: /^Stage \d+$/.test(stage.stageName || '') ? `Stage ${index + 1}` : stage.stageName,
-    stageType: index === 0 ? 'manufacturing' : stage.stageType || 'processing',
+    stageNumber: startIndex + index,
+    stageName: /^Stage \d+$/.test(stage.stageName || '') ? `Stage ${startIndex + index}` : stage.stageName,
+    stageType: index === 0 && startIndex === 1 ? 'manufacturing' : stage.stageType || 'processing',
     description: stage.description,
     requiresValidation: Boolean(stage.requiresValidation)
   }));
 
 const stripDerivedStageContext = (stages = []) =>
   stages.map(({ productionLine, reportType, processKey, processName, partKey, partName, ...stage }) => stage);
+
+const defaultStageSet = () => [
+  {
+    stageNumber: 1,
+    stageName: 'Manufacturing',
+    stageType: 'manufacturing',
+    requiresValidation: false
+  }
+];
 
 const ManufacturingConfig = () => {
   const navigate = useNavigate();
@@ -31,19 +38,16 @@ const ManufacturingConfig = () => {
   const [reviewStats, setReviewStats] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [editingConfig, setEditingConfig] = useState(null);
+  const [formMode, setFormMode] = useState('stages');
   const [loading, setLoading] = useState(false);
+
+  // Track which config is selected for the edit choice modal
+  const [editChoiceModalConfig, setEditChoiceModalConfig] = useState(null);
 
   const [formData, setFormData] = useState({
     productName: '',
     workflowType: '1-step',
-    stages: [
-      {
-        stageNumber: 1,
-        stageName: 'Manufacturing',
-        stageType: 'manufacturing',
-        requiresValidation: false
-      }
-    ]
+    stages: defaultStageSet()
   });
 
   useEffect(() => {
@@ -81,7 +85,7 @@ const ManufacturingConfig = () => {
 
   const resolveCode = (productName) => {
     const product = products.find((item) => item.productName === productName);
-    return product?.code || product?.code || productName;
+    return product?.code || productName;
   };
 
   const fetchReviewStats = async (nextConfigs = configs, nextProducts = products) => {
@@ -89,7 +93,7 @@ const ManufacturingConfig = () => {
     const entries = await Promise.all(
       (nextConfigs || []).map(async (config) => {
         const product = productLookup.get(config.productName);
-        const code = product?.code || product?.code || config.productName;
+        const code = product?.code || config.productName;
         const stageNumber = config.stages?.[0]?.stageNumber || 1;
 
         try {
@@ -123,28 +127,62 @@ const ManufacturingConfig = () => {
   };
 
   const handleProductChange = (productName) => {
-    setFormData((prev) => ({ ...prev, productName }));
+    const matchedConfig = configs.find((config) => config.productName === productName);
+    const startIndex = formMode === 'finalStages' ? (matchedConfig?.stages?.length || 1) + 1 : 1;
+    const matchedStages =
+      formMode === 'finalStages'
+        ? renumberStages(matchedConfig?.finalStages?.length ? matchedConfig.finalStages : defaultStageSet(), startIndex)
+        : renumberStages(matchedConfig?.stages?.length ? matchedConfig.stages : defaultStageSet());
+
+    setEditingConfig(matchedConfig || null);
+    setFormData((prev) => ({
+      ...prev,
+      productName,
+      workflowType: getWorkflowType(matchedStages),
+      stages: matchedStages
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = {
-        productName: formData.productName,
-        workflowType: getWorkflowType(formData.stages),
-        stages: stripDerivedStageContext(renumberStages(formData.stages))
-      };
+      const matchedConfig =
+        editingConfig ||
+        configs.find((config) => config.productName === formData.productName);
 
-      if (editingConfig) {
-        await manufacturingConfigAPI.update(editingConfig._id, payload);
-        toast.success('Configuration updated successfully');
+      const startIndex = formMode === 'finalStages' ? (matchedConfig?.stages?.length || 1) + 1 : 1;
+      const normalizedStages = stripDerivedStageContext(renumberStages(formData.stages, startIndex));
+      const payload = formMode === 'finalStages'
+        ? {
+            productName: formData.productName,
+            finalStages: normalizedStages
+          }
+        : {
+            productName: formData.productName,
+            workflowType: getWorkflowType(formData.stages),
+            stages: normalizedStages
+          };
+
+
+
+      if (matchedConfig) {
+        await manufacturingConfigAPI.update(matchedConfig._id, payload);
+        toast.success(formMode === 'finalStages' ? 'Final configuration updated successfully' : 'Configuration updated successfully');
       } else {
-        await manufacturingConfigAPI.create(payload);
-        toast.success('Configuration created successfully');
+        await manufacturingConfigAPI.create(
+          formMode === 'finalStages'
+            ? {
+                ...payload,
+                stages: defaultStageSet()
+              }
+            : payload
+        );
+        toast.success(formMode === 'finalStages' ? 'Final configuration created successfully' : 'Configuration created successfully');
       }
 
       setShowForm(false);
       setEditingConfig(null);
+      setFormMode('stages');
       fetchConfigs();
     } catch (error) {
       const message =
@@ -153,12 +191,21 @@ const ManufacturingConfig = () => {
     }
   };
 
-  const handleEdit = (config) => {
+  // Open edit modal for the chosen configuration type (stages or finalStages)
+  const handleEdit = (config, mode = 'stages') => {
     setEditingConfig(config);
+    setFormMode(mode);
+
+    const startIndex = mode === 'finalStages' ? (config.stages?.length || 1) + 1 : 1;
+    const stageSource =
+      mode === 'finalStages'
+        ? renumberStages(config.finalStages?.length ? config.finalStages : defaultStageSet(), startIndex)
+        : renumberStages(config.stages?.length ? config.stages : defaultStageSet());
+
     setFormData({
       productName: config.productName,
-      workflowType: config.workflowType,
-      stages: renumberStages(config.stages)
+      workflowType: getWorkflowType(stageSource),
+      stages: stageSource
     });
     setShowForm(true);
   };
@@ -191,7 +238,9 @@ const ManufacturingConfig = () => {
       }
     });
 
-    const normalizedStages = renumberStages(nextStages);
+    const matchedConfig = editingConfig || configs.find((config) => config.productName === formData.productName);
+    const startIndex = formMode === 'finalStages' ? (matchedConfig?.stages?.length || 1) + 1 : 1;
+    const normalizedStages = renumberStages(nextStages, startIndex);
     setFormData((prev) => ({
       ...prev,
       workflowType: getWorkflowType(normalizedStages),
@@ -202,7 +251,9 @@ const ManufacturingConfig = () => {
   const removeStage = (stageNumber) => {
     if (stageNumber === 1 || formData.stages.length <= 1) return;
 
-    const normalizedStages = renumberStages(formData.stages.filter((s) => s.stageNumber !== stageNumber));
+    const matchedConfig = editingConfig || configs.find((config) => config.productName === formData.productName);
+    const startIndex = formMode === 'finalStages' ? (matchedConfig?.stages?.length || 1) + 1 : 1;
+    const normalizedStages = renumberStages(formData.stages.filter((s) => s.stageNumber !== stageNumber), startIndex);
 
     setFormData((prev) => ({
       ...prev,
@@ -211,47 +262,55 @@ const ManufacturingConfig = () => {
     }));
   };
 
-  const openQuestionnaireReview = (config, stage) => {
+  const openQuestionnaireReview = (config, stage, configurationMode = 'stages') => {
     if (!stage?.stageNumber) return;
 
-    navigate(`/app/manufacturing-config/stages/${stage.stageNumber}/product-review`, {
+    navigate(`/app/manufacturing-config/stages/${stage.stageNumber}/product-review/${configurationMode}`, {
       state: {
         configId: config?._id,
         productName: config?.productName,
         code: resolveCode(config?.productName),
         workflowType: config?.workflowType,
+        configurationMode,
         stage,
-        stages: config?.stages || []
+        stages: configurationMode === 'finalStages' ? (config?.finalStages || []) : (config?.stages || [])
       }
     });
   };
 
-  const renderStageFlow = (config) => (
-    <div className="flex flex-wrap items-center gap-2 max-w-full">
-      {config.stages.map((stage, index) => (
-        <div key={stage.stageNumber} className="flex items-center gap-2 min-w-0">
-          <button
-            type="button"
-            onClick={() => openQuestionnaireReview(config, stage)}
-            className={
-              '\n              max-w-48 truncate\n              px-3 py-2\n              bg-indigo-100\n              text-indigo-700\n              rounded-lg\n              text-sm\n              hover:bg-indigo-200\n              transition-colors\n              font-medium\n            '
-            }
-            title={`Configure Product Review for ${stage.stageName}`}
-          >
-            {stage.stageName}
-          </button>
+  const renderStageFlow = (config, stageSet = 'stages') => {
+    const stages = stageSet === 'finalStages' ? (config.finalStages || []) : (config.stages || []);
+    if (!stages.length) {
+      return <span className="text-sm text-slate-400">-</span>;
+    }
 
-          {index < config.stages.length - 1 && (
-            <ArrowRight
+    return (
+      <div className="flex flex-wrap items-center gap-2 max-w-full">
+        {stages.map((stage, index) => (
+          <div key={stage.stageNumber} className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => openQuestionnaireReview(config, stage, stageSet)}
               className={
-                '\n              w-4 h-4\n              shrink-0\n              text-slate-400\n            '
+                '\n              max-w-48 truncate\n              px-3 py-2\n              bg-indigo-100\n              text-indigo-700\n              rounded-lg\n              text-sm\n              hover:bg-indigo-200\n              transition-colors\n              font-medium\n            '
               }
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
+              title={`Configure Product Review for ${stage.stageName}`}
+            >
+              {stage.stageName}
+            </button>
+
+            {index < stages.length - 1 && (
+              <ArrowRight
+                className={
+                  '\n              w-4 h-4\n              shrink-0\n              text-slate-400\n            '
+                }
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const renderStats = (config) => {
     const stats = reviewStats[config._id] || {};
@@ -278,53 +337,64 @@ const ManufacturingConfig = () => {
   return (
     <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Manufacturing Configuration</h1>
             <p className="text-slate-600 dark:text-slate-400">Configure product workflows (stage 1 is direct)</p>
           </div>
 
-          <button
-            onClick={() => {
-              setShowForm(true);
-              setEditingConfig(null);
-              setFormData({
-                productName: '',
-                workflowType: '1-step',
-                stages: [
-                  {
-                    stageNumber: 1,
-                    stageName: 'Manufacturing',
-                    stageType: 'manufacturing',
-                    requiresValidation: false
-                  }
-                ]
-              });
-            }}
-            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Add Configuration
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => {
+                setShowForm(true);
+                setEditingConfig(null);
+                setFormMode('stages');
+                setFormData({
+                  productName: '',
+                  workflowType: '1-step',
+                  stages: defaultStageSet()
+                });
+              }}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Add Stages Configuration
+            </button>
+            <button
+              onClick={() => {
+                setShowForm(true);
+                setEditingConfig(null);
+                setFormMode('finalStages');
+                setFormData({
+                  productName: '',
+                  workflowType: '1-step',
+                  stages: defaultStageSet()
+                });
+              }}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Add Final Configuration
+            </button>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] table-fixed">
+            <table className="w-full min-w-[1350px] table-fixed">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <th className="w-[20%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Product Name
                   </th>
-                  <th className="w-[12%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <th className="w-[10%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Workflow
                   </th>
-                  <th className="w-[36%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <th className="w-[26%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Stages
                   </th>
-                  {/* <th className="w-[28%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
-                    Stats
-                  </th> */}
-                  <th className="w-[12%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <th className="w-[26%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                    Final
+                  </th>
+                  <th className="w-[10%] px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Actions
                   </th>
                 </tr>
@@ -351,33 +421,41 @@ const ManufacturingConfig = () => {
                         </div>
                       </td>
 
-                       <td className="px-6 py-4 text-sm">
-                         <span
-                           className={
-                             'px-2 py-1 text-xs rounded-full ' +
-                             (config.workflowType === '1-step'
-                               ? 'bg-blue-100 text-blue-700'
-                               : 'bg-purple-100 text-purple-700')
-                           }
-                         >
-                           {getWorkflowType(config.stages)}
-                         </span>
-                       </td>
-                       <td className="px-6 py-4 text-sm align-top">{renderStageFlow(config)}</td>
-                       {/* <td className="px-6 py-4 text-sm align-top">{renderStats(config)}</td> */}
-                       <td className="px-6 py-4">
-                        <div className="flex gap-2">
+                      <td className="px-6 py-4 text-sm">
+                        <span
+                          className={
+                            'px-2 py-1 text-xs rounded-full ' +
+                            (config.workflowType === '1-step'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-purple-100 text-purple-700')
+                          }
+                        >
+                          {getWorkflowType(config.stages)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm align-top">{renderStageFlow(config, 'stages')}</td>
+                      <td className="px-6 py-4 text-sm align-top">{renderStageFlow(config, 'finalStages')}</td>
+
+                      {/* ── Actions column with Edit and Delete ── */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+
+                          {/* Edit button */}
                           <button
-                            onClick={() => handleEdit(config)}
-                            className="p-1 text-primary-600 hover:bg-primary-50 rounded"
                             type="button"
+                            onClick={() => setEditChoiceModalConfig(config)}
+                            className="p-1 text-primary-600 hover:bg-primary-50 rounded dark:hover:bg-primary-900/20"
+                            title="Edit configuration"
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="h-4 w-4" />
                           </button>
+
+                          {/* Delete button */}
                           <button
                             onClick={() => handleDelete(config._id)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            className="p-1 text-red-600 hover:bg-red-50 rounded dark:hover:bg-red-900/20"
                             type="button"
+                            title="Delete configuration"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -392,13 +470,77 @@ const ManufacturingConfig = () => {
         </div>
       </div>
 
+      {/* ── Edit Choice Modal ── */}
+      {editChoiceModalConfig && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-sm overflow-hidden flex flex-col shadow-xl">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Configuration</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Choose which configuration to edit for <span className="font-semibold text-slate-700 dark:text-slate-300">{editChoiceModalConfig.productName}</span>.
+              </p>
+            </div>
+            <div className="p-5 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handleEdit(editChoiceModalConfig, 'stages');
+                  setEditChoiceModalConfig(null);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700 hover:bg-primary-100 hover:text-primary-800 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-900/50"
+              >
+                <Edit className="h-4 w-4" /> Edit Stages
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleEdit(editChoiceModalConfig, 'finalStages');
+                  setEditChoiceModalConfig(null);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+              >
+                <Edit className="h-4 w-4" /> Edit Final Stages
+              </button>
+            </div>
+            <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setEditChoiceModalConfig(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit / Add Modal ── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                {editingConfig ? 'Edit Configuration' : 'Add Configuration'}
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                {editingConfig
+                  ? formMode === 'finalStages'
+                    ? 'Edit Final Configuration'
+                    : 'Edit Configuration'
+                  : formMode === 'finalStages'
+                    ? 'Add Final Configuration'
+                    : 'Add Configuration'}
               </h2>
+              {editingConfig && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Editing&nbsp;
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    {formMode === 'finalStages' ? 'Final Stages' : 'Stages'}
+                  </span>
+                  &nbsp;for&nbsp;
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    {editingConfig.productName}
+                  </span>
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -428,45 +570,45 @@ const ManufacturingConfig = () => {
                         {formData.stages.map((stage, index) => (
                           <div key={stage.stageNumber} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-600">
                             <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
-                              {stage.stageNumber}
-                            </div>
-                            <input
-                              type="text"
-                              value={stage.stageName}
-                              onChange={(e) => {
-                                const nextStages = formData.stages.map((s) =>
-                                  s.stageNumber === stage.stageNumber ? { ...s, stageName: e.target.value } : s
-                                );
-                                setFormData((prev) => ({ ...prev, stages: nextStages }));
-                              }}
-                              required
-                              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-                              placeholder={`Stage ${stage.stageNumber} name`}
-                            />
-                            <div className="flex shrink-0 items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => insertStageAfter(stage.stageNumber)}
-                                disabled={formData.stages.length >= 10}
-                                className="rounded-lg p-2 text-primary-600 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-primary-900/20"
-                                aria-label={`Add stage after stage ${stage.stageNumber}`}
-                                title="Add stage after this"
-                              >
-                                <PlusCircle className="h-4 w-4" />
-                              </button>
-                              {index > 0 && (
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
+                                {stage.stageNumber}
+                              </div>
+                              <input
+                                type="text"
+                                value={stage.stageName}
+                                onChange={(e) => {
+                                  const nextStages = formData.stages.map((s) =>
+                                    s.stageNumber === stage.stageNumber ? { ...s, stageName: e.target.value } : s
+                                  );
+                                  setFormData((prev) => ({ ...prev, stages: nextStages }));
+                                }}
+                                required
+                                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                                placeholder={`Stage ${stage.stageNumber} name`}
+                              />
+                              <div className="flex shrink-0 items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => removeStage(stage.stageNumber)}
-                                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                  aria-label={`Remove stage ${stage.stageNumber}`}
-                                  title="Remove this stage"
+                                  onClick={() => insertStageAfter(stage.stageNumber)}
+                                  disabled={formData.stages.length >= 10}
+                                  className="rounded-lg p-2 text-primary-600 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-primary-900/20"
+                                  aria-label={`Add stage after stage ${stage.stageNumber}`}
+                                  title="Add stage after this"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <PlusCircle className="h-4 w-4" />
                                 </button>
-                              )}
-                            </div>
+                                {index > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeStage(stage.stageNumber)}
+                                    className="rounded-lg p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    aria-label={`Remove stage ${stage.stageNumber}`}
+                                    title="Remove this stage"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -516,7 +658,10 @@ const ManufacturingConfig = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    setShowForm(false);
+                    setFormMode('stages');
+                  }}
                   className="flex-1 px-4 py-2 bg-slate-300 text-slate-700 rounded-lg hover:bg-slate-400"
                 >
                   Cancel
