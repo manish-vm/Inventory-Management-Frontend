@@ -338,7 +338,7 @@ const ProductReviewConfig = () => {
               reviewForm: {
                 formId: `stage-${stage.stageNumber}-admin`,
                 formName: `${stage.stageName} Inspection Form`,
-                questions: configurationMode === 'finalStages' ? [] : (stage.reviewForm?.questions || []),
+                questions: stage.reviewForm?.questions || [],
                 rejectionForm: {
                   formId: `stage-${stage.stageNumber}-rejection-admin`,
                   formName: configurationMode === 'finalStages' ? `${stage.stageName} Not OK Form` : `${stage.stageName} Rejection Analysis Form`,

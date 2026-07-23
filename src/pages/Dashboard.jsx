@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, Download, FileSpreadsheet, Search, User } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import * as XLSX from 'xlsx-js-style';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -900,7 +900,7 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
       subQuestionPath,
       hasSubQuestion: hasQuestionnaireSubDetail(backendRow),
       stageName: backendRow.stageName || '',
-      assemblyProcess: backendRow.questionAnswer || backendRow.assemblyProcess || backendReport.processName || '',
+      assemblyProcess: backendRow.assemblyProcess || backendRow.questionAnswer || backendReport.processName || '',
       partDetails: backendRow.partName || backendReport.partName || '',
       defectDetails: defectDetails || backendRow.defectName || 'Unspecified',
       drrRowKey: rowKey,
@@ -1550,6 +1550,7 @@ const AdminDashboard = ({
   showInspectionReports = true,
 }) => {
   const now = new Date();
+  const [searchParams] = useSearchParams();
   const [activeDashboardFamilyId, setActiveDashboardFamilyId] = useState(dashboardReportFamilies[0].id);
   const [activeInspectionFamilyId, setActiveInspectionFamilyId] = useState(inspectionReportFamilies[0].id);
   const [activeShellInspectionGroupId, setActiveShellInspectionGroupId] = useState(shellInspectionGroups[0].id);
@@ -1560,6 +1561,8 @@ const AdminDashboard = ({
   const [activeD1VmBaseId, setActiveD1VmBaseId] = useState(d1VmBaseInspectionReports[0].id);
   const [activeReportId, setActiveReportId] = useState(reportTabs[0].id);
   const [activeSubReportId, setActiveSubReportId] = useState(reportTabs[0].subReports[0].id);
+  const [stagesActiveCategoryId, setStagesActiveCategoryId] = useState(null);
+  const [finalStagesActiveCategoryId, setFinalStagesActiveCategoryId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [reportScrollMode, setReportScrollMode] = useState('calendar');
   const [reportMonth, setReportMonth] = useState(now.getMonth() + 1);
@@ -1887,9 +1890,149 @@ const AdminDashboard = ({
     }
     return report;
   }), [availableStaticReportTabs, dynamicMisCrsSubReports]);
+  const stagesDynamicTab = useMemo(() => {
+    const stagesSubReports = reportableCategories.flatMap((category) => {
+      const categoryId = String(category._id);
+      const subcategories = productSubcategories.filter((subcategory) =>
+        String(subcategory.category?._id || subcategory.category || '') === categoryId
+          && !isGeneratedDashboardSubcategory(subcategory)
+      );
+      const targets = subcategories.length
+        ? subcategories.map((subcategory) => ({
+            baseId: `product-subcategory-${String(subcategory._id)}`,
+            name: `${category.name} - ${subcategory.name}`,
+            sourceFileName: `${category.name} / ${subcategory.name}`
+          }))
+        : [{
+            baseId: `product-category-${categoryId}-all`,
+            name: category.name,
+            sourceFileName: category.name
+          }];
+      return targets.flatMap((target) => [
+        {
+          id: `${target.baseId}-rejection`,
+          sourceReportId: `${target.baseId}-rejection`,
+          type: 'drr',
+          metric: 'rejection',
+          name: `${target.name} Rejected`,
+          sourceFileName: target.sourceFileName,
+          categoryName: category.name,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: dynamicRejectionSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: []
+        },
+        {
+          id: `${target.baseId}-rework`,
+          sourceReportId: `${target.baseId}-rework`,
+          type: 'drr',
+          metric: 'rework',
+          name: `${target.name} Rework`,
+          sourceFileName: target.sourceFileName,
+          categoryName: category.name,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: dynamicReworkSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: []
+        }
+      ]);
+    });
+    return {
+      id: 'stages',
+      name: 'Stages',
+      dynamic: true,
+      subReports: stagesSubReports
+    };
+  }, [productSubcategories, reportableCategories]);
+  const finalStagesDynamicTab = useMemo(() => {
+    const finalStagesSubReports = reportableCategories.flatMap((category) => {
+      const categoryId = String(category._id);
+      const subcategories = productSubcategories.filter((subcategory) =>
+        String(subcategory.category?._id || subcategory.category || '') === categoryId
+          && !isGeneratedDashboardSubcategory(subcategory)
+      );
+      const targets = subcategories.length
+        ? subcategories.map((subcategory) => ({
+            baseId: `product-subcategory-${String(subcategory._id)}`,
+            name: `${category.name} - ${subcategory.name}`,
+            sourceFileName: `${category.name} / ${subcategory.name}`
+          }))
+        : [{
+            baseId: `product-category-${categoryId}-all`,
+            name: category.name,
+            sourceFileName: category.name
+          }];
+      return targets.flatMap((target) => [
+        {
+          id: `${target.baseId}-ok`,
+          sourceReportId: `${target.baseId}-ok`,
+          type: 'drr',
+          metric: 'ok',
+          name: `${target.name} OK`,
+          sourceFileName: target.sourceFileName,
+          categoryName: category.name,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: okCountSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: []
+        },
+        {
+          id: `${target.baseId}-not-ok`,
+          sourceReportId: `${target.baseId}-not-ok`,
+          type: 'drr',
+          metric: 'notOk',
+          name: `${target.name} Not OK`,
+          sourceFileName: target.sourceFileName,
+          categoryName: category.name,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: notOkCountSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: []
+        }
+      ]);
+    });
+    return {
+      id: 'finalStages',
+      name: 'Final Stages',
+      dynamic: true,
+      subReports: finalStagesSubReports
+    };
+  }, [productSubcategories, reportableCategories]);
   const dashboardReportTabs = useMemo(
-    () => [...staticReportTabsWithDynamicSheets, ...dynamicCategoryTabs],
-    [dynamicCategoryTabs, staticReportTabsWithDynamicSheets]
+    () => [...staticReportTabsWithDynamicSheets, stagesDynamicTab, finalStagesDynamicTab],
+    [staticReportTabsWithDynamicSheets, stagesDynamicTab, finalStagesDynamicTab]
   );
   const activeShellInspectionReport = shellMouldingInspectionReports.find((report) => report.id === activeShellInspectionId)
     || shellMouldingInspectionReports[0];
@@ -1919,6 +2062,16 @@ const AdminDashboard = ({
       setActiveSubReportId(nextReport.subReports[0]?.id || '');
     }
   }, [activeReportId, activeSubReportId, dashboardReportTabs]);
+
+  useEffect(() => {
+    const view = searchParams.get('view');
+    if (!view) return;
+    const targetTab = dashboardReportTabs.find((report) => report.id === view);
+    if (targetTab && targetTab.id !== activeReportId) {
+      setActiveReportId(targetTab.id);
+      setActiveSubReportId(targetTab.subReports[0]?.id || '');
+    }
+  }, [searchParams, dashboardReportTabs, activeReportId]);
 
   useEffect(() => {
     if (!activeShellInspectionSheets.some((report) => report.id === activeShellInspectionId)) {
@@ -2098,7 +2251,48 @@ const AdminDashboard = ({
     rows: []
   };
   const activeReport = dashboardReportTabs.find((report) => report.id === activeReportId) || dashboardReportTabs[0] || availableStaticReportTabs[0];
-  const activeSubReportBase = activeReport.subReports.find((report) => report.id === activeSubReportId) || activeReport.subReports[0] || emptyDashboardSubReport;
+  const isStagesTab = activeReportId === 'stages';
+  const isFinalStagesTab = activeReportId === 'finalStages';
+  const stagesCategories = useMemo(() => {
+    if (!isStagesTab) return [];
+    return [...new Set(activeReport.subReports.map((sr) => sr.categoryName).filter(Boolean))];
+  }, [isStagesTab, activeReport]);
+  const finalStagesCategories = useMemo(() => {
+    if (!isFinalStagesTab) return [];
+    return [...new Set(activeReport.subReports.map((sr) => sr.categoryName).filter(Boolean))];
+  }, [isFinalStagesTab, activeReport]);
+  const filteredSubReports = useMemo(() => {
+    if (isStagesTab && stagesActiveCategoryId) {
+      return activeReport.subReports.filter((sr) => sr.categoryName === stagesActiveCategoryId);
+    }
+    if (isFinalStagesTab && finalStagesActiveCategoryId) {
+      return activeReport.subReports.filter((sr) => sr.categoryName === finalStagesActiveCategoryId);
+    }
+    return activeReport.subReports;
+  }, [isStagesTab, isFinalStagesTab, stagesActiveCategoryId, finalStagesActiveCategoryId, activeReport]);
+  const activeSubReportBase = filteredSubReports.find((report) => report.id === activeSubReportId) || filteredSubReports[0] || emptyDashboardSubReport;
+
+  useEffect(() => {
+    if (!isStagesTab) setStagesActiveCategoryId(null);
+    if (!isFinalStagesTab) setFinalStagesActiveCategoryId(null);
+  }, [isStagesTab, isFinalStagesTab]);
+
+  useEffect(() => {
+    if (isStagesTab && !stagesActiveCategoryId && stagesCategories.length) {
+      setStagesActiveCategoryId(stagesCategories[0]);
+      const firstSub = stagesDynamicTab.subReports.find((sr) => sr.categoryName === stagesCategories[0]);
+      if (firstSub) setActiveSubReportId(firstSub.id);
+    }
+  }, [isStagesTab, stagesCategories, stagesActiveCategoryId, stagesDynamicTab]);
+
+  useEffect(() => {
+    if (isFinalStagesTab && !finalStagesActiveCategoryId && finalStagesCategories.length) {
+      setFinalStagesActiveCategoryId(finalStagesCategories[0]);
+      const firstSub = finalStagesDynamicTab.subReports.find((sr) => sr.categoryName === finalStagesCategories[0]);
+      if (firstSub) setActiveSubReportId(firstSub.id);
+    }
+  }, [isFinalStagesTab, finalStagesCategories, finalStagesActiveCategoryId, finalStagesDynamicTab]);
+
   const isRejectionReport = activeSubReportBase.type === 'rejection';
   const isDrrReport = activeSubReportBase.type === 'drr';
   const rejectionDayColumns = useMemo(() => {
@@ -3209,7 +3403,7 @@ const AdminDashboard = ({
         <div className="space-y-3 py-3">
           <div className="flex gap-2 overflow-x-auto">
             {dashboardReportTabs.map((report) => {
-              const quickReportItems = report.dynamic
+              const quickReportItems = report.dynamic && report.id !== 'stages' && report.id !== 'finalStages'
                 ? report.subReports
                     .filter((subReport) => subReport.type === 'drr' && !subReport.id.endsWith('-rejection') && !subReport.id.endsWith('-rework'))
                     .flatMap((subReport) => ([
@@ -3300,9 +3494,57 @@ const AdminDashboard = ({
               ))}
             </div>
           )}
-          {activeReport.subReports.length > 0 && !['mis-quality-performance', 'consolidated-rejection-status'].includes(activeReport.id) && (
+          {isStagesTab && stagesCategories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {stagesCategories.map((catName) => (
+              <button
+                key={catName}
+                type="button"
+                onClick={() => {
+                  setStagesActiveCategoryId(catName);
+                  const firstSub = activeReport.subReports.find((sr) => sr.categoryName === catName);
+                  if (firstSub) setActiveSubReportId(firstSub.id);
+                  setSearchTerm('');
+                }}
+                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
+                  stagesActiveCategoryId === catName
+                    ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                {catName}
+              </button>
+            ))}
+          </div>
+          )}
+          {isFinalStagesTab && finalStagesCategories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {finalStagesCategories.map((catName) => (
+              <button
+                key={catName}
+                type="button"
+                onClick={() => {
+                  setFinalStagesActiveCategoryId(catName);
+                  const firstSub = activeReport.subReports.find((sr) => sr.categoryName === catName);
+                  if (firstSub) setActiveSubReportId(firstSub.id);
+                  setSearchTerm('');
+                }}
+                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
+                  finalStagesActiveCategoryId === catName
+                    ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                {catName}
+              </button>
+            ))}
+          </div>
+          )}
+          {filteredSubReports.length > 0 && !['mis-quality-performance', 'consolidated-rejection-status'].includes(activeReport.id) && (
           <div className="flex gap-2 overflow-x-auto">
-            {activeReport.subReports.map((subReport) => (
+            {filteredSubReports.map((subReport) => (
               <button
                 key={subReport.id}
                 type="button"

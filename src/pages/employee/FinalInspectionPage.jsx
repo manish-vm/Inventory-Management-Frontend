@@ -171,18 +171,51 @@ const FinalInspectionPage = () => {
         currentSelectable ||
         response.data.stages?.find((stage) => stage.selectable && Number(stage.availableCount || 0) > 0) ||
         response.data.stages?.find((stage) => stage.selectable);
-      setSelectedStageNumber(
-        firstSelectable?.stageNumber || backendCurrentStageNumber || ''
-      );
+      const initialStageNumber = firstSelectable?.stageNumber || backendCurrentStageNumber || '';
+      setSelectedStageNumber(initialStageNumber);
 
       setInspectionValues({});
       setRejectionValues({});
       setReworkValues({});
       setCounts({ accepted: 0, rejected: 0, rework: 0 });
       setRemarks('');
+      setSelectedInspectionType(null);
       setSuggestions([]);
       setDropdownOpen(false);
       if (showToast) toast.success('Product batch loaded');
+
+      if (initialStageNumber && response.data.product) {
+        const stageForUi = (response.data.stages || []).find(
+          (s) => Number(s.stageNumber) === Number(initialStageNumber)
+        );
+        if (stageForUi) {
+          setLookupData((current) => ({
+            ...current,
+            product: {
+              ...current?.product,
+              availableCount: Number(stageForUi.availableCount || 0)
+            }
+          }));
+        }
+        try {
+          const [rejectionRes] = await Promise.all([
+            inspectionAPI.getFormsByStage(initialStageNumber, {
+              code: response.data.product.code,
+              productName: response.data.product.productName,
+              formType: 'rejection',
+              finalStage: true
+            })
+          ]);
+          setLookupData((current) => ({
+            ...current,
+            forms: [],
+            rejectionForms: rejectionRes.data || [],
+            reworkForms: []
+          }));
+        } catch {
+          // Silent — forms will load when stage is clicked
+        }
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Product lookup failed');
     } finally {
@@ -216,30 +249,21 @@ const FinalInspectionPage = () => {
     }
 
     try {
-      const [rejectionRes, reworkRes] = await Promise.all([
+      const [rejectionRes] = await Promise.all([
         inspectionAPI.getFormsByStage(stageNumber, {
           code: product.code,
           productName: product.productName,
           formType: 'rejection',
           finalStage: true
-        }),
-        inspectionAPI.getFormsByStage(stageNumber, {
-          code: product.code,
-          productName: product.productName,
-          formType: 'rework',
-          finalStage: true
         })
       ]);
 
-      setLookupData((current) => {
-        const next = {
-          ...current,
-          forms: [],
-          rejectionForms: rejectionRes.data || current?.rejectionForms || [],
-          reworkForms: reworkRes.data || current?.reworkForms || []
-        };
-        return next;
-      });
+      setLookupData((current) => ({
+        ...current,
+        forms: [],
+        rejectionForms: rejectionRes.data || current?.rejectionForms || [],
+        reworkForms: []
+      }));
 
     } catch {
       toast.error('Failed to load stage forms');
@@ -423,13 +447,19 @@ const FinalInspectionPage = () => {
             )}
           </div>
 
+          {!user?.assignedFinalStageRole && (
+            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+              No final stage role has been assigned to your account. Please contact your administrator.
+            </p>
+          )}
+
           <button
             onClick={() => {
               const q = search.trim();
               if (!q) return;
               loadProduct(q);
             }}
-            disabled={loading}
+            disabled={loading || !user?.assignedFinalStageRole}
             className="mt-3 rounded-lg bg-emerald-700 px-5 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
           >
             {loading ? 'Searching...' : 'Proceed'}
