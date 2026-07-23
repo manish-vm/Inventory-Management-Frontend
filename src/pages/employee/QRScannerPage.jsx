@@ -83,13 +83,30 @@ const QRScannerPage = () => {
 
   const product = lookupData?.product;
   const availableCount = Number(product?.availableCount || 0);
+  const stageRows = useMemo(() => {
+    const rowsByNumber = new Map();
+    (lookupData?.stages || []).forEach((stage) => {
+      const stageNumber = Number(stage.stageNumber);
+      if (!Number.isFinite(stageNumber)) return;
+      const existing = rowsByNumber.get(stageNumber);
+      rowsByNumber.set(stageNumber, existing
+        ? {
+            ...existing,
+            ...stage,
+            selectable: Boolean(existing.selectable || stage.selectable),
+            availableCount: Math.max(Number(existing.availableCount || 0), Number(stage.availableCount || 0))
+          }
+        : stage);
+    });
+    return Array.from(rowsByNumber.values()).sort((a, b) => Number(a.stageNumber) - Number(b.stageNumber));
+  }, [lookupData?.stages]);
 
   const selectedStage = useMemo(
     () =>
-      lookupData?.stages?.find(
+      stageRows.find(
         (stage) => Number(stage.stageNumber) === Number(selectedStageNumber)
       ),
-    [lookupData, selectedStageNumber]
+    [stageRows, selectedStageNumber]
   );
   const isOpenIntakeStage = Number(selectedStageNumber) === 1;
 
@@ -161,20 +178,38 @@ const QRScannerPage = () => {
     setLoading(true);
     try {
       const response = await inspectionAPI.lookupBatchProduct(key);
-      setLookupData(response.data);
 
       const backendCurrentStageNumber =
         response.data.stage?.stageNumber ||
         response.data.product?.currentStageNumber;
-      const currentSelectable = response.data.stages?.find(
+      const responseStageRows = response.data.stages || [];
+      const uniqueResponseStageRows = Array.from(
+        responseStageRows.reduce((rowsByNumber, stage) => {
+          const stageNumber = Number(stage.stageNumber);
+          if (!Number.isFinite(stageNumber)) return rowsByNumber;
+          const existing = rowsByNumber.get(stageNumber);
+          rowsByNumber.set(stageNumber, existing
+            ? {
+                ...existing,
+                ...stage,
+                selectable: Boolean(existing.selectable || stage.selectable),
+                availableCount: Math.max(Number(existing.availableCount || 0), Number(stage.availableCount || 0))
+              }
+            : stage);
+          return rowsByNumber;
+        }, new Map()).values()
+      ).sort((a, b) => Number(a.stageNumber) - Number(b.stageNumber));
+      setLookupData({ ...response.data, stages: uniqueResponseStageRows });
+
+      const currentSelectable = uniqueResponseStageRows.find(
         (stage) =>
           Number(stage.stageNumber) === Number(backendCurrentStageNumber) &&
           stage.selectable
       );
       const firstSelectable =
         currentSelectable ||
-        response.data.stages?.find((stage) => stage.selectable && Number(stage.availableCount || 0) > 0) ||
-        response.data.stages?.find((stage) => stage.selectable);
+        uniqueResponseStageRows.find((stage) => stage.selectable && Number(stage.availableCount || 0) > 0) ||
+        uniqueResponseStageRows.find((stage) => stage.selectable);
       setSelectedStageNumber(
         firstSelectable?.stageNumber || backendCurrentStageNumber || ''
       );
@@ -205,7 +240,7 @@ const QRScannerPage = () => {
 
     if (!product || !stageNumber) return;
 
-    const stageForUi = (lookupData?.stages || []).find(
+    const stageForUi = stageRows.find(
       (s) => Number(s.stageNumber) === Number(stageNumber)
     );
 
@@ -478,11 +513,11 @@ const QRScannerPage = () => {
                 Current Working Stage
               </h2>
               <div className="grid gap-3 md:grid-cols-5">
-                {(lookupData.stages || []).map((stage) => {
+                {stageRows.map((stage) => {
                   const isSelected = Number(stage.stageNumber) === Number(selectedStageNumber);
 
                   return <button
-                    key={stage.stageNumber}
+                    key={`stage-${stage.stageNumber}`}
                     type="button"
                     disabled={!stage.selectable}
                     onClick={() => loadStageForms(stage.stageNumber)}

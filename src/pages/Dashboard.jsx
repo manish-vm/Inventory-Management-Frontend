@@ -916,9 +916,13 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
     const rejected = toNumber(backendDay?.rejected ?? backendDay?.rejection ?? 0);
     const backendRejection = metric === 'rework'
       ? backendDay?.rework
-      : metric === 'rejectionAndRework' || backendReport?.reportType === 'helmet-assembly'
-        ? backendDay?.rejectionAndRework ?? rejected + toNumber(backendDay?.rework)
-        : backendDay?.rejection;
+      : metric === 'ok'
+        ? backendDay?.ok
+        : metric === 'notOk'
+          ? backendDay?.notOk
+          : metric === 'rejectionAndRework' || backendReport?.reportType === 'helmet-assembly'
+            ? backendDay?.rejectionAndRework ?? rejected + toNumber(backendDay?.rework)
+            : backendDay?.rejection;
     const rework = toNumber(backendDay?.rework ?? 0);
     const ok = toNumber(backendDay?.ok ?? 0);
     const notOk = toNumber(backendDay?.notOk ?? 0);
@@ -984,7 +988,11 @@ const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = [], metr
     const rowTotal = rows.reduce((sum, row) => sum + toNumber(row.days?.[index]), 0);
     const rejection = metric === 'rejectionAndRework'
       ? toNumber(day.rejected) + toNumber(day.rework)
-      : rowTotal;
+      : metric === 'ok'
+        ? toNumber(day.ok)
+        : metric === 'notOk'
+          ? toNumber(day.notOk)
+          : rowTotal;
     return {
       ...day,
       rejection,
@@ -1562,7 +1570,9 @@ const AdminDashboard = ({
   const [activeReportId, setActiveReportId] = useState(reportTabs[0].id);
   const [activeSubReportId, setActiveSubReportId] = useState(reportTabs[0].subReports[0].id);
   const [stagesActiveCategoryId, setStagesActiveCategoryId] = useState(null);
+  const [stagesActiveSubReportId, setStagesActiveSubReportId] = useState('');
   const [finalStagesActiveCategoryId, setFinalStagesActiveCategoryId] = useState(null);
+  const [finalStagesActiveSubReportId, setFinalStagesActiveSubReportId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [reportScrollMode, setReportScrollMode] = useState('calendar');
   const [reportMonth, setReportMonth] = useState(now.getMonth() + 1);
@@ -1910,6 +1920,27 @@ const AdminDashboard = ({
           }];
       return targets.flatMap((target) => [
         {
+          id: target.baseId,
+          sourceReportId: target.baseId,
+          type: 'drr',
+          metric: 'rejectionAndRework',
+          name: `${target.name} DRR`,
+          sourceFileName: target.sourceFileName,
+          categoryName: category.name,
+          descriptorColumns: [
+            stageDescriptorColumn,
+            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
+            { key: 'partDetails', label: 'Part details', width: 120 },
+            { key: 'defectDetails', label: 'Defect Details', width: 180 },
+          ],
+          summaryRows: drrSummaryRows,
+          totalColumns: [
+            { id: 'total', label: 'Total' },
+            { id: 'totalPercent', label: 'Total %' },
+          ],
+          rows: []
+        },
+        {
           id: `${target.baseId}-rejection`,
           sourceReportId: `${target.baseId}-rejection`,
           type: 'drr',
@@ -2253,6 +2284,11 @@ const AdminDashboard = ({
   const activeReport = dashboardReportTabs.find((report) => report.id === activeReportId) || dashboardReportTabs[0] || availableStaticReportTabs[0];
   const isStagesTab = activeReportId === 'stages';
   const isFinalStagesTab = activeReportId === 'finalStages';
+  const activeScopedSubReportId = isStagesTab
+    ? stagesActiveSubReportId
+    : isFinalStagesTab
+      ? finalStagesActiveSubReportId
+      : activeSubReportId;
   const stagesCategories = useMemo(() => {
     if (!isStagesTab) return [];
     return [...new Set(activeReport.subReports.map((sr) => sr.categoryName).filter(Boolean))];
@@ -2270,7 +2306,7 @@ const AdminDashboard = ({
     }
     return activeReport.subReports;
   }, [isStagesTab, isFinalStagesTab, stagesActiveCategoryId, finalStagesActiveCategoryId, activeReport]);
-  const activeSubReportBase = filteredSubReports.find((report) => report.id === activeSubReportId) || filteredSubReports[0] || emptyDashboardSubReport;
+  const activeSubReportBase = filteredSubReports.find((report) => report.id === activeScopedSubReportId) || filteredSubReports[0] || emptyDashboardSubReport;
 
   useEffect(() => {
     if (!isStagesTab) setStagesActiveCategoryId(null);
@@ -2281,17 +2317,33 @@ const AdminDashboard = ({
     if (isStagesTab && !stagesActiveCategoryId && stagesCategories.length) {
       setStagesActiveCategoryId(stagesCategories[0]);
       const firstSub = stagesDynamicTab.subReports.find((sr) => sr.categoryName === stagesCategories[0]);
-      if (firstSub) setActiveSubReportId(firstSub.id);
+      if (firstSub) setStagesActiveSubReportId(firstSub.id);
     }
   }, [isStagesTab, stagesCategories, stagesActiveCategoryId, stagesDynamicTab]);
+
+  useEffect(() => {
+    if (!isStagesTab || !stagesActiveCategoryId) return;
+    const categoryReports = stagesDynamicTab.subReports.filter((sr) => sr.categoryName === stagesActiveCategoryId);
+    if (categoryReports.length && !categoryReports.some((sr) => sr.id === stagesActiveSubReportId)) {
+      setStagesActiveSubReportId(categoryReports[0].id);
+    }
+  }, [isStagesTab, stagesActiveCategoryId, stagesActiveSubReportId, stagesDynamicTab]);
 
   useEffect(() => {
     if (isFinalStagesTab && !finalStagesActiveCategoryId && finalStagesCategories.length) {
       setFinalStagesActiveCategoryId(finalStagesCategories[0]);
       const firstSub = finalStagesDynamicTab.subReports.find((sr) => sr.categoryName === finalStagesCategories[0]);
-      if (firstSub) setActiveSubReportId(firstSub.id);
+      if (firstSub) setFinalStagesActiveSubReportId(firstSub.id);
     }
   }, [isFinalStagesTab, finalStagesCategories, finalStagesActiveCategoryId, finalStagesDynamicTab]);
+
+  useEffect(() => {
+    if (!isFinalStagesTab || !finalStagesActiveCategoryId) return;
+    const categoryReports = finalStagesDynamicTab.subReports.filter((sr) => sr.categoryName === finalStagesActiveCategoryId);
+    if (categoryReports.length && !categoryReports.some((sr) => sr.id === finalStagesActiveSubReportId)) {
+      setFinalStagesActiveSubReportId(categoryReports[0].id);
+    }
+  }, [isFinalStagesTab, finalStagesActiveCategoryId, finalStagesActiveSubReportId, finalStagesDynamicTab]);
 
   const isRejectionReport = activeSubReportBase.type === 'rejection';
   const isDrrReport = activeSubReportBase.type === 'drr';
@@ -3503,7 +3555,7 @@ const AdminDashboard = ({
                 onClick={() => {
                   setStagesActiveCategoryId(catName);
                   const firstSub = activeReport.subReports.find((sr) => sr.categoryName === catName);
-                  if (firstSub) setActiveSubReportId(firstSub.id);
+                  if (firstSub) setStagesActiveSubReportId(firstSub.id);
                   setSearchTerm('');
                 }}
                 className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
@@ -3527,7 +3579,7 @@ const AdminDashboard = ({
                 onClick={() => {
                   setFinalStagesActiveCategoryId(catName);
                   const firstSub = activeReport.subReports.find((sr) => sr.categoryName === catName);
-                  if (firstSub) setActiveSubReportId(firstSub.id);
+                  if (firstSub) setFinalStagesActiveSubReportId(firstSub.id);
                   setSearchTerm('');
                 }}
                 className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
@@ -3549,11 +3601,17 @@ const AdminDashboard = ({
                 key={subReport.id}
                 type="button"
                 onClick={() => {
-                  setActiveSubReportId(subReport.id);
+                  if (isStagesTab) {
+                    setStagesActiveSubReportId(subReport.id);
+                  } else if (isFinalStagesTab) {
+                    setFinalStagesActiveSubReportId(subReport.id);
+                  } else {
+                    setActiveSubReportId(subReport.id);
+                  }
                   setSearchTerm('');
                 }}
                 className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium transition ${
-                  activeSubReportId === subReport.id
+                  activeScopedSubReportId === subReport.id
                     ? 'border-primary-600 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                 }`}

@@ -68,6 +68,24 @@ const lineFromValue = (...values) => {
   return match ? Number(match[1]) : null;
 };
 
+const reportTypeFromValue = (...values) => {
+  const text = values.join(' ').toLowerCase();
+  if (text.includes('helmet') && text.includes('drr')) return 'helmet-assembly';
+  if (text.includes('visor') && text.includes('coating')) return 'visor-coating';
+  if (text.includes('visor') && (text.includes('mechanism') || text.includes('vm top') || text.includes('visor top'))) {
+    return 'visor-mechanism-top-moulding';
+  }
+  if (text.includes('visor') && (text.includes('mould') || text.includes('mold'))) return 'visor-moulding';
+  if (text.includes('shell') && (text.includes('mould') || text.includes('mold'))) return 'shell-moulding';
+  if (text.includes('chin cover')) return 'chin-cover-moulding';
+  if (text.includes('spoiler')) return 'spoiler-moulding';
+  if (text.includes('stagewise')) return 'stagewise-rejection';
+  if (text.includes('bop') || text.includes('inward')) return 'bop-parts-receipt';
+  if (/\bdrr\b/.test(text)) return 'helmet-assembly';
+  if (text.includes('assembly') || text.includes('assy')) return 'helmet-assembly';
+  return '';
+};
+
 const reportRowsByContext = ({ productionLine, reportType }) => {
   const line = Number(String(productionLine || '').replace(/\D/g, '')) || null;
   const byLine = (reports) => reports.find((report) => Number(report.line) === line)?.rows || [];
@@ -152,9 +170,10 @@ const ProductReviewConfig = () => {
   );
 
   const rejectionOptionGroups = useMemo(() => {
+    const inferredReportType = currentStage.reportType || reportTypeFromValue(productName, currentStage.stageName);
     const rows = reportRowsByContext({
       productionLine: currentStage.productionLine || `D${lineFromValue(productName, currentStage.stageName) || ''}`,
-      reportType: currentStage.reportType
+      reportType: inferredReportType
     });
     return groupedProcessDefects(rows);
   }, [currentStage.productionLine, currentStage.reportType, currentStage.stageName, productName]);
