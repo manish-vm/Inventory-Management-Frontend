@@ -134,18 +134,18 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
     const renderOptionDetails = (optionKey, option = {}) => {
       const fixedDefectType = option.defectType || option.defectDetail || '';
       const fixedAssemblyProcess = option.assemblyProcess || question.assemblyProcess || '';
-      const detailLabel = textOf(question) || fixedDefectType || option.label || option.value || 'Defect detail';
+      const detailLabel = option.label || option.value || fixedDefectType || textOf(question) || 'Defect detail';
 
       if (isSubQuestion) return renderCountInput(optionKey, option);
 
       return (
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-          {detailLabel}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {detailLabel}
+          </div>
+          {renderCountInput(optionKey, option)}
         </div>
-        {renderCountInput(optionKey, option)}
-      </div>
-    );
+      );
     };
 
     const renderChildQuestions = (option, optionKey) => {
@@ -183,8 +183,8 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
 
         {/* ── MULTI-SELECT (checkbox) ────────────────────────────────────────────
             Rule:
-            • Option has NO sub-questions → show count input directly (always visible).
-            • Option HAS sub-questions    → show checkbox; sub-fields appear when ticked.
+            • Single option AND no sub-questions -> show count input directly (no checkbox needed).
+            • Multiple options (3 options) -> show checkboxes; checking option displays count input.
         ──────────────────────────────────────────────────────────────────────── */}
         {hasOptions && !isSingle && (
           <div className="space-y-3">
@@ -192,42 +192,53 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
               const optionKey = optionValue(option);
               const hasSubQuestions = (option.subQuestions || []).length > 0;
               const checked = selected.includes(optionKey);
+              const isOnlyOption = options.length === 1;
 
-              // ── Option WITHOUT sub-questions: always show count directly ──────
-              if (!hasSubQuestions) {
+              // ── Single option WITHOUT sub-questions: always show count directly ──
+              if (isOnlyOption && !hasSubQuestions) {
                 return (
                   <div
                     key={optionKey}
                     className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/30"
                   >
-                    <div className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {option.label || option.value}
-                    </div>
                     <div>{renderOptionDetails(optionKey, option)}</div>
                   </div>
                 );
               }
 
-              // ── Option WITH sub-questions: checkbox toggles nested fields ─────
+              // ── Multiple options OR option with sub-questions: checkbox toggles option ──
               return (
                 <div key={optionKey} className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/30">
-                  <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        const nextSelected = e.target.checked
-                          ? [...selected, optionKey]
-                          : selected.filter((v) => v !== optionKey);
-                        update(question, index, nextSelected, prefix);
-                      }}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium">{option.label || option.value}</div>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2.5 text-sm font-medium text-slate-800 dark:text-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const nextSelected = e.target.checked
+                            ? [...selected, optionKey]
+                            : selected.filter((v) => v !== optionKey);
+                          update(question, index, nextSelected, prefix);
+                          if (e.target.checked) {
+                            if (getCount(question, index, optionKey, prefix) <= 0) {
+                              updateCount(question, index, optionKey, 1, prefix, option, lineage);
+                            }
+                          } else {
+                            updateCount(question, index, optionKey, 0, prefix, option, lineage);
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>{option.label || option.value}</span>
+                    </label>
+                  </div>
+
+                  {(checked || hasSubQuestions) && (
+                    <div className="mt-3">
+                      {checked && renderOptionDetails(optionKey, option)}
                       {renderChildQuestions(option, optionKey)}
                     </div>
-                  </label>
+                  )}
                 </div>
               );
             })}
