@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, Edit, Plus, PlusCircle, Trash2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, Edit, Plus, PlusCircle, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { manufacturingConfigAPI, processingStageAPI, productAPI } from '../api/api';
@@ -40,6 +40,7 @@ const ManufacturingConfig = () => {
   const [editingConfig, setEditingConfig] = useState(null);
   const [formMode, setFormMode] = useState('stages');
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Track which config is selected for the edit choice modal
   const [editChoiceModalConfig, setEditChoiceModalConfig] = useState(null);
@@ -71,10 +72,10 @@ const ManufacturingConfig = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configs, products]);
 
-  const fetchConfigs = async () => {
+  const fetchConfigs = async (search = searchQuery) => {
     setLoading(true);
     try {
-      const response = await manufacturingConfigAPI.getAll();
+      const response = await manufacturingConfigAPI.getAll(search ? { search } : {});
       setConfigs(response.data);
     } catch (error) {
       toast.error('Failed to fetch configurations');
@@ -344,6 +345,20 @@ const ManufacturingConfig = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  fetchConfigs(e.target.value);
+                }}
+                className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-4 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
             <button
               onClick={() => {
                 setShowForm(true);
