@@ -719,45 +719,126 @@ const Products = () => {
   };
 
   const parseWorkflowTemplateRows = (sheet) => {
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-    const headers = rows[0] || [];
+    const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const headers = rawRows[0] || [];
+
+    // Detect regular stage columns (stage1, stage2, ...) and final stage columns (finalstage1, ...)
     const stageColumnIndexes = headers
       .map((header, index) => ({ header: normalizeHeader(header), index }))
-      .filter(({ header }) => /^stage\d+$/.test(header));
+      .filter(({ header }) => /^stage\d+$/.test(header) && !/^finalstage/.test(header));
 
-    return rows.slice(1).map((row) => {
-      const parsedRow = {};
+    const finalStageColumnIndexes = headers
+      .map((header, index) => ({ header: normalizeHeader(header), index }))
+      .filter(({ header }) => /^finalstage\d+$/.test(header));
 
+    // Group raw rows by product name (product name repeats for multiple option rows)
+    const productMap = new Map();
+    let currentProductName = '';
+
+    rawRows.slice(1).forEach((row) => {
+      // Extract product-level fields
+      const parsedMeta = {};
       headers.forEach((header, index) => {
         const mappedKey = productColumnMap[normalizeHeader(header)];
-        if (mappedKey) parsedRow[mappedKey] = normalizeCellValue(row[index]);
+        if (mappedKey) parsedMeta[mappedKey] = normalizeCellValue(row[index]);
       });
 
-      parsedRow.workflowStages = stageColumnIndexes
-        .map(({ header, index }) => {
-          const stageNumber = Number(header.replace('stage', ''));
-          return {
-            stageNumber,
+      let productName = String(parsedMeta.productName || '').trim();
+      if (!productName && currentProductName) {
+        productName = currentProductName;
+        parsedMeta.productName = currentProductName;
+      }
+      if (productName) {
+        currentProductName = productName;
+      }
+
+      // Skip completely empty rows
+      const hasAnyContent = Object.values(parsedMeta).some((v) => String(v || '').trim()) ||
+        stageColumnIndexes.some(({ index }) => String(row[index] || '').trim()) ||
+        finalStageColumnIndexes.some(({ index }) => String(row[index] || '').trim());
+      if (!hasAnyContent || !productName) return;
+
+      if (!productMap.has(productName)) {
+        productMap.set(productName, {
+          ...parsedMeta,
+          workflowStages: stageColumnIndexes.map(({ header, index }) => ({
+            stageNumber: Number(header.replace('stage', '')),
             stageName: normalizeCellValue(row[index]),
             enabled: normalizeCellValue(row[index]),
             accepted: normalizeCellValue(row[index + 1]),
             rejectionQuestion: normalizeCellValue(row[index + 2]),
             rejectionOptionType: normalizeCellValue(row[index + 3]),
-            rejectionOptions: normalizeCellValue(row[index + 4]),
+            rejectionOptions: [],   // will accumulate
             reworkQuestion: normalizeCellValue(row[index + 5]),
             reworkOptionType: normalizeCellValue(row[index + 6]),
-            reworkOptions: normalizeCellValue(row[index + 7])
-          };
-        })
-        .filter((stage) =>
-          [stage.enabled, stage.accepted, stage.rejectionQuestion, stage.rejectionOptionType, stage.rejectionOptions, stage.reworkQuestion, stage.reworkOptionType, stage.reworkOptions]
-            .some((value) => String(value || '').trim())
-        );
+            reworkOptions: []       // will accumulate
+          })),
+          finalStages: finalStageColumnIndexes.map(({ header, index }) => ({
+            stageNumber: Number(header.replace('finalstage', '')),
+            stageName: normalizeCellValue(row[index]),
+            okCount: normalizeCellValue(row[index + 1]),
+            notOkQuestion: normalizeCellValue(row[index + 2]),
+            notOkOptionType: normalizeCellValue(row[index + 3]),
+            notOkOptions: []        // will accumulate
+          }))
+        });
+      }
 
-      return parsedRow;
-    }).filter((row) =>
-      Object.entries(row).some(([key, value]) => key !== 'workflowStages' && String(value || '').trim()) ||
-      row.workflowStages?.length
+      const entry = productMap.get(productName);
+
+      // For non-first rows (option rows): accumulate options into existing stage entries
+      // Also update product meta fields from continuation rows if they were blank on first row
+      Object.entries(parsedMeta).forEach(([key, value]) => {
+        if (key !== 'productName' && String(value || '').trim() && !String(entry[key] || '').trim()) {
+          entry[key] = value;
+        }
+      });
+
+      // Accumulate rejection/rework options per stage
+      stageColumnIndexes.forEach(({ header, index }, i) => {
+        const stage = entry.workflowStages[i];
+        if (!stage) return;
+        const rejOpt = normalizeCellValue(row[index + 4]);
+        const rwkOpt = normalizeCellValue(row[index + 7]);
+        if (String(rejOpt || '').trim()) stage.rejectionOptions.push(String(rejOpt).trim());
+        if (String(rwkOpt || '').trim()) stage.reworkOptions.push(String(rwkOpt).trim());
+      });
+
+      // Accumulate Not OK options per final stage
+      finalStageColumnIndexes.forEach(({ header, index }, i) => {
+        const fStage = entry.finalStages[i];
+        if (!fStage) return;
+        const notOkOpt = normalizeCellValue(row[index + 4]);
+        if (String(notOkOpt || '').trim()) fStage.notOkOptions.push(String(notOkOpt).trim());
+      });
+    });
+
+    // Convert map entries to rows; join accumulated options as comma-separated strings
+    return Array.from(productMap.values()).map((entry) => ({
+      ...entry,
+      workflowStages: entry.workflowStages
+        .map((stage) => ({
+          ...stage,
+          rejectionOptions: stage.rejectionOptions.join(','),
+          reworkOptions: stage.reworkOptions.join(',')
+        }))
+        .filter((stage) =>
+          [stage.enabled, stage.accepted, stage.rejectionQuestion, stage.rejectionOptions, stage.reworkQuestion, stage.reworkOptions]
+            .some((v) => String(v || '').trim())
+        ),
+      finalStages: entry.finalStages
+        .map((stage) => ({
+          ...stage,
+          notOkOptions: stage.notOkOptions.join(',')
+        }))
+        .filter((stage) =>
+          [stage.stageName, stage.okCount, stage.notOkQuestion, stage.notOkOptions]
+            .some((v) => String(v || '').trim())
+        )
+    })).filter((row) =>
+      Object.entries(row).some(([k, v]) => !['workflowStages', 'finalStages'].includes(k) && String(v || '').trim()) ||
+      row.workflowStages?.length ||
+      row.finalStages?.length
     );
   };
 
@@ -792,42 +873,80 @@ const Products = () => {
   };
 
   const handleDownloadWorkflowTemplate = () => {
-    const templateRows = [
-      [ 'Product Name', 
-        'Code',
-        'Category',
-        'Subcategory',
-        'Brand', 
-        'Model',
-        'Stage 1', 
-        'Accepted',
-        'Question for rejected',
-        'Rejected Option Type',
-        'Options (separate with ,)',
-        'Question for Rework',
-        'Rework Option Type', 
-        'Options (separate with ,)', 
-        'Stage 2', 
-        'Accepted',
-        'Question for rejected',
-        'Rejected Option Type', 
-        'Options (separate with ,)', 
-        'Question for Rework',
-        'Rework Option Type',
-        'Options (separate with ,)',
-        'Stage 3',
-        'Accepted', 
-        'Question for rejected',
-        'Rejected Option Type', 
-        'Options (separate with ,)',
-        'Question for Rework',
-        'Rework Option Type', 
-        'Options (separate with ,)'
+    // The template uses one row per option.
+    // Product-level info (name, code, category, etc.) repeats on every row for that product.
+    // Each stage block occupies 5 columns for regular stages and 5 columns for final stages.
+    // Regular stage columns (per stage): Stage N | Accepted | Question for rejected | Rejected Option Type | Rejected Option | Question for rework | Rework Option Type | Rework Option
+    // Final stage columns (per final stage): Final Stage N | OK Count | Question for Not OK | Not OK Option Type | Not OK Option
+    const baseHeaders = ['Product Name', 'Code', 'Category', 'Subcategory', 'Brand', 'Model'];
+    const stage1Headers = [
+      'Stage 1', 'Accepted',
+      'Question for rejected', 'Rejected Option Type', 'Rejected Option',
+      'Question for rework', 'Rework Option Type', 'Rework Option'
+    ];
+    const stage2Headers = [
+      'Stage 2', 'Accepted',
+      'Question for rejected', 'Rejected Option Type', 'Rejected Option',
+      'Question for rework', 'Rework Option Type', 'Rework Option'
+    ];
+    const stage3Headers = [
+      'Stage 3', 'Accepted',
+      'Question for rejected', 'Rejected Option Type', 'Rejected Option',
+      'Question for rework', 'Rework Option Type', 'Rework Option'
+    ];
+    const finalStage1Headers = [
+      'Final Stage 1', 'OK Count',
+      'Question for Not OK', 'Not OK Option Type', 'Not OK Option'
+    ];
+
+    const headerRow = [...baseHeaders, ...stage1Headers, ...stage2Headers, ...stage3Headers, ...finalStage1Headers];
+
+    // Example: product with 3 options per reject question on stage 1, 2 options on stage 2, 1 final stage Not OK option
+    // Row 1: all data + option 1
+    // Row 2: product name + option 2 (other columns blank)
+    // Row 3: product name + option 3
+    const exampleRows = [
+      [
+        'Sample Product', 'PROD-001', 'Electronics', 'Sensors', 'BrandA', 'ModelX',
+        // Stage 1
+        'Manufacturing', 'Stage 2', 'What is the reject reason?', 'Checkbox', 'Scratch',
+        'What needs rework?', 'Checkbox', 'Misalignment',
+        // Stage 2
+        'Assembly', 'Stage 3', 'Reject reason?', 'Checkbox', 'Loose Part',
+        'Rework reason?', 'Checkbox', 'Re-solder',
+        // Stage 3
+        '', '', '', '', '', '', '', '',
+        // Final Stage 1
+        'Final Inspection', '10', 'Not OK reason?', 'Checkbox', 'Defective'
+      ],
+      [
+        // Row 2: same product, option 2 for stage 1 reject
+        'Sample Product', '', '', '', '', '',
+        '', '', '', '', 'Dent',   // Stage 1 reject option 2
+        '', '', 'Paint Issue',    // Stage 1 rework option 2
+        '', '', '', '', 'Missing Bolt',  // Stage 2 reject option 2
+        '', '', '',              // Stage 2 rework
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', 'Broken'
+      ],
+      [
+        // Row 3: option 3 for stage 1 reject
+        'Sample Product', '', '', '', '', '',
+        '', '', '', '', 'Deformation',
+        '', '', '',
+        '', '', '', '', '',
+        '', '', '',
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', ''
       ]
     ];
 
-    const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
-    worksheet['!cols'] = [{ wch: 22 }];
+    const worksheetData = [headerRow, ...exampleRows];
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // Set column widths
+    worksheet['!cols'] = headerRow.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
     XLSX.writeFile(workbook, 'workflow-template.xlsx');
