@@ -3802,12 +3802,24 @@ const AdminDashboard = ({
         />
       ) : activeSubReportBase.type === 'empty' ? (
         <section className="flex min-h-[320px] items-center justify-center border border-slate-200 bg-white px-5 py-12 text-center dark:border-slate-700 dark:bg-slate-800">
-          <div>
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600" />
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-              Loading category reports...
-            </p>
-          </div>
+          {reportsStillLoading ? (
+            <div>
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600" />
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                Loading category reports...
+              </p>
+            </div>
+          ) : (
+            <div>
+              <ClipboardList className="mx-auto mb-3 h-9 w-9 text-slate-400" />
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                No report found
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                No inspections have been submitted for this admin yet.
+              </p>
+            </div>
+          )}
         </section>
       ) : isMisReport ? (
         <div className="space-y-4">
