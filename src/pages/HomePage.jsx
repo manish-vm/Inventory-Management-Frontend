@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { publicAPI } from "../api/api";
-import AIChatbot from "../components/AIChatbot";
 
 /* ---------------- ANIMATED BACKGROUND ---------------- */
 function AnimatedBackground() {
@@ -803,7 +802,6 @@ export default function HomePage() {
       <TestimonialsSection />
       <CTASection />
       <Footer />
-      <AIChatbot />
     </div>
   );
 }

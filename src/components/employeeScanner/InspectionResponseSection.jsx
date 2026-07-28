@@ -1,5 +1,5 @@
 import { CheckCircle2, RotateCcw, Send, XCircle } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import QuestionCountGrid from '../employeeScanner/QuestionCountGrid';
 
 const fields = [
@@ -50,11 +50,6 @@ const InspectionResponseSection = ({
   const acceptedDerived = Number(derivedTotals?.accepted || 0);
   const rejectedDerived = Number(derivedTotals?.rejected || 0);
   const reworkDerived = Number(derivedTotals?.rework || 0);
-
-  useEffect(() => {
-    if (!activeMode) return;
-    if (Number(counts?.[activeMode] || 0) === 0) setActiveMode(null);
-  }, [counts, activeMode]);
 
   const activeInputValue = useMemo(() => {
     if (!activeMode) return '';
@@ -179,13 +174,19 @@ const InspectionResponseSection = ({
           <input
             type="number"
             min="0"
-            value={Number(activeInputValue || 0)}
+            value={activeInputValue}
             onChange={(e) =>
               setCounts((prev) => ({
                 ...prev,
-                accepted: Math.max(0, Number(e.target.value) || 0)
+                accepted: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0)
               }))
             }
+            onBlur={() => {
+              setCounts((prev) => ({
+                ...prev,
+                accepted: Math.max(0, Number(prev.accepted) || 0)
+              }));
+            }}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
           />
         </div>

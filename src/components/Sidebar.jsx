@@ -117,6 +117,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     isAlert: true 
   };
   // Employee gets profile with analytics, products (read-only), invoices, and production
+  const hasFinalInspectionAccess = user?.role !== 'inspector' && Boolean(user?.assignedFinalStageRole);
   const employeeNavItems = [
     ...(user?.role === 'inspector' ? [] : [{ path: '/app/employee/scanner', icon: Scan, label: 'QR Scanner' }]),
     ...(user?.role === 'inspector' ? [
@@ -125,7 +126,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     ] : [
       { path: '/app/employee/scan-logs', icon: FileText, label: 'Scan Logs' },
     ]),
-    ...(user?.assignedFinalStageRole ? [{ path: '/app/employee/final-inspection', icon: ShieldCheck, label: 'Final Inspection' }] : []),
+    ...(hasFinalInspectionAccess ? [{ path: '/app/employee/final-inspection', icon: ShieldCheck, label: 'Final Inspection' }] : []),
     { path: '/app/attendance', icon: Clock3, label: 'Attendance' },
     ...(user?.role === 'inspector' ? [] : [{ path: '/app/employee-profile', icon: LayoutDashboard, label: 'Profile' }]),
   ];

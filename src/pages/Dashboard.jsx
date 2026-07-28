@@ -577,6 +577,17 @@ const isGeneratedDashboardCategory = (category) =>
   normalizeReportKey(category?.description) === normalizeReportKey('Dashboard report sheet');
 const isGeneratedDashboardSubcategory = (subcategory) =>
   normalizeReportKey(subcategory?.description).includes(normalizeReportKey('nested sheet'));
+const reportTitleFromKey = (value) =>
+  String(value || 'Report')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => (/^d\d+$/i.test(part) || part === part.toUpperCase() ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(' ');
+const getBackendReportTitle = (reportId, report = {}) =>
+  [
+    report.productionLine,
+    report.processName || report.partName || reportTitleFromKey(report.reportType || reportId)
+  ].filter(Boolean).join(' - ') || reportTitleFromKey(reportId);
 const productCategoryColumns = [
   { key: 'productName', label: 'Product', width: 220 },
   { key: 'code', label: 'Code', width: 140 },
@@ -1632,15 +1643,31 @@ const AdminDashboard = ({
     let isMounted = true;
     setReportDataLoading(true);
 
-    Promise.all([
+    const emptyResponse = (data) => ({ data });
+    const unwrapResponse = (result, fallbackData) =>
+      result.status === 'fulfilled' ? result.value : emptyResponse(fallbackData);
+
+    Promise.allSettled([
       api.get('/inspection/admin/rejection-report', { params: { month: reportMonth, year: reportYear } }),
-      api.get('/inspection/admin/mis-dashboard', { params: { month: reportMonth, year: reportYear } }),
+      api.get('/inspection/admin/mis-dashboard', { params: { month: reportMonth, year: reportYear }, skipCache: true }),
       api.get('/mis-operations/bop-receipts', { params: { month: reportMonth, year: reportYear } }),
       api.get('/mis-operations/supplier-rejections', { params: { month: reportMonth, year: reportYear } }),
       misOperationsAPI.getEmployeeSheetEntries({ month: reportMonth, year: reportYear })
     ])
-      .then(([rejectionResponse, misResponse, bopResponse, supplierResponse, employeeSheetResponse]) => {
+      .then((results) => {
         if (!isMounted) return;
+        const [rejectionResult, misResult, bopResult, supplierResult, employeeSheetResult] = results;
+
+        if (rejectionResult.status === 'rejected' && misResult.status === 'rejected') {
+          throw new Error('Unable to fetch report data');
+        }
+
+        const rejectionResponse = unwrapResponse(rejectionResult, {});
+        const misResponse = unwrapResponse(misResult, { reports: {} });
+        const bopResponse = unwrapResponse(bopResult, []);
+        const supplierResponse = unwrapResponse(supplierResult, []);
+        const employeeSheetResponse = unwrapResponse(employeeSheetResult, { aggregate: [] });
+
         const report = rejectionResponse.data || {};
         const days = Array.isArray(report.days) ? report.days : [];
         setRejectionReport({
@@ -1775,61 +1802,76 @@ const AdminDashboard = ({
     );
   }, [productCategories]);
   const dynamicMisCrsSubReports = useMemo(() => {
-    const reports = [];
-    reportableCategories
-      .forEach((category) => {
-        const categoryId = String(category._id);
-        const subcategories = productSubcategories.filter((subcategory) =>
-          String(subcategory.category?._id || subcategory.category || '') === categoryId
-          && !isGeneratedDashboardSubcategory(subcategory)
-        );
-        const targets = subcategories.length
-          ? subcategories.map((subcategory) => ({
-              baseId: `product-subcategory-${String(subcategory._id)}`,
-              name: `${category.name} - ${subcategory.name}`,
-              sourceFileName: `${category.name} / ${subcategory.name}`
-            }))
-          : [{
-              baseId: `product-category-${categoryId}-all`,
-              name: category.name,
-              sourceFileName: category.name
-            }];
+    const categoryById = new Map(productCategories.map((category) => [String(category._id || ''), category]));
+    const labels = {};
 
-        targets.forEach((target) => {
-          reports.push({
-            ...target,
-            mis: {
-              id: `${target.baseId}-mis`,
-              sourceReportId: `${target.baseId}-mis`,
-              type: 'mis',
-              metric: 'rejectionAndRework',
-              name: `${target.name} MIS`,
-              sourceFileName: target.sourceFileName,
-              descriptorColumns: [],
-              summaryRows: [],
-              totalColumns: [],
-              dayColumns: [],
-              rows: []
-            },
-            crs: {
-              id: `${target.baseId}-crs`,
-              sourceReportId: target.baseId,
-              rejectionReportId: `${target.baseId}-rejection`,
-              type: 'crs',
-              metric: 'rejectionAndRework',
-              name: `${target.name} CRS`,
-              sourceFileName: target.sourceFileName,
-              descriptorColumns: [],
-              summaryRows: [],
-              totalColumns: [],
-              dayColumns: [],
-              rows: []
-            }
-          });
-        });
-      });
-    return reports;
-  }, [productSubcategories, reportableCategories]);
+    productCategories.forEach((category) => {
+      const categoryId = String(category._id || '');
+      if (categoryId) {
+        labels[`product-category-${categoryId}-all-mis`] = category.name;
+        labels[`product-category-${categoryId}-all-crs`] = category.name;
+      }
+    });
+
+    productSubcategories.forEach((subcategory) => {
+      const subcategoryId = String(subcategory._id || '');
+      const categoryId = String(subcategory.category?._id || subcategory.category || '');
+      const categoryName = subcategory.category?.name || categoryById.get(categoryId)?.name || '';
+      const label = [categoryName, subcategory.name].filter(Boolean).join(' / ');
+      if (subcategoryId && label) {
+        labels[`product-subcategory-${subcategoryId}-mis`] = label;
+        labels[`product-subcategory-${subcategoryId}-crs`] = label;
+      }
+    });
+
+    return Object.entries(backendMisReports || {})
+      .filter(([reportId]) => reportId.endsWith('-mis') || reportId.endsWith('-crs'))
+      .sort(([left], [right]) => {
+        const leftLabel = labels[left] || left;
+        const rightLabel = labels[right] || right;
+        return leftLabel.localeCompare(rightLabel);
+      })
+      .map(([reportId, report]) => {
+      const isMis = reportId.endsWith('-mis');
+      const baseId = reportId.replace(/-(mis|crs)$/, '');
+      const label = labels[reportId] || getBackendReportTitle(reportId, report);
+      return {
+        baseId,
+        name: label,
+        sourceFileName: label,
+        ...(isMis ? {
+          mis: {
+            id: reportId,
+            sourceReportId: reportId,
+            type: 'mis',
+            metric: 'rejectionAndRework',
+            name: `${label} MIS`,
+            sourceFileName: label,
+            descriptorColumns: [],
+            summaryRows: [],
+            totalColumns: [],
+            dayColumns: [],
+            rows: []
+          }
+        } : {
+          crs: {
+            id: reportId,
+            sourceReportId: reportId,
+            rejectionReportId: `${baseId}-rejection`,
+            type: 'crs',
+            metric: 'rejectionAndRework',
+            name: `${label} CRS`,
+            sourceFileName: label,
+            descriptorColumns: [],
+            summaryRows: [],
+            totalColumns: [],
+            dayColumns: [],
+            rows: []
+          }
+        })
+      };
+    });
+  }, [backendMisReports, productCategories, productSubcategories]);
   const dynamicCategoryTabs = useMemo(() => reportableCategories.map((category) => {
     const categoryId = String(category._id);
     const subcategories = productSubcategories.filter((subcategory) =>
@@ -1889,13 +1931,13 @@ const AdminDashboard = ({
     if (report.id === 'mis-quality-performance') {
       return {
         ...report,
-        subReports: dynamicMisCrsSubReports.map((item) => item.mis)
+        subReports: dynamicMisCrsSubReports.map((item) => item.mis).filter(Boolean)
       };
     }
     if (report.id === 'consolidated-rejection-status') {
       return {
         ...report,
-        subReports: dynamicMisCrsSubReports.map((item) => item.crs)
+        subReports: dynamicMisCrsSubReports.map((item) => item.crs).filter(Boolean)
       };
     }
     return report;

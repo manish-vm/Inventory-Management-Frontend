@@ -283,7 +283,7 @@ function AppRoutes() {
            </ProtectedRoute>
          } />
          <Route path="manufacturing-config" element={
-           <ProtectedRoute allowedRoles={['admin']}>
+           <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
              <ManufacturingConfig />
            </ProtectedRoute>
          } />
@@ -333,7 +333,7 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="employee/final-inspection" element={
-            <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
+            <ProtectedRoute allowedRoles={['employee', 'admin']}>
               <FinalInspectionPage />
             </ProtectedRoute>
           } />
@@ -354,14 +354,14 @@ function AppRoutes() {
          } />
         {/* Product Review Config (admin) */}
          <Route path="product-review-config/:stageId" element={
-          <ProtectedRoute allowedRoles={['admin']}>
+          <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
             <ProductReviewConfig />
           </ProtectedRoute>
         } />
 
         {/* Manufacturing stage -> product review (question preview/config) */}
         <Route path="manufacturing-config/stages/:stageNumber/product-review/:configurationMode?" element={
-          <ProtectedRoute allowedRoles={['admin']}>
+          <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
             <ProductReviewConfig />
           </ProtectedRoute>
         } />

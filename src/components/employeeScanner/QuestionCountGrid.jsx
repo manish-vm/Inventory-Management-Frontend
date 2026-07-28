@@ -37,6 +37,30 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
     }));
   };
 
+  const updateAndPrune = (question, index, answer, prefix, prunePrefixes = [], countKeys = []) => {
+    const questionId = idOf(question, index, prefix);
+    commitChange((currentValues) => {
+      const nextValues = { ...(currentValues || {}) };
+      prunePrefixes.forEach((prunePrefix) => {
+        Object.keys(nextValues).forEach((key) => {
+          if (key === prunePrefix || key.startsWith(`${prunePrefix}-`) || key.startsWith(`${prunePrefix}::__count__::`)) {
+            delete nextValues[key];
+          }
+        });
+      });
+      countKeys.forEach((key) => {
+        delete nextValues[key];
+      });
+      nextValues[questionId] = {
+        questionId,
+        question: textOf(question),
+        type: typeOf(question),
+        answer
+      };
+      return nextValues;
+    });
+  };
+
   const updateCount = (question, index, optionKey, count, prefix, option = {}, lineage = {}) => {
     const questionId = idOf(question, index, prefix);
     // store per-question per-option counts under special key
@@ -52,6 +76,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           type: 'count',
           optionKey,
           answer: normalizeCount(count),
+          isLeafAnswer: !(option.subQuestions || []).length,
           rootQuestion: lineage.rootQuestion || textOf(question),
           parentOption: lineage.parentOption || (optionKey === RESPONSE_COUNT_KEY ? '' : option.label || option.value || optionKey),
           subQuestion: lineage.subQuestion || '',
@@ -218,8 +243,15 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                           const nextSelected = e.target.checked
                             ? [...selected, optionKey]
                             : selected.filter((v) => v !== optionKey);
-                          update(question, index, nextSelected, prefix);
-                          if (e.target.checked) {
+                          updateAndPrune(
+                            question,
+                            index,
+                            nextSelected,
+                            prefix,
+                            e.target.checked ? [] : [`${questionId}-${optionKey}`],
+                            e.target.checked && !hasSubQuestions ? [] : [`${questionId}::__count__::${optionKey}`]
+                          );
+                          if (!hasSubQuestions && e.target.checked) {
                             if (getCount(question, index, optionKey, prefix) <= 0) {
                               updateCount(question, index, optionKey, 1, prefix, option, lineage);
                             }
@@ -235,7 +267,7 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
 
                   {(checked || hasSubQuestions) && (
                     <div className="mt-3">
-                      {checked && renderOptionDetails(optionKey, option)}
+                      {checked && !hasSubQuestions && renderOptionDetails(optionKey, option)}
                       {renderChildQuestions(option, optionKey)}
                     </div>
                   )}
@@ -278,7 +310,14 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
                       type="radio"
                       name={questionId}
                       checked={checked}
-                      onChange={() => update(question, index, optionKey, prefix)}
+                      onChange={() => updateAndPrune(
+                        question,
+                        index,
+                        optionKey,
+                        prefix,
+                        options.filter((candidate) => optionValue(candidate) !== optionKey).map((candidate) => `${questionId}-${optionValue(candidate)}`),
+                        options.map((candidate) => `${questionId}::__count__::${optionValue(candidate)}`)
+                      )}
                       className="mt-1"
                     />
                     <div className="flex-1">
@@ -301,7 +340,14 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           <div className="space-y-3">
             <select
               value={selected[0] || ''}
-              onChange={(e) => update(question, index, e.target.value, prefix)}
+              onChange={(e) => updateAndPrune(
+                question,
+                index,
+                e.target.value,
+                prefix,
+                options.filter((candidate) => optionValue(candidate) !== e.target.value).map((candidate) => `${questionId}-${optionValue(candidate)}`),
+                options.map((candidate) => `${questionId}::__count__::${optionValue(candidate)}`)
+              )}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
             >
               <option value="">Select option</option>
