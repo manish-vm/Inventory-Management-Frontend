@@ -3,6 +3,7 @@ import { ArrowRight, ChevronDown, Edit, Plus, PlusCircle, Search, Trash2 } from 
 import { useNavigate } from 'react-router-dom';
 
 import { manufacturingConfigAPI, processingStageAPI, productAPI } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 import toast from 'react-hot-toast';
 
@@ -32,6 +33,8 @@ const defaultStageSet = () => [
 
 const ManufacturingConfig = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canManageConfigurations = user?.role === 'admin' || user?.role === 'superadmin';
 
   const [configs, setConfigs] = useState([]);
   const [products, setProducts] = useState([]);
@@ -146,6 +149,11 @@ const ManufacturingConfig = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!canManageConfigurations) {
+      toast.error('Only an admin can save manufacturing configurations');
+      return;
+    }
+
     try {
       const matchedConfig =
         editingConfig ||
@@ -187,7 +195,9 @@ const ManufacturingConfig = () => {
       fetchConfigs();
     } catch (error) {
       const message =
-        error.response?.data?.message || error.response?.data?.error || 'Failed to save configuration';
+        error.response?.status === 403
+          ? 'Only an admin can save manufacturing configurations'
+          : error.response?.data?.message || error.response?.data?.error || 'Failed to save configuration';
       toast.error(message);
     }
   };
@@ -212,6 +222,11 @@ const ManufacturingConfig = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!canManageConfigurations) {
+      toast.error('Only an admin can delete manufacturing configurations');
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this configuration?')) return;
 
     try {
@@ -361,6 +376,10 @@ const ManufacturingConfig = () => {
 
             <button
               onClick={() => {
+                if (!canManageConfigurations) {
+                  toast.error('Only an admin can save manufacturing configurations');
+                  return;
+                }
                 setShowForm(true);
                 setEditingConfig(null);
                 setFormMode('stages');
@@ -376,6 +395,10 @@ const ManufacturingConfig = () => {
             </button>
             <button
               onClick={() => {
+                if (!canManageConfigurations) {
+                  toast.error('Only an admin can save manufacturing configurations');
+                  return;
+                }
                 setShowForm(true);
                 setEditingConfig(null);
                 setFormMode('finalStages');
@@ -458,7 +481,13 @@ const ManufacturingConfig = () => {
                           {/* Edit button */}
                           <button
                             type="button"
-                            onClick={() => setEditChoiceModalConfig(config)}
+                            onClick={() => {
+                              if (!canManageConfigurations) {
+                                toast.error('Only an admin can save manufacturing configurations');
+                                return;
+                              }
+                              setEditChoiceModalConfig(config);
+                            }}
                             className="p-1 text-primary-600 hover:bg-primary-50 rounded dark:hover:bg-primary-900/20"
                             title="Edit configuration"
                           >

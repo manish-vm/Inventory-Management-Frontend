@@ -7,7 +7,6 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Search, Menu, X } from 'lucide-react';
 
 const GlobalModals = lazy(() => import('./GlobalModals'));
-const AIChatbot = lazy(() => import('./AIChatbot'));
 
 const Layout = ({ isSuperAdmin }) => {
   const { user } = useAuth();
@@ -161,11 +160,6 @@ const Layout = ({ isSuperAdmin }) => {
         </div>
 
       </main>
-      {loadDeferredUi && (
-        <Suspense fallback={null}>
-          <AIChatbot />
-        </Suspense>
-      )}
     </div>
     </>
   );

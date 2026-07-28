@@ -79,6 +79,7 @@ const FinalInspectionPage = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const productDetailsRef = useRef(null);
+  const hasFinalInspectionAccess = user?.role !== 'inspector' && Boolean(user?.assignedFinalStageRole);
 
   const product = lookupData?.product;
   const availableCount = Number(product?.availableCount || 0);
@@ -131,14 +132,14 @@ const FinalInspectionPage = () => {
         setSuggestions(response.data || []);
       } catch (error) {
         setSuggestions([]);
-        setSuggestionsError(!user?.assignedFinalStageRole ? 'No final stage role has been assigned yet' : (error.response?.data?.message || 'Unable to load assigned products'));
+        setSuggestionsError(!hasFinalInspectionAccess ? 'No inspection role has been assigned yet' : (error.response?.data?.message || 'Unable to load assigned products'));
       } finally {
         setSuggestionsLoading(false);
       }
     }, 250);
 
     return () => clearTimeout(handle);
-  }, [search, dropdownOpen]);
+  }, [search, dropdownOpen, hasFinalInspectionAccess]);
 
   useEffect(() => {
     if (!product) return;
@@ -422,7 +423,7 @@ const FinalInspectionPage = () => {
                   </div>
                 ) : suggestions.length === 0 ? (
                   <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                    {!user?.assignedFinalStageRole ? 'No final stage role has been assigned yet' : (search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your final stage role.')}
+                    {!hasFinalInspectionAccess ? 'No inspection role has been assigned yet' : (search.trim() ? 'No assigned products match your search.' : 'No products are assigned to your inspection role.')}
                   </div>
                 ) : suggestions.map((item) => (
                     <button
@@ -447,9 +448,9 @@ const FinalInspectionPage = () => {
             )}
           </div>
 
-          {!user?.assignedFinalStageRole && (
+          {!hasFinalInspectionAccess && (
             <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-              No final stage role has been assigned to your account. Please contact your administrator.
+              No inspection role has been assigned to your account. Please contact your administrator.
             </p>
           )}
 
@@ -459,7 +460,7 @@ const FinalInspectionPage = () => {
               if (!q) return;
               loadProduct(q);
             }}
-            disabled={loading || !user?.assignedFinalStageRole}
+            disabled={loading || !hasFinalInspectionAccess}
             className="mt-3 rounded-lg bg-emerald-700 px-5 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
           >
             {loading ? 'Searching...' : 'Proceed'}

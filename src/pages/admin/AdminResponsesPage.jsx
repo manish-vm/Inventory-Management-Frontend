@@ -168,6 +168,101 @@ const normalizeRows = (responses, productCategoryMap = {}) =>
     };
   });
 
+const reportTypeLabel = (value) =>
+  String(value || 'Report')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.toUpperCase() === part ? part : part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const getReportDisplayName = (report) =>
+  [
+    report.productionLine,
+    reportTypeLabel(report.reportType || report.processName || report.reportId)
+  ].filter(Boolean).join(' - ') || report.reportId || 'Report';
+
+const normalizeMisReportRows = (reports = {}) =>
+  Object.values(reports).flatMap((report) => {
+    const reportName = getReportDisplayName(report);
+    const base = {
+      code: report.reportId,
+      partDescription: report.partName || report.processName || reportName,
+      productName: reportName,
+      employeeName: 'All employees',
+      stage: report.processName || report.reportType || '-',
+      categoryId: report.reportId || reportName,
+      categoryName: reportName,
+      acceptedCount: Number(report.totals?.accepted ?? report.totals?.output ?? 0),
+      rejectedCount: Number(report.totals?.rejected ?? report.totals?.rejection ?? 0),
+      rejectedResponses: [],
+      rejectedReason: '',
+      reworkCount: Number(report.totals?.rework ?? 0),
+      reworkResponses: [],
+      reworkReason: '',
+      overallCount: Number(report.totals?.output ?? 0),
+      submittedAt: null,
+      raw: {
+        _id: report.reportId,
+        code: report.reportId,
+        formName: reportName,
+        productName: reportName,
+        employeeName: 'All employees',
+        stageName: report.processName || report.reportType || '-',
+        acceptedCount: Number(report.totals?.accepted ?? report.totals?.output ?? 0),
+        rejectedCount: Number(report.totals?.rejected ?? report.totals?.rejection ?? 0),
+        reworkCount: Number(report.totals?.rework ?? 0),
+        responses: [],
+        rejectionFormResponses: [],
+        reworkFormResponses: []
+      }
+    };
+
+    const defectRows = Array.isArray(report.rows) ? report.rows : [];
+    if (!defectRows.length) return [base];
+
+    return [base, ...defectRows.map((row) => {
+      const count = Number(row.total || 0);
+      const detail = row.defectName || row.questionAnswer || row.questionHeader || 'Report row';
+      const responseItem = {
+        type: 'optionDetail',
+        question: row.questionHeader || row.stageName || 'Report detail',
+        selectedAnswer: row.questionAnswer || row.subOption || detail,
+        defectDetail: detail,
+        count
+      };
+      const rowStatus = report.reportId?.endsWith('-rework') ? 'rework' : 'rejected';
+
+      return {
+        ...base,
+        code: row.defectCode || base.code,
+        partDescription: row.partName || row.assemblyProcess || base.partDescription,
+        productName: detail,
+        stage: row.stageName || base.stage,
+        acceptedCount: 0,
+        rejectedCount: rowStatus === 'rejected' ? count : 0,
+        rejectedResponses: rowStatus === 'rejected' ? [responseItem] : [],
+        rejectedReason: rowStatus === 'rejected' ? formatResponseValue(responseItem) : '',
+        reworkCount: rowStatus === 'rework' ? count : 0,
+        reworkResponses: rowStatus === 'rework' ? [responseItem] : [],
+        reworkReason: rowStatus === 'rework' ? formatResponseValue(responseItem) : '',
+        overallCount: count,
+        raw: {
+          ...base.raw,
+          _id: `${report.reportId}-${row.defectCode || detail}`,
+          code: row.defectCode || report.reportId,
+          productName: detail,
+          partDescription: row.partName || '',
+          stageName: row.stageName || base.stage,
+          acceptedCount: 0,
+          rejectedCount: rowStatus === 'rejected' ? count : 0,
+          reworkCount: rowStatus === 'rework' ? count : 0,
+          rejectionFormResponses: rowStatus === 'rejected' ? [responseItem] : [],
+          reworkFormResponses: rowStatus === 'rework' ? [responseItem] : []
+        }
+      };
+    })];
+  });
+
 const getStatusCount = (row, status) => {
   if (status === 'ACCEPTED') return row.acceptedCount;
   if (status === 'REJECTED') return row.rejectedCount;
@@ -347,10 +442,40 @@ const InspectionResponses = ({ analytics, rows, filters, setFilters, load, selec
   );
 };
 
-const ReportManagement = ({ rows, analytics, selected, setSelected, loading }) => {
+const ReportManagement = ({ fallbackRows, analytics, selected, setSelected }) => {
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState('ACCEPTED');
   const [tableView, setTableView] = useState('summary');
+  const now = new Date();
+  const [period, setPeriod] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
+  const [reportRowsSource, setReportRowsSource] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingReports(true);
+
+    inspectionAPI.getMisDashboard({ month: period.month, year: period.year })
+      .then((response) => {
+        if (!isMounted) return;
+        setReportRowsSource(normalizeMisReportRows(response.data?.reports || {}));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setReportRowsSource([]);
+        toast.error('Failed to load report management data');
+      })
+      .finally(() => {
+        if (isMounted) setLoadingReports(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [period.month, period.year]);
+
+  const rows = reportRowsSource.length ? reportRowsSource : fallbackRows;
+  const loading = loadingReports;
 
   const categories = useMemo(() => {
     const map = new Map();
@@ -393,7 +518,7 @@ const ReportManagement = ({ rows, analytics, selected, setSelected, loading }) =
       },
       { overall: 0, accepted: 0, rejected: 0, rework: 0 }
     );
-  }, [reportRows]);
+  }, [reportRows, status]);
 
   const exportReport = () => {
     const categoryLabel = categories.find((item) => item.id === categoryId)?.name || 'all-categories';
@@ -440,11 +565,28 @@ const ReportManagement = ({ rows, analytics, selected, setSelected, loading }) =
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-4 grid gap-3 lg:grid-cols-[160px_130px_minmax(220px,1fr)_auto] lg:items-center">
+          <select
+            value={period.month}
+            onChange={(e) => setPeriod((current) => ({ ...current, month: Number(e.target.value) }))}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+          >
+            {Array.from({ length: 12 }, (_, index) => (
+              <option key={index + 1} value={index + 1}>
+                {new Date(2000, index, 1).toLocaleString('default', { month: 'long' })}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={period.year}
+            onChange={(e) => setPeriod((current) => ({ ...current, year: Number(e.target.value) || current.year }))}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+          />
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900 lg:max-w-xs"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
           >
             <option value="">All categories</option>
             {categories.map((category) => (
@@ -454,7 +596,7 @@ const ReportManagement = ({ rows, analytics, selected, setSelected, loading }) =
             ))}
           </select>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             {RESULT_TABS.map((tab) => (
               <TabButton key={tab.key} active={status === tab.key} onClick={() => setStatus(tab.key)}>
                 {tab.label}
@@ -913,7 +1055,7 @@ const AdminResponsesPage = () => {
           loading={loading}
         />
       ) : (
-        <ReportManagement rows={rows} analytics={analytics} selected={selected} setSelected={setSelected} loading={loading} />
+        <ReportManagement fallbackRows={rows} analytics={analytics} selected={selected} setSelected={setSelected} />
       )}
     </div>
   );
