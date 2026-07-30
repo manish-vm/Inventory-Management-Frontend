@@ -32,6 +32,131 @@ const getQRCodeValue = (product) => {
   return product?.code || product?.code || product?.productName || product?._id || '';
 };
 
+const crcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let j = 0; j < 8; j += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+const crc32 = (bytes) => {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+};
+
+const writeUint16 = (target, offset, value) => {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+};
+
+const writeUint32 = (target, offset, value) => {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+  target[offset + 2] = (value >>> 16) & 0xff;
+  target[offset + 3] = (value >>> 24) & 0xff;
+};
+
+const patchStoredXlsxEntry = (xlsxArrayBuffer, targetName, transformText) => {
+  const input = new Uint8Array(xlsxArrayBuffer);
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const entries = [];
+  let offset = 0;
+
+  while (offset + 30 <= input.length && input[offset] === 0x50 && input[offset + 1] === 0x4b && input[offset + 2] === 0x03 && input[offset + 3] === 0x04) {
+    const method = input[offset + 8] | (input[offset + 9] << 8);
+    const compressedSize = input[offset + 18] | (input[offset + 19] << 8) | (input[offset + 20] << 16) | (input[offset + 21] << 24);
+    const fileNameLength = input[offset + 26] | (input[offset + 27] << 8);
+    const extraLength = input[offset + 28] | (input[offset + 29] << 8);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + fileNameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    const name = decoder.decode(input.slice(nameStart, nameStart + fileNameLength));
+    let data = input.slice(dataStart, dataEnd);
+
+    if (name === targetName) {
+      if (method !== 0) return xlsxArrayBuffer;
+      data = encoder.encode(transformText(decoder.decode(data)));
+    }
+
+    entries.push({ name, data });
+    offset = dataEnd;
+  }
+
+  if (!entries.length) return xlsxArrayBuffer;
+
+  const fileNameBytes = entries.map((entry) => encoder.encode(entry.name));
+  const localSizes = entries.map((entry, index) => 30 + fileNameBytes[index].length + entry.data.length);
+  const centralSizes = entries.map((entry, index) => 46 + fileNameBytes[index].length);
+  const centralOffset = localSizes.reduce((sum, size) => sum + size, 0);
+  const totalSize = centralOffset + centralSizes.reduce((sum, size) => sum + size, 0) + 22;
+  const output = new Uint8Array(totalSize);
+  let cursor = 0;
+  const centralEntries = [];
+
+  entries.forEach((entry, index) => {
+    const nameBytes = fileNameBytes[index];
+    const dataCrc = crc32(entry.data);
+    const localOffset = cursor;
+    writeUint32(output, cursor, 0x04034b50);
+    writeUint16(output, cursor + 4, 20);
+    writeUint16(output, cursor + 6, 0);
+    writeUint16(output, cursor + 8, 0);
+    writeUint32(output, cursor + 14, dataCrc);
+    writeUint32(output, cursor + 18, entry.data.length);
+    writeUint32(output, cursor + 22, entry.data.length);
+    writeUint16(output, cursor + 26, nameBytes.length);
+    output.set(nameBytes, cursor + 30);
+    output.set(entry.data, cursor + 30 + nameBytes.length);
+    cursor += 30 + nameBytes.length + entry.data.length;
+    centralEntries.push({ nameBytes, data: entry.data, crc: dataCrc, localOffset });
+  });
+
+  const centralStart = cursor;
+  centralEntries.forEach((entry) => {
+    writeUint32(output, cursor, 0x02014b50);
+    writeUint16(output, cursor + 4, 20);
+    writeUint16(output, cursor + 6, 20);
+    writeUint32(output, cursor + 16, entry.crc);
+    writeUint32(output, cursor + 20, entry.data.length);
+    writeUint32(output, cursor + 24, entry.data.length);
+    writeUint16(output, cursor + 28, entry.nameBytes.length);
+    writeUint32(output, cursor + 42, entry.localOffset);
+    output.set(entry.nameBytes, cursor + 46);
+    cursor += 46 + entry.nameBytes.length;
+  });
+
+  writeUint32(output, cursor, 0x06054b50);
+  writeUint16(output, cursor + 8, entries.length);
+  writeUint16(output, cursor + 10, entries.length);
+  writeUint32(output, cursor + 12, cursor - centralStart);
+  writeUint32(output, cursor + 16, centralOffset);
+  return output.buffer;
+};
+
+const insertSheetDataValidations = (sheetXml, validationsXml) => {
+  const withoutExisting = sheetXml.replace(/<dataValidations[\s\S]*?<\/dataValidations>/, '');
+  const insertBefore = ['<hyperlinks', '<printOptions', '<pageMargins', '<pageSetup', '<headerFooter>', '<drawing', '<legacyDrawing', '<tableParts', '<ignoredErrors', '</worksheet>']
+    .find((token) => withoutExisting.includes(token));
+  return insertBefore ? withoutExisting.replace(insertBefore, `${validationsXml}${insertBefore}`) : withoutExisting;
+};
+
+const downloadArrayBuffer = (arrayBuffer, fileName) => {
+  const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 // QR Code Popup Modal Component
 const QRCodePopup = ({ product, onClose }) => {
   const [qrDataUrl, setQrDataUrl] = useState(null);
@@ -721,6 +846,78 @@ const Products = () => {
   const parseWorkflowTemplateRows = (sheet) => {
     const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
     const headers = rawRows[0] || [];
+    const sameStageName = (left, right) =>
+      normalizeCellValue(left).toLowerCase() === normalizeCellValue(right).toLowerCase();
+    const addUniqueOption = (options, value) => {
+      const cleanValue = String(value || '').trim();
+      if (!cleanValue) return;
+      if (!options.some((item) => item.toLowerCase() === cleanValue.toLowerCase())) {
+        options.push(cleanValue);
+      }
+    };
+    const sortByTemplateStageOrder = (stages = []) =>
+      [...stages].sort((a, b) =>
+        Number(a.sourceStageNumber || 0) - Number(b.sourceStageNumber || 0) ||
+        Number(a.discoveryOrder || 0) - Number(b.discoveryOrder || 0)
+      );
+    const findOrCreateStage = (entry, row, columnIndex, originalStageNumber) => {
+      const stageName = normalizeCellValue(row[columnIndex]);
+      if (!stageName) return null;
+
+      let stage = entry.workflowStages.find((item) => sameStageName(item.stageName, stageName));
+      if (!stage) {
+        stage = {
+          stageNumber: entry.workflowStages.length + 1,
+          sourceStageNumber: originalStageNumber,
+          discoveryOrder: entry.workflowStages.length,
+          stageName,
+          enabled: stageName,
+          accepted: normalizeCellValue(row[columnIndex + 1]),
+          rejectionQuestion: normalizeCellValue(row[columnIndex + 2]),
+          rejectionOptionType: normalizeCellValue(row[columnIndex + 3]),
+          rejectionOptions: [],
+          reworkQuestion: normalizeCellValue(row[columnIndex + 5]),
+          reworkOptionType: normalizeCellValue(row[columnIndex + 6]),
+          reworkOptions: []
+        };
+        entry.workflowStages.push(stage);
+      } else {
+        stage.sourceStageNumber = Math.min(Number(stage.sourceStageNumber || originalStageNumber), Number(originalStageNumber));
+        if (!stage.accepted) stage.accepted = normalizeCellValue(row[columnIndex + 1]);
+        if (!stage.rejectionQuestion) stage.rejectionQuestion = normalizeCellValue(row[columnIndex + 2]);
+        if (!stage.rejectionOptionType) stage.rejectionOptionType = normalizeCellValue(row[columnIndex + 3]);
+        if (!stage.reworkQuestion) stage.reworkQuestion = normalizeCellValue(row[columnIndex + 5]);
+        if (!stage.reworkOptionType) stage.reworkOptionType = normalizeCellValue(row[columnIndex + 6]);
+      }
+
+      return stage;
+    };
+    const findOrCreateFinalStage = (entry, row, columnIndex, originalStageNumber) => {
+      const stageName = normalizeCellValue(row[columnIndex]);
+      if (!stageName) return null;
+
+      let stage = entry.finalStages.find((item) => sameStageName(item.stageName, stageName));
+      if (!stage) {
+        stage = {
+          stageNumber: entry.finalStages.length + 1,
+          sourceStageNumber: originalStageNumber,
+          discoveryOrder: entry.finalStages.length,
+          stageName,
+          okCount: normalizeCellValue(row[columnIndex + 1]),
+          notOkQuestion: normalizeCellValue(row[columnIndex + 2]),
+          notOkOptionType: normalizeCellValue(row[columnIndex + 3]),
+          notOkOptions: []
+        };
+        entry.finalStages.push(stage);
+      } else {
+        stage.sourceStageNumber = Math.min(Number(stage.sourceStageNumber || originalStageNumber), Number(originalStageNumber));
+        if (!stage.okCount) stage.okCount = normalizeCellValue(row[columnIndex + 1]);
+        if (!stage.notOkQuestion) stage.notOkQuestion = normalizeCellValue(row[columnIndex + 2]);
+        if (!stage.notOkOptionType) stage.notOkOptionType = normalizeCellValue(row[columnIndex + 3]);
+      }
+
+      return stage;
+    };
 
     // Detect regular stage columns (stage1, stage2, ...) and final stage columns (finalstage1, ...)
     const stageColumnIndexes = headers
@@ -761,26 +958,8 @@ const Products = () => {
       if (!productMap.has(productName)) {
         productMap.set(productName, {
           ...parsedMeta,
-          workflowStages: stageColumnIndexes.map(({ header, index }) => ({
-            stageNumber: Number(header.replace('stage', '')),
-            stageName: normalizeCellValue(row[index]),
-            enabled: normalizeCellValue(row[index]),
-            accepted: normalizeCellValue(row[index + 1]),
-            rejectionQuestion: normalizeCellValue(row[index + 2]),
-            rejectionOptionType: normalizeCellValue(row[index + 3]),
-            rejectionOptions: [],   // will accumulate
-            reworkQuestion: normalizeCellValue(row[index + 5]),
-            reworkOptionType: normalizeCellValue(row[index + 6]),
-            reworkOptions: []       // will accumulate
-          })),
-          finalStages: finalStageColumnIndexes.map(({ header, index }) => ({
-            stageNumber: Number(header.replace('finalstage', '')),
-            stageName: normalizeCellValue(row[index]),
-            okCount: normalizeCellValue(row[index + 1]),
-            notOkQuestion: normalizeCellValue(row[index + 2]),
-            notOkOptionType: normalizeCellValue(row[index + 3]),
-            notOkOptions: []        // will accumulate
-          }))
+          workflowStages: [],
+          finalStages: []
         });
       }
 
@@ -795,30 +974,33 @@ const Products = () => {
       });
 
       // Accumulate rejection/rework options per stage
-      stageColumnIndexes.forEach(({ header, index }, i) => {
-        const stage = entry.workflowStages[i];
+      stageColumnIndexes.forEach(({ header, index }) => {
+        const stage = findOrCreateStage(entry, row, index, Number(header.replace('stage', '')));
         if (!stage) return;
         const rejOpt = normalizeCellValue(row[index + 4]);
         const rwkOpt = normalizeCellValue(row[index + 7]);
-        if (String(rejOpt || '').trim()) stage.rejectionOptions.push(String(rejOpt).trim());
-        if (String(rwkOpt || '').trim()) stage.reworkOptions.push(String(rwkOpt).trim());
+        addUniqueOption(stage.rejectionOptions, rejOpt);
+        addUniqueOption(stage.reworkOptions, rwkOpt);
       });
 
       // Accumulate Not OK options per final stage
-      finalStageColumnIndexes.forEach(({ header, index }, i) => {
-        const fStage = entry.finalStages[i];
+      finalStageColumnIndexes.forEach(({ header, index }) => {
+        const fStage = findOrCreateFinalStage(entry, row, index, Number(header.replace('finalstage', '')));
         if (!fStage) return;
         const notOkOpt = normalizeCellValue(row[index + 4]);
-        if (String(notOkOpt || '').trim()) fStage.notOkOptions.push(String(notOkOpt).trim());
+        addUniqueOption(fStage.notOkOptions, notOkOpt);
       });
     });
 
     // Convert map entries to rows; join accumulated options as comma-separated strings
     return Array.from(productMap.values()).map((entry) => ({
       ...entry,
-      workflowStages: entry.workflowStages
-        .map((stage) => ({
+      workflowStages: sortByTemplateStageOrder(entry.workflowStages)
+        .map((stage, index) => ({
           ...stage,
+          stageNumber: index + 1,
+          sourceStageNumber: undefined,
+          discoveryOrder: undefined,
           rejectionOptions: stage.rejectionOptions.join(','),
           reworkOptions: stage.reworkOptions.join(',')
         }))
@@ -826,9 +1008,12 @@ const Products = () => {
           [stage.enabled, stage.accepted, stage.rejectionQuestion, stage.rejectionOptions, stage.reworkQuestion, stage.reworkOptions]
             .some((v) => String(v || '').trim())
         ),
-      finalStages: entry.finalStages
-        .map((stage) => ({
+      finalStages: sortByTemplateStageOrder(entry.finalStages)
+        .map((stage, index) => ({
           ...stage,
+          stageNumber: index + 1,
+          sourceStageNumber: undefined,
+          discoveryOrder: undefined,
           notOkOptions: stage.notOkOptions.join(',')
         }))
         .filter((stage) =>
@@ -943,13 +1128,36 @@ const Products = () => {
 
     const worksheetData = [headerRow, ...exampleRows];
     const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const templateRowLimit = 500;
+    const optionTypeValues = ['Checkbox', 'Dropdown', 'Radio', 'Text'];
+    const optionTypeColumnIndexes = headerRow
+      .map((header, index) => ({ header, index }))
+      .filter(({ header }) => ['Rejected Option Type', 'Rework Option Type', 'Not OK Option Type'].includes(header))
+      .map(({ index }) => index);
+
+    const encodeRange = (columnIndex) =>
+      `${XLSX.utils.encode_cell({ r: 1, c: columnIndex })}:${XLSX.utils.encode_cell({ r: templateRowLimit, c: columnIndex })}`;
+
+    const dataValidationsXml = `<dataValidations count="${optionTypeColumnIndexes.length}">` +
+      optionTypeColumnIndexes.map((columnIndex) =>
+        `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${encodeRange(columnIndex)}">` +
+        `<formula1>"${optionTypeValues.join(',')}"</formula1>` +
+        '</dataValidation>'
+      ).join('') +
+      '</dataValidations>';
 
     // Set column widths
     worksheet['!cols'] = headerRow.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
-    XLSX.writeFile(workbook, 'workflow-template.xlsx');
+    const workbookArray = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', compression: false });
+    const patchedWorkbook = patchStoredXlsxEntry(
+      workbookArray,
+      'xl/worksheets/sheet1.xml',
+      (sheetXml) => insertSheetDataValidations(sheetXml, dataValidationsXml)
+    );
+    downloadArrayBuffer(patchedWorkbook, 'workflow-template.xlsx');
   };
 
   const fetchCategoriesList = async () => {

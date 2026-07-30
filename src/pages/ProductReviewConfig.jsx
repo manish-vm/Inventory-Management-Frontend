@@ -62,6 +62,14 @@ const toKey = (value) => String(value || '')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '');
 
+const normalizePartText = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/\bd\s*\d+\b/g, ' ')
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 const lineFromValue = (...values) => {
   const text = values.join(' ').toLowerCase();
   const match = text.match(/\bd\s*([1-4])\b/);
@@ -111,12 +119,26 @@ const reportRowsByContext = ({ productionLine, reportType }) => {
   return [];
 };
 
-const groupedProcessDefects = (rows = []) => {
+const filterRowsForProductPart = (rows = [], selectedProductName = '') => {
+  const productText = normalizePartText(selectedProductName);
+  if (!productText) return rows;
+
+  const matchedRows = rows.filter((row) => {
+    const partText = normalizePartText(row.partDetails || row.partName);
+    return partText && productText.includes(partText);
+  });
+
+  // If the report dataset is already product-specific but uses a shorthand part
+  // name, keep the rows instead of hiding a valid questionnaire.
+  return matchedRows.length ? matchedRows : rows;
+};
+
+const groupedProcessDefects = (rows = [], selectedProductName = '') => {
   const groups = new Map();
   let currentProcess = '';
   let currentPart = '';
 
-  rows.forEach((row) => {
+  filterRowsForProductPart(rows, selectedProductName).forEach((row) => {
     if (row.assemblyProcess || row.defectGroup) currentProcess = String(row.assemblyProcess || row.defectGroup).trim();
     if (row.partDetails) currentPart = String(row.partDetails).trim();
     const process = currentProcess || 'Unspecified';
@@ -175,12 +197,22 @@ const ProductReviewConfig = () => {
       productionLine: currentStage.productionLine || `D${lineFromValue(productName, currentStage.stageName) || ''}`,
       reportType: inferredReportType
     });
-    return groupedProcessDefects(rows);
+    return groupedProcessDefects(rows, productName);
   }, [currentStage.productionLine, currentStage.reportType, currentStage.stageName, productName]);
 
   const applyReportOptionsToRejectionQuestions = (questions = []) =>
     normalizeQuestions(questions).map((question) => {
       if (!rejectionOptionGroups.length) return question;
+      const hasSavedOptions = (question.options || []).length > 0;
+      const usesReportOptions = question.optionsSource === 'dashboard-report-sheet' ||
+        (question.options || []).some((option) => option.optionsSource === 'dashboard-report-sheet' || option.optionsLocked);
+
+      // Imported/manual questionnaires already contain the product-specific
+      // rejection options. Do not replace them with report-wide process options,
+      // because same-named processes like "Moulding Defects" exist on multiple
+      // products with different rejection reasons.
+      if (hasSavedOptions && !usesReportOptions) return question;
+
       const questionId = question.questionId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       return {
         ...question,
@@ -234,6 +266,14 @@ const ProductReviewConfig = () => {
 
   useEffect(() => {
     if (!rejectionOptionGroups.length || !config.rejectionQuestions.length) return;
+    const shouldApplyReportOptions = config.rejectionQuestions.some((question) => {
+      const hasSavedOptions = (question.options || []).length > 0;
+      const usesReportOptions = question.optionsSource === 'dashboard-report-sheet' ||
+        (question.options || []).some((option) => option.optionsSource === 'dashboard-report-sheet' || option.optionsLocked);
+      return !hasSavedOptions || usesReportOptions;
+    });
+    if (!shouldApplyReportOptions) return;
+
     setConfig((prev) => ({
       ...prev,
       rejectionQuestions: applyReportOptionsToRejectionQuestions(prev.rejectionQuestions)
