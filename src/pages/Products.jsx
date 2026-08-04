@@ -778,8 +778,13 @@ const Products = () => {
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
   const [allModels, setAllModels] = useState([]);
-  const [showLowStock, setShowLowStock] = useState(false);
+const [showLowStock, setShowLowStock] = useState(false);
   const [uploadingProducts, setUploadingProducts] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const [previewData, setPreviewData] = useState(null); // { fileName, rows }
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
 
 
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -1027,7 +1032,7 @@ const Products = () => {
     );
   };
 
-  const handleProductExcelUpload = async (event) => {
+const handleProductExcelUpload = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -1038,6 +1043,28 @@ const Products = () => {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const productsToUpload = parseWorkflowTemplateRows(sheet);
 
+      if (!productsToUpload.length) {
+        toast.error('No valid product rows found in the file. Please check the template and try again.');
+        return;
+      }
+
+      // Show preview & confirmation popup before writing anything to the DB.
+      setPreviewData({ fileName: file.name, rows: productsToUpload });
+      setPreviewExpanded(false);
+      setShowPreviewModal(true);
+    } catch (error) {
+      toast.error('Failed to parse the Excel file. Please make sure it is a valid workbook.');
+    } finally {
+      setUploadingProducts(false);
+    }
+  };
+
+  const confirmProductImport = async () => {
+    if (!previewData?.rows?.length) return;
+    setShowPreviewModal(false);
+    setUploadingProducts(true);
+    try {
+      const productsToUpload = previewData.rows;
       const response = await productAPI.bulkUpload(productsToUpload);
       const { created = 0, updated = 0, qrCreated = 0, workflowCreated = 0, workflowUpdated = 0, errors = [] } = response.data || {};
       toast.success(`Imported ${created} new and ${updated} updated products. Workflows: ${workflowCreated} new, ${workflowUpdated} updated. QR created: ${qrCreated}.`);
@@ -1054,6 +1081,7 @@ const Products = () => {
       toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to import products');
     } finally {
       setUploadingProducts(false);
+      setPreviewData(null);
     }
   };
 
@@ -1391,13 +1419,41 @@ const Products = () => {
   //   }
   // };
 
-  const handleDelete = async (id) => {
+const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
       await productAPI.delete(id);
       fetchProducts();
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to delete product');
+    }
+  };
+
+  const toggleSelectProduct = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.length === products.length ? [] : products.map((p) => p._id)
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.length) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected product(s)? This will also delete related manufacturing configs, inspection responses, reports, QR codes and other operational data.`)) return;
+    setDeletingSelected(true);
+    try {
+      await productAPI.bulkDelete(selectedIds);
+      toast.success(`Deleted ${selectedIds.length} product(s) and related data`);
+      setSelectedIds([]);
+      fetchProducts();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete selected products');
+    } finally {
+      setDeletingSelected(false);
     }
   };
 
@@ -1471,8 +1527,19 @@ const Products = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Products</h1>
           <p className="text-slate-500 dark:text-slate-400">Manage your inventory</p>
         </div>
-        {isAdmin && (
+{isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={deletingSelected}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl disabled:opacity-50"
+              >
+                {deletingSelected ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                Delete Selected ({selectedIds.length})
+              </button>
+            )}
             <button
               type="button"
               onClick={handleDownloadWorkflowTemplate}
@@ -1563,8 +1630,18 @@ const Products = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50 dark:bg-slate-700/50">
+<thead className="bg-slate-50 dark:bg-slate-700/50">
                 <tr>
+                  {isAdmin && (
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
+                      <input
+                        type="checkbox"
+                        checked={products.length > 0 && selectedIds.length === products.length}
+                        onChange={toggleSelectAll}
+                        className="rounded"
+                      />
+                    </th>
+                  )}
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Product</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Code</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Category</th>
@@ -1580,8 +1657,18 @@ const Products = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {products.map((product) => (
-                    <tr key={product._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+{products.map((product) => (
+                    <tr key={product._id} className={`hover:bg-slate-50 dark:hover:bg-slate-700/30 ${selectedIds.includes(product._id) ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
+                    {isAdmin && (
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(product._id)}
+                          onChange={() => toggleSelectProduct(product._id)}
+                          className="rounded"
+                        />
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
@@ -1762,11 +1849,175 @@ const Products = () => {
         />
       )}
 
-{selectedProduct && (
+      {selectedProduct && (
         <QRCodePopup 
           product={selectedProduct} 
           onClose={() => setSelectedProduct(null)} 
         />
+      )}
+
+{showPreviewModal && previewData && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Review Excel Upload</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{previewData.fileName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  setPreviewData(null);
+                }}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Summary */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6 pb-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Products</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{previewData.rows.length}</p>
+              </div>
+              <div className="rounded-xl bg-violet-50 dark:bg-violet-900/20 p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Workflow Stages</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {previewData.rows.reduce((sum, row) => sum + (row.workflowStages?.length || 0), 0)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Final Stages</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {previewData.rows.reduce((sum, row) => sum + (row.finalStages?.length || 0), 0)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Total Options</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {previewData.rows.reduce(
+                    (sum, row) =>
+                      sum +
+                      (row.workflowStages || []).reduce(
+                        (stageSum, stage) =>
+                          stageSum +
+                          (stage.rejectionOptions ? String(stage.rejectionOptions).split(',').filter(Boolean).length : 0) +
+                          (stage.reworkOptions ? String(stage.reworkOptions).split(',').filter(Boolean).length : 0),
+                        0
+                      ) +
+                      (row.finalStages || []).reduce(
+                        (stageSum, stage) =>
+                          stageSum + (stage.notOkOptions ? String(stage.notOkOptions).split(',').filter(Boolean).length : 0),
+                        0
+                      ),
+                    0
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Warning */}
+            <div className="flex items-start gap-3 px-6 py-4 bg-amber-50 dark:bg-amber-900/10 border-b border-amber-200 dark:border-amber-800 shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  No data has been written to the database yet.
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Please verify the parsed contents below before confirming. Once confirmed, products, workflows, and QR codes will be created/updated.
+                </p>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="overflow-x-auto max-h-[45vh]">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-700/50 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">#</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Product Name</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Code</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Category</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Subcategory</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Brand</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Model</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">Workflow</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                    {previewData.rows.slice(0, previewExpanded ? previewData.rows.length : 10).map((row, index) => (
+                      <tr key={index} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{index + 1}</td>
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{row.productName || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.code || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.categoryName || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.subcategoryName || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.brandName || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.model || '-'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {(row.workflowStages || []).map((stage) => (
+                              <span key={stage.stageNumber} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                S{stage.stageNumber}: {stage.stageName}
+                              </span>
+                            ))}
+                            {(row.finalStages || []).map((stage) => (
+                              <span key={`f-${stage.stageNumber}`} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                                F{stage.stageNumber}: {stage.stageName}
+                              </span>
+                            ))}
+                            {!(row.workflowStages || []).length && !(row.finalStages || []).length && (
+                              <span className="text-xs text-slate-400">No workflow</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {previewData.rows.length > 10 && (
+                <button
+                  onClick={() => setPreviewExpanded(!previewExpanded)}
+                  className="mt-4 w-full py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-slate-200 dark:border-slate-700 rounded-xl"
+                >
+                  {previewExpanded
+                    ? `Show fewer rows (10 of ${previewData.rows.length})`
+                    : `Show all ${previewData.rows.length} rows`}
+                </button>
+              )}
+            </div>
+
+            {/* Footer buttons */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700 shrink-0">
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  setPreviewData(null);
+                }}
+                className="px-6 py-2 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmProductImport}
+                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl"
+              >
+                {uploadingProducts ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                {uploadingProducts ? 'Importing...' : 'Confirm Import'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
 {/* {showAnalyticsModal && analyticsData && (
