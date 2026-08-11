@@ -2649,9 +2649,30 @@ const AdminDashboard = ({
 
   const buildExportReport = (subReport) => {
     if (['drr', 'visor-drr'].includes(subReport.type)) {
+      const reportRows = editableDrrReports[subReport.id]?.rows || [];
+      const firstQuestionHeader = reportRows
+        .map((row) => String(row.questionHeader || '').trim())
+        .find(Boolean);
+      const questionHeaderIsDefectDetails = normalizeReportKey(firstQuestionHeader) === normalizeReportKey('Defect Details');
+      const stageColumn = subReport.descriptorColumns.find((column) => column.key === 'stageName');
+      const partDetailsColumn = subReport.descriptorColumns.find((column) => column.key === 'partDetails');
+      const questionAnswerColumn = subReport.descriptorColumns.find((column) => column.key === 'assemblyProcess') || subReport.descriptorColumns[0];
+      const defectDetailsColumn = subReport.descriptorColumns.find((column) => column.key === 'defectDetails');
+      const descriptorColumns = firstQuestionHeader
+        ? [
+            stageColumn,
+            partDetailsColumn,
+            questionAnswerColumn && {
+              ...questionAnswerColumn,
+              label: firstQuestionHeader
+            },
+            !questionHeaderIsDefectDetails && defectDetailsColumn
+          ].filter(Boolean)
+        : subReport.descriptorColumns;
       return {
         ...subReport,
-        rows: editableDrrReports[subReport.id]?.rows || [],
+        descriptorColumns,
+        rows: reportRows,
         dayColumns: currentDayColumns
       };
     }
