@@ -123,6 +123,7 @@ const FinalInspectionPage = () => {
 
   useEffect(() => {
     const q = search.trim();
+    const controller = new AbortController();
     const handle = setTimeout(async () => {
       if (!q && !dropdownOpen) {
         setSuggestions([]);
@@ -132,17 +133,22 @@ const FinalInspectionPage = () => {
       try {
         setSuggestionsLoading(true);
         setSuggestionsError('');
-        const response = await inspectionAPI.searchProducts({ q, finalStage: true });
+        const response = await inspectionAPI.searchProducts({ q, finalStage: true }, { signal: controller.signal });
         setSuggestions(response.data || []);
       } catch (error) {
+        if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') return;
         setSuggestions([]);
         setSuggestionsError(!hasFinalInspectionAccess ? 'No inspection role has been assigned yet' : (error.response?.data?.message || 'Unable to load assigned products'));
       } finally {
+        if (controller.signal.aborted) return;
         setSuggestionsLoading(false);
       }
     }, 250);
 
-    return () => clearTimeout(handle);
+    return () => {
+      controller.abort();
+      clearTimeout(handle);
+    };
   }, [search, dropdownOpen, hasFinalInspectionAccess]);
 
   useEffect(() => {

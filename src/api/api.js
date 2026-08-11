@@ -406,7 +406,7 @@ export const processingStageAPI = {
 export const inspectionAPI = {
   getDashboard: () => api.get('/inspection/employee/dashboard'),
   scan: (qrId) => api.post('/inspection/employee/scan', { qrId }),
-  searchProducts: (params) => api.get('/employees/products/search', { params }),
+  searchProducts: (params, config = {}) => api.get('/employees/products/search', { ...config, params }),
   lookupBatchProduct: (key, params) => api.get(`/employees/batch-product/${encodeURIComponent(key)}`, { params }),
   lookupProduct: (code) => api.get(`/employees/product/${encodeURIComponent(code)}`),
   submitEmployeeResponse: (data) => api.post('/employees/inspection-response', data),
