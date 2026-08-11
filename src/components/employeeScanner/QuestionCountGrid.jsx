@@ -67,6 +67,9 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
     const countKey = `${questionId}::__count__::${optionKey}`;
     commitChange((currentValues) => {
       const current = currentValues?.[countKey] || {};
+      const optionLabel = option.label || option.value || option.defectType || option.defectDetail || '';
+      const questionText = textOf(question);
+      const defectDetail = optionKey === RESPONSE_COUNT_KEY ? questionText : optionLabel || questionText;
       return {
         ...currentValues,
         [countKey]: {
@@ -81,16 +84,16 @@ const QuestionCountGrid = ({ forms = [], values, onChange }) => {
           parentOption: lineage.parentOption || (optionKey === RESPONSE_COUNT_KEY ? '' : option.label || option.value || optionKey),
           subQuestion: lineage.subQuestion || '',
           subOption: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
-            ? option.label || option.value || optionKey
+            ? optionLabel || optionKey
             : lineage.subOption || '',
           defectDetail: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
-            ? option.label || option.value || optionKey
-            : textOf(question) || option.defectType || option.defectDetail || current.defectDetail || '',
+            ? optionLabel || optionKey
+            : defectDetail || current.defectDetail || '',
           assemblyProcess: option.assemblyProcess || question.assemblyProcess || current.assemblyProcess || '',
           partDetails: option.partDetails || question.partDetails || current.partDetails || '',
           defectType: lineage.subQuestion && optionKey !== RESPONSE_COUNT_KEY
-            ? option.label || option.value || optionKey
-            : textOf(question) || option.defectType || option.defectDetail || current.defectType || ''
+            ? optionLabel || optionKey
+            : defectDetail || current.defectType || ''
         }
       };
     });

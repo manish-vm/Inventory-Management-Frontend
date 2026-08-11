@@ -52,6 +52,10 @@ const deriveSelectedCounts = (values = {}) => {
       freeFormTotal += count;
       return;
     }
+    if (item.isLeafAnswer && !selectedByQuestion[questionId]) {
+      optionTotal += count;
+      return;
+    }
     if (selectedByQuestion[questionId]?.has(optionKey)) optionTotal += count;
   });
 
