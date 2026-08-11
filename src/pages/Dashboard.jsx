@@ -2496,6 +2496,7 @@ const AdminDashboard = ({
       const firstQuestionHeader = reportRows
         .map((row) => String(row.questionHeader || '').trim())
         .find(Boolean);
+      const questionHeaderIsDefectDetails = normalizeReportKey(firstQuestionHeader) === normalizeReportKey('Defect Details');
       const stageColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'stageName');
       const partDetailsColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'partDetails');
       const questionAnswerColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'assemblyProcess') || activeSubReportBase.descriptorColumns[0];
@@ -2515,7 +2516,7 @@ const AdminDashboard = ({
               label: firstQuestionHeader,
               width: estimateTextColumnWidth(firstQuestionHeader, reportRows, questionAnswerColumn.key)
             },
-            defectDetailsColumn && {
+            !questionHeaderIsDefectDetails && defectDetailsColumn && {
               ...defectDetailsColumn,
               label: 'Defect Details',
               width: estimateTextColumnWidth('Defect Details', reportRows, defectDetailsColumn.key, { min: 180, max: 360 })
