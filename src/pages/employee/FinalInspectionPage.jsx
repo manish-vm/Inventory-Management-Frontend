@@ -83,7 +83,7 @@ const FinalInspectionPage = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const productDetailsRef = useRef(null);
-  const hasFinalInspectionAccess = user?.role !== 'inspector' && Boolean(user?.assignedFinalStageRole);
+  const hasFinalInspectionAccess = Boolean(user?.assignedFinalStageRole);
 
   const product = lookupData?.product;
   const availableCount = Number(product?.availableCount || 0);

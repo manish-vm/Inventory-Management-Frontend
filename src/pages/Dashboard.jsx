@@ -1943,13 +1943,13 @@ const AdminDashboard = ({
     return report;
   }), [availableStaticReportTabs, dynamicMisCrsSubReports]);
   const stagesDynamicTab = useMemo(() => {
-    const excludedSuffixes = ['-mis', '-crs', '-ok', '-not-ok', '-final-stages'];
+    const excludedSuffixes = ['-mis', '-crs', '-ok', '-not-ok', '-final-stages', '-stages'];
     const stagesSubReports = Object.entries(backendMisReports || {})
       .filter(([reportId]) => {
         if (reportId.endsWith('-final-stages')) return false;
         if (reportId.startsWith('stagewise-rejection-performance-')) return true;
         if (!reportId.startsWith('product-')) return false;
-        if (reportId.endsWith('-rejection') || reportId.endsWith('-rework') || reportId.endsWith('-stages')) return true;
+        if (reportId.endsWith('-rejection') || reportId.endsWith('-rework')) return true;
         return !excludedSuffixes.some((suffix) => reportId.endsWith(suffix));
       })
       .sort(([leftId, leftReport], [rightId, rightReport]) =>
@@ -1960,6 +1960,7 @@ const AdminDashboard = ({
         const isRework = reportId.endsWith('-rework');
         const isRejected = reportId.endsWith('-rejection') || reportId.startsWith('stagewise-rejection-performance-');
         const name = isRework ? `${label} Rework` : isRejected ? `${label} Rejected` : `${label} DRR`;
+        const categoryName = report.partName || report.processName || report.productionLine || 'Submitted Reports';
         return {
           id: reportId,
           sourceReportId: reportId,
@@ -1967,7 +1968,7 @@ const AdminDashboard = ({
           metric: isRework ? 'rework' : isRejected ? 'rejection' : 'rejectionAndRework',
           name,
           sourceFileName: label,
-          categoryName: report.partName || report.processName || report.productionLine || 'Submitted Reports',
+          categoryName,
           descriptorColumns: [
             stageDescriptorColumn,
             { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
