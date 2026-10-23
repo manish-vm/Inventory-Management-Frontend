@@ -182,7 +182,10 @@ const FinalInspectionPage = () => {
         currentSelectable ||
         response.data.stages?.find((stage) => stage.selectable && Number(stage.availableCount || 0) > 0) ||
         response.data.stages?.find((stage) => stage.selectable);
-      const initialStageNumber = firstSelectable?.stageNumber || backendCurrentStageNumber || '';
+      const matchingStage = response.data.stages?.find(
+        (stage) => Number(stage.stageNumber) === Number(backendCurrentStageNumber)
+      );
+      const initialStageNumber = firstSelectable?.stageNumber || matchingStage?.stageNumber || response.data.stages?.[0]?.stageNumber || '';
       setSelectedStageNumber(initialStageNumber);
 
       setInspectionValues({});
@@ -485,7 +488,10 @@ const FinalInspectionPage = () => {
                   ...product,
                   currentStage: selectedStage?.stageName || product?.currentStage || '',
                   currentStageNumber: selectedStage?.stageNumber || product?.currentStageNumber,
-                  currentStageName: selectedStage?.stageName || product?.currentStage
+                  currentStageName: selectedStage?.stageName || product?.currentStage,
+                  manufacturingStatus: selectedStage?.inspectionCompleted
+                    ? 'Inspection Done'
+                    : product?.manufacturingStatus || 'Pending Inspection'
                 }}
               />
             </div>
@@ -516,7 +522,15 @@ const FinalInspectionPage = () => {
                       Stage {stage.stageNumber}{isSelected ? ' - Selected' : ''}
                     </span>
                     <span className="font-semibold">{stage.stageName}</span>
-                    {Number(stage.stageNumber) > 1 && stage.availableCount !== undefined && (
+                    {stage.inspectionCompleted ? (
+                      <span className={`mt-1 inline-flex rounded px-2 py-0.5 text-xs font-semibold ${
+                        isSelected
+                          ? 'bg-emerald-800/40 text-white'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      }`}>
+                        Inspection Done
+                      </span>
+                    ) : Number(stage.stageNumber) > 1 && stage.availableCount !== undefined && (
                       <span className={`mt-1 block text-xs ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
                         {Number(stage.availableCount || 0)} available
                       </span>

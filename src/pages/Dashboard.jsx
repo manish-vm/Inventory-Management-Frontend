@@ -1959,21 +1959,37 @@ const AdminDashboard = ({
   }), [availableStaticReportTabs, dynamicMisCrsSubReports]);
   const stagesDynamicTab = useMemo(() => {
     const excludedSuffixes = ['-mis', '-crs', '-ok', '-not-ok', '-final-stages', '-stages'];
+    const reportOrder = (reportId) => reportId.endsWith('-rework')
+      ? 2
+      : reportId.endsWith('-rejection')
+        ? 1
+        : 0;
+    const reportBaseId = (reportId) => reportId.replace(/-(rejection|rework)$/, '');
+    const reportBaseTitle = (reportId, report) => getBackendReportTitle(reportId, report)
+      .replace(/\s+(DRR|Rejected|Rework|Stages)$/i, '');
     const stagesSubReports = Object.entries(backendMisReports || {})
       .filter(([reportId]) => {
         if (reportId.endsWith('-final-stages')) return false;
-        if (reportId.startsWith('stagewise-rejection-performance-')) return true;
+        if (reportId.startsWith('stagewise-rejection-performance-')) return false;
         if (!reportId.startsWith('product-')) return false;
         if (reportId.endsWith('-rejection') || reportId.endsWith('-rework')) return true;
         return !excludedSuffixes.some((suffix) => reportId.endsWith(suffix));
       })
       .sort(([leftId, leftReport], [rightId, rightReport]) =>
-        getBackendReportTitle(leftId, leftReport).localeCompare(getBackendReportTitle(rightId, rightReport))
+        reportBaseTitle(leftId, leftReport).localeCompare(reportBaseTitle(rightId, rightReport), undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        }) ||
+        reportBaseId(leftId).localeCompare(reportBaseId(rightId), undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        }) ||
+        reportOrder(leftId) - reportOrder(rightId)
       )
       .map(([reportId, report]) => {
         const label = getBackendReportTitle(reportId, report).replace(/\s+(DRR|Rejected|Rework|Stages)$/i, '');
         const isRework = reportId.endsWith('-rework');
-        const isRejected = reportId.endsWith('-rejection') || reportId.startsWith('stagewise-rejection-performance-');
+        const isRejected = reportId.endsWith('-rejection');
         const name = isRework ? `${label} Rework` : isRejected ? `${label} Rejected` : `${label} DRR`;
         const categoryName = report.partName || report.processName || report.productionLine || 'Submitted Reports';
         return {
