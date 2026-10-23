@@ -117,7 +117,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     isAlert: true 
   };
   // Employee gets profile with analytics, products (read-only), invoices, and production
-  const hasFinalInspectionAccess = user?.role !== 'inspector' && Boolean(user?.assignedFinalStageRole);
+  const hasFinalInspectionAccess = Boolean(user?.assignedFinalStageRole);
   const employeeNavItems = [
     ...(user?.role === 'inspector' ? [] : [{ path: '/app/employee/scanner', icon: Scan, label: 'QR Scanner' }]),
     ...(user?.role === 'inspector' ? [

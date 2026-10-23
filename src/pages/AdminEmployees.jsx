@@ -31,7 +31,14 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
   const label = roleLabels[personType] || 'Employee';
   const stageRoleFor = personType === 'inspector' ? 'inspector' : 'employee';
   const stageRoles = roles.filter((role) => (role.roleFor || 'employee') === stageRoleFor);
+
   const finalStageRoles = roles.filter((role) => ['finalStages', 'employeeFinalStages'].includes(role.roleFor));
+  const finalStageRoleFor = personType === 'inspector' ? 'inspectorFinalStages' : 'employeeFinalStages';
+  const currentFinalStageRoleId = String(employee?.assignedFinalStageRole?._id || employee?.assignedFinalStageRole || '');
+  const finalStageRoles = roles.filter((role) =>
+    role.roleFor === finalStageRoleFor
+    || (role.roleFor === 'finalStages' && String(role._id) === currentFinalStageRoleId)
+  );
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     phone: employee?.phone || '',
@@ -75,9 +82,6 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
       // Only send password if it's filled (for new employees or password changes)
       const dataToSend = { ...formData };
       delete dataToSend.canLogin;
-      if (personType === 'inspector') {
-        dataToSend.assignedFinalStageRole = '';
-      }
       if (employee && !formData.password) {
         delete dataToSend.password;
       }
@@ -186,19 +190,17 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
             {stageRoles.length === 0 && <p className="text-xs text-amber-500 mt-1">No {label.toLowerCase()} stages roles available. Create one in Role Management first.</p>}
           </div>
 
-          {personType !== 'inspector' && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Final Stages Role
-              </label>
-              <select value={formData.assignedFinalStageRole} onChange={(e) => setFormData({ ...formData, assignedFinalStageRole: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
-                <option value="">No final stages role</option>
-                {finalStageRoles.map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
-              </select>
-              <p className="text-xs text-slate-500 mt-1">Optional. Controls access to final stages.</p>
-              {finalStageRoles.length === 0 && <p className="text-xs text-amber-500 mt-1">No final stages roles available. Create one in Role Management first.</p>}
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Final Stages Role
+            </label>
+            <select value={formData.assignedFinalStageRole} onChange={(e) => setFormData({ ...formData, assignedFinalStageRole: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="">No final stages role</option>
+              {finalStageRoles.map((role) => <option key={role._id} value={role._id}>{role.roleName}</option>)}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">Optional. Controls access to final stages.</p>
+            {finalStageRoles.length === 0 && <p className="text-xs text-amber-500 mt-1">No final stages roles available. Create one in Role Management first.</p>}
+          </div>
 
           {/* Login Access Section */}
           <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
@@ -337,9 +339,6 @@ const AdminEmployees = () => {
     try {
       setError('');
       const dataToSend = { ...formData, role: activeTab };
-      if (activeTab === 'inspector') {
-        dataToSend.assignedFinalStageRole = '';
-      }
       if (editingEmployee) {
         await employeeAPI.updateEmployee(editingEmployee._id, dataToSend);
 
@@ -543,7 +542,7 @@ const AdminEmployees = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Email</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Address</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Stage Role</th>
-                  {activeTab !== 'inspector' && <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Final Role</th>}
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Final Role</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">Status</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">Actions</th>
                 </tr>
@@ -584,13 +583,11 @@ const AdminEmployees = () => {
                         {employee.assignedRole?.roleName || 'No role'}
                       </span>
                     </td>
-                    {activeTab !== 'inspector' && (
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${employee.assignedFinalStageRole ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
-                          {employee.assignedFinalStageRole?.roleName || 'No role'}
-                        </span>
-                      </td>
-                    )}
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${employee.assignedFinalStageRole ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                        {employee.assignedFinalStageRole?.roleName || 'No role'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
                         employee.isActive 

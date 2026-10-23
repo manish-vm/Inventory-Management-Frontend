@@ -1958,166 +1958,93 @@ const AdminDashboard = ({
     return report;
   }), [availableStaticReportTabs, dynamicMisCrsSubReports]);
   const stagesDynamicTab = useMemo(() => {
-    const stagesSubReports = reportableCategories.flatMap((category) => {
-      const categoryId = String(category._id);
-      const subcategories = productSubcategories.filter((subcategory) =>
-        String(subcategory.category?._id || subcategory.category || '') === categoryId
-          && !isGeneratedDashboardSubcategory(subcategory)
-      );
-      const targets = subcategories.length
-        ? subcategories.map((subcategory) => ({
-            baseId: `product-subcategory-${String(subcategory._id)}`,
-            name: `${category.name} - ${subcategory.name}`,
-            sourceFileName: `${category.name} / ${subcategory.name}`
-          }))
-        : [{
-            baseId: `product-category-${categoryId}-all`,
-            name: category.name,
-            sourceFileName: category.name
-          }];
-      return targets.flatMap((target) => [
-        {
-          id: target.baseId,
-          sourceReportId: target.baseId,
+    const excludedSuffixes = ['-mis', '-crs', '-ok', '-not-ok', '-final-stages', '-stages'];
+    const stagesSubReports = Object.entries(backendMisReports || {})
+      .filter(([reportId]) => {
+        if (reportId.endsWith('-final-stages')) return false;
+        if (reportId.startsWith('stagewise-rejection-performance-')) return true;
+        if (!reportId.startsWith('product-')) return false;
+        if (reportId.endsWith('-rejection') || reportId.endsWith('-rework')) return true;
+        return !excludedSuffixes.some((suffix) => reportId.endsWith(suffix));
+      })
+      .sort(([leftId, leftReport], [rightId, rightReport]) =>
+        getBackendReportTitle(leftId, leftReport).localeCompare(getBackendReportTitle(rightId, rightReport))
+      )
+      .map(([reportId, report]) => {
+        const label = getBackendReportTitle(reportId, report).replace(/\s+(DRR|Rejected|Rework|Stages)$/i, '');
+        const isRework = reportId.endsWith('-rework');
+        const isRejected = reportId.endsWith('-rejection') || reportId.startsWith('stagewise-rejection-performance-');
+        const name = isRework ? `${label} Rework` : isRejected ? `${label} Rejected` : `${label} DRR`;
+        const categoryName = report.partName || report.processName || report.productionLine || 'Submitted Reports';
+        return {
+          id: reportId,
+          sourceReportId: reportId,
           type: 'drr',
-          metric: 'rejectionAndRework',
-          name: `${target.name} DRR`,
-          sourceFileName: target.sourceFileName,
-          categoryName: category.name,
+          metric: isRework ? 'rework' : isRejected ? 'rejection' : 'rejectionAndRework',
+          name,
+          sourceFileName: label,
+          categoryName,
           descriptorColumns: [
             stageDescriptorColumn,
             { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
             { key: 'partDetails', label: 'Part details', width: 120 },
             { key: 'defectDetails', label: 'Defect Details', width: 180 },
           ],
-          summaryRows: drrSummaryRows,
+          summaryRows: isRework ? dynamicReworkSummaryRows : isRejected ? dynamicRejectionSummaryRows : drrSummaryRows,
           totalColumns: [
             { id: 'total', label: 'Total' },
             { id: 'totalPercent', label: 'Total %' },
           ],
           rows: []
-        },
-        {
-          id: `${target.baseId}-rejection`,
-          sourceReportId: `${target.baseId}-rejection`,
-          type: 'drr',
-          metric: 'rejection',
-          name: `${target.name} Rejected`,
-          sourceFileName: target.sourceFileName,
-          categoryName: category.name,
-          descriptorColumns: [
-            stageDescriptorColumn,
-            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
-            { key: 'partDetails', label: 'Part details', width: 120 },
-            { key: 'defectDetails', label: 'Defect Details', width: 180 },
-          ],
-          summaryRows: dynamicRejectionSummaryRows,
-          totalColumns: [
-            { id: 'total', label: 'Total' },
-            { id: 'totalPercent', label: 'Total %' },
-          ],
-          rows: []
-        },
-        {
-          id: `${target.baseId}-rework`,
-          sourceReportId: `${target.baseId}-rework`,
-          type: 'drr',
-          metric: 'rework',
-          name: `${target.name} Rework`,
-          sourceFileName: target.sourceFileName,
-          categoryName: category.name,
-          descriptorColumns: [
-            stageDescriptorColumn,
-            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
-            { key: 'partDetails', label: 'Part details', width: 120 },
-            { key: 'defectDetails', label: 'Defect Details', width: 180 },
-          ],
-          summaryRows: dynamicReworkSummaryRows,
-          totalColumns: [
-            { id: 'total', label: 'Total' },
-            { id: 'totalPercent', label: 'Total %' },
-          ],
-          rows: []
-        }
-      ]);
-    });
+        };
+      });
     return {
       id: 'stages',
       name: 'Stages',
       dynamic: true,
       subReports: stagesSubReports
     };
-  }, [productSubcategories, reportableCategories]);
+  }, [backendMisReports]);
   const finalStagesDynamicTab = useMemo(() => {
-    const finalStagesSubReports = reportableCategories.flatMap((category) => {
-      const categoryId = String(category._id);
-      const subcategories = productSubcategories.filter((subcategory) =>
-        String(subcategory.category?._id || subcategory.category || '') === categoryId
-          && !isGeneratedDashboardSubcategory(subcategory)
-      );
-      const targets = subcategories.length
-        ? subcategories.map((subcategory) => ({
-            baseId: `product-subcategory-${String(subcategory._id)}`,
-            name: `${category.name} - ${subcategory.name}`,
-            sourceFileName: `${category.name} / ${subcategory.name}`
-          }))
-        : [{
-            baseId: `product-category-${categoryId}-all`,
-            name: category.name,
-            sourceFileName: category.name
-          }];
-      return targets.flatMap((target) => [
-        {
-          id: `${target.baseId}-ok`,
-          sourceReportId: `${target.baseId}-ok`,
+    const finalStagesSubReports = Object.entries(backendMisReports || {})
+      .filter(([reportId]) => reportId.endsWith('-ok') || reportId.endsWith('-not-ok') || reportId.endsWith('-final-stages'))
+      .sort(([leftId, leftReport], [rightId, rightReport]) =>
+        getBackendReportTitle(leftId, leftReport).localeCompare(getBackendReportTitle(rightId, rightReport))
+      )
+      .map(([reportId, report]) => {
+        const label = getBackendReportTitle(reportId, report)
+          .replace(/\s+(OK|Not OK|Final Stages)$/i, '');
+        const isOk = reportId.endsWith('-ok') && !reportId.endsWith('-not-ok');
+        const isCombined = reportId.endsWith('-final-stages');
+        return {
+          id: reportId,
+          sourceReportId: reportId,
           type: 'drr',
-          metric: 'ok',
-          name: `${target.name} OK`,
-          sourceFileName: target.sourceFileName,
-          categoryName: category.name,
+          metric: isOk ? 'ok' : 'notOk',
+          name: isCombined ? `${label} Final Stages` : `${label} ${isOk ? 'OK' : 'Not OK'}`,
+          sourceFileName: label,
+          categoryName: report.partName || report.processName || report.productionLine || 'Submitted Reports',
           descriptorColumns: [
             stageDescriptorColumn,
             { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
             { key: 'partDetails', label: 'Part details', width: 120 },
             { key: 'defectDetails', label: 'Defect Details', width: 180 },
           ],
-          summaryRows: okCountSummaryRows,
+          summaryRows: isOk ? okCountSummaryRows : notOkCountSummaryRows,
           totalColumns: [
             { id: 'total', label: 'Total' },
             { id: 'totalPercent', label: 'Total %' },
           ],
           rows: []
-        },
-        {
-          id: `${target.baseId}-not-ok`,
-          sourceReportId: `${target.baseId}-not-ok`,
-          type: 'drr',
-          metric: 'notOk',
-          name: `${target.name} Not OK`,
-          sourceFileName: target.sourceFileName,
-          categoryName: category.name,
-          descriptorColumns: [
-            stageDescriptorColumn,
-            { key: 'assemblyProcess', label: 'Assembly Process', width: 160 },
-            { key: 'partDetails', label: 'Part details', width: 120 },
-            { key: 'defectDetails', label: 'Defect Details', width: 180 },
-          ],
-          summaryRows: notOkCountSummaryRows,
-          totalColumns: [
-            { id: 'total', label: 'Total' },
-            { id: 'totalPercent', label: 'Total %' },
-          ],
-          rows: []
-        }
-      ]);
-    });
+        };
+      });
     return {
       id: 'finalStages',
       name: 'Final Stages',
       dynamic: true,
       subReports: finalStagesSubReports
     };
-  }, [productSubcategories, reportableCategories]);
+  }, [backendMisReports]);
   const dashboardReportTabs = useMemo(
     () => [...staticReportTabsWithDynamicSheets, stagesDynamicTab, finalStagesDynamicTab],
     [staticReportTabsWithDynamicSheets, stagesDynamicTab, finalStagesDynamicTab]
@@ -2667,9 +2594,30 @@ const AdminDashboard = ({
 
   const buildExportReport = (subReport) => {
     if (['drr', 'visor-drr'].includes(subReport.type)) {
+      const reportRows = editableDrrReports[subReport.id]?.rows || [];
+      const firstQuestionHeader = reportRows
+        .map((row) => String(row.questionHeader || '').trim())
+        .find(Boolean);
+      const questionHeaderIsDefectDetails = normalizeReportKey(firstQuestionHeader) === normalizeReportKey('Defect Details');
+      const stageColumn = subReport.descriptorColumns.find((column) => column.key === 'stageName');
+      const partDetailsColumn = subReport.descriptorColumns.find((column) => column.key === 'partDetails');
+      const questionAnswerColumn = subReport.descriptorColumns.find((column) => column.key === 'assemblyProcess') || subReport.descriptorColumns[0];
+      const defectDetailsColumn = subReport.descriptorColumns.find((column) => column.key === 'defectDetails');
+      const descriptorColumns = firstQuestionHeader
+        ? [
+            stageColumn,
+            partDetailsColumn,
+            questionAnswerColumn && {
+              ...questionAnswerColumn,
+              label: firstQuestionHeader
+            },
+            !questionHeaderIsDefectDetails && defectDetailsColumn
+          ].filter(Boolean)
+        : subReport.descriptorColumns;
       return {
         ...subReport,
-        rows: editableDrrReports[subReport.id]?.rows || [],
+        descriptorColumns,
+        rows: reportRows,
         dayColumns: currentDayColumns
       };
     }

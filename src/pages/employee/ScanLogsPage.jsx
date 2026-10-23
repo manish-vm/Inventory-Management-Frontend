@@ -159,7 +159,7 @@ const ScanLogsPage = () => {
           <table className="w-full min-w-[1200px]">
             <thead className="bg-slate-50 dark:bg-slate-900/60">
               <tr>
-                {['Date & Time', 'Code', 'Product Name', 'Stage', 'Previous Accepted', 'Accepted', 'Total Accepted', 'Rejected', 'Rework', 'Result', 'Remarks'].map((head) => (
+                {['Date & Time', 'Code', 'Product Name', 'Stage', 'Previous Accepted', 'Accepted', 'Total Accepted', 'Rejected', 'Rework', 'Remarks'].map((head) => (
                   <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
                     {head}
                   </th>
@@ -180,7 +180,7 @@ const ScanLogsPage = () => {
                   </td>
                   <td className="px-4 py-3 text-sm text-red-700">{Number(row.rejectedCount || 0)}</td>
                   <td className="px-4 py-3 text-sm text-amber-700">{Number(row.reworkCount || 0)}</td>
-                  <td className={`px-4 py-3 text-sm font-semibold ${
+                  {/* <td className={`px-4 py-3 text-sm font-semibold ${
                     row.inspectionResult === 'ACCEPTED'
                       ? 'text-emerald-700 dark:text-emerald-400'
                       : row.inspectionResult === 'REJECTED'
@@ -188,7 +188,7 @@ const ScanLogsPage = () => {
                         : row.inspectionResult === 'REWORK'
                           ? 'text-orange-600 dark:text-orange-400'
                           : 'text-slate-600 dark:text-slate-300'
-                  }`}>{row.inspectionResult || '-'}</td>
+                  }`}>{row.inspectionResult || '-'}</td> */}
                   <td className="max-w-sm px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.remarks || '-'}</td>
                 </tr>
               ))}

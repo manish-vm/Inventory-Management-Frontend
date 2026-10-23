@@ -333,7 +333,7 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="employee/final-inspection" element={
-            <ProtectedRoute allowedRoles={['employee', 'admin']}>
+            <ProtectedRoute allowedRoles={['employee', 'inspector', 'admin']}>
               <FinalInspectionPage />
             </ProtectedRoute>
           } />

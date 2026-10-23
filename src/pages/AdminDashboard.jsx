@@ -72,7 +72,7 @@ const HorizontalBarChart = ({ rows, mode }) => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-4">
-        {(mode === 'mis' || mode === 'crs') && <LegendDot color="#2563eb" label="Production Qty" />}
+        <LegendDot color="#2563eb" label={mode === 'finalStages' ? 'OK Qty' : 'Production Qty'} />
         {mode === 'crs' && <LegendDot color="#f59e0b" label="Rejection & Rework Qty" />}
         <LegendDot color="#dc2626" label="Rejected Qty" />
       </div>
@@ -80,26 +80,29 @@ const HorizontalBarChart = ({ rows, mode }) => {
         <div className="space-y-4">
           {rows.map((row) => (
             <div key={row.name} className="grid gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60 md:grid-cols-[220px_1fr] md:items-center">
+              {(() => {
+                const productionValue = mode === 'finalStages'
+                  ? Math.max(toCount(row.production) - toCount(row.rejection), 0)
+                  : toCount(row.production);
+                const rejectionValue = mode === 'crs' ? toCount(row.rejectionOnly) : toCount(row.rejection);
+                return (
+                  <>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-slate-900 dark:text-white" title={row.name}>{row.name}</p>
-                {(mode === 'mis' || mode === 'crs') && (
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {mode === 'crs'
-                      ? `${row.rejectionAndReworkPercent}% rejection & rework`
-                      : `${row.rejectionPercent}% rejection`}
-                  </p>
-                )}
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {mode === 'crs'
+                    ? `${row.rejectionAndReworkPercent}% rejection & rework`
+                    : `${row.rejectionPercent}% ${mode === 'finalStages' ? 'not ok' : 'rejection'}`}
+                </p>
               </div>
               <div className="space-y-2">
-                {(mode === 'mis' || mode === 'crs') && (
-                  <div className="grid grid-cols-[88px_1fr_54px] items-center gap-2">
-                    <span className="text-xs text-slate-500">Production</span>
-                    <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                      <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max((row.production / maxValue) * 100, 3)}%` }} />
-                    </div>
-                    <span className="text-right text-xs font-semibold text-slate-700 dark:text-slate-200">{row.production}</span>
+                <div className="grid grid-cols-[88px_1fr_54px] items-center gap-2">
+                  <span className="text-xs text-slate-500">{mode === 'finalStages' ? 'OK' : 'Production'}</span>
+                  <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max((productionValue / maxValue) * 100, 3)}%` }} />
                   </div>
-                )}
+                  <span className="text-right text-xs font-semibold text-slate-700 dark:text-slate-200">{productionValue}</span>
+                </div>
                 {mode === 'crs' && (
                   <div className="grid grid-cols-[88px_1fr_54px] items-center gap-2">
                     <span className="text-xs text-slate-500">Rej+Rew</span>
@@ -110,13 +113,16 @@ const HorizontalBarChart = ({ rows, mode }) => {
                   </div>
                 )}
                 <div className="grid grid-cols-[88px_1fr_54px] items-center gap-2">
-                  <span className="text-xs text-slate-500">Rejected</span>
+                  <span className="text-xs text-slate-500">{mode === 'finalStages' ? 'Not OK' : 'Rejected'}</span>
                   <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                    <div className="h-full rounded-full bg-red-600" style={{ width: `${Math.max(((mode === 'crs' ? row.rejectionOnly : row.rejection) / maxValue) * 100, 3)}%` }} />
+                    <div className="h-full rounded-full bg-red-600" style={{ width: `${Math.max((rejectionValue / maxValue) * 100, 3)}%` }} />
                   </div>
-                  <span className="text-right text-xs font-semibold text-slate-700 dark:text-slate-200">{mode === 'crs' ? row.rejectionOnly : row.rejection}</span>
+                  <span className="text-right text-xs font-semibold text-slate-700 dark:text-slate-200">{rejectionValue}</span>
                 </div>
               </div>
+                  </>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -326,6 +332,57 @@ const collectCrsRows = (reports, labelLookup = {}) => {
     .sort((a, b) => b.rejectionAndRework - a.rejectionAndRework || b.production - a.production || a.name.localeCompare(b.name))
 };
 
+const isStageReport = (reportId = '') =>
+  (reportId.endsWith('-stages') && !reportId.endsWith('-final-stages')) || reportId.startsWith('stagewise-rejection-performance-');
+
+const isFinalStageReport = (reportId = '') => reportId.endsWith('-final-stages');
+
+const getReportsByPredicate = (reports, predicate) =>
+  Object.values(reports || {}).filter((report) => predicate(String(report.reportId || '')));
+
+const collectStageRows = (reports) => getReportsByPredicate(reports, isStageReport)
+  .flatMap((report) => {
+    const sourceRows = report.processRows?.length
+      ? report.processRows
+      : [{
+          key: report.reportId,
+          partName: report.partName || labelFromReportId(report.reportId),
+          processName: report.processName || 'Stage',
+          totalOutput: report.totals?.output || 0,
+          totalRejection: report.totals?.rejection || 0
+        }];
+    return sourceRows.map((row) => ({
+      name: `${row.partName || 'Part'} / ${row.processName || 'Stage'}`,
+      production: toCount(row.totalOutput),
+      rejection: toCount(row.totalRejection),
+      rejectionPercent: toCount(row.totalOutput)
+        ? Number(((toCount(row.totalRejection) / toCount(row.totalOutput)) * 100).toFixed(2))
+        : 0
+    }));
+  })
+  .filter((row) => row.production || row.rejection)
+  .sort((a, b) => b.rejection - a.rejection || b.production - a.production || a.name.localeCompare(b.name));
+
+const collectFinalStageRows = (reports) => getReportsByPredicate(reports, isFinalStageReport)
+  .map((report) => {
+    const ok = toCount(report.totals?.ok ?? report.totals?.accepted);
+    const notOk = toCount(report.totals?.notOk ?? report.totals?.rejected);
+    const production = ok + notOk || toCount(report.totals?.output);
+    return {
+      name: labelFromReportId(report.reportId),
+      production,
+      rejection: notOk,
+      rejectionPercent: production ? Number(((notOk / production) * 100).toFixed(2)) : 0
+    };
+  })
+  .filter((row) => row.production || row.rejection)
+  .sort((a, b) => b.rejection - a.rejection || b.production - a.production || a.name.localeCompare(b.name));
+
+const collectRowsTotals = (rows) => rows.reduce((acc, row) => ({
+  production: acc.production + toCount(row.production),
+  rejection: acc.rejection + toCount(row.rejection)
+}), { production: 0, rejection: 0 });
+
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('mis');
   const [monthValue, setMonthValue] = useState(formatMonthValue());
@@ -429,7 +486,15 @@ const AdminDashboard = () => {
 
   const misRows = useMemo(() => collectMisRows(filteredMisReports), [filteredMisReports]);
   const crsRows = useMemo(() => collectCrsRows(filteredCrsReports, crsLabelLookup), [crsLabelLookup, filteredCrsReports]);
-  const currentRows = activeTab === 'mis' ? misRows : crsRows;
+  const stageRows = useMemo(() => collectStageRows(reports), [reports]);
+  const finalStageRows = useMemo(() => collectFinalStageRows(reports), [reports]);
+  const currentRows = activeTab === 'mis'
+    ? misRows
+    : activeTab === 'crs'
+      ? crsRows
+      : activeTab === 'stages'
+        ? stageRows
+        : finalStageRows;
 
   const misTotals = useMemo(() => collectCanonicalMisTotals(filteredMisReports, misReportFilter), [filteredMisReports, misReportFilter]);
 
@@ -438,15 +503,23 @@ const AdminDashboard = () => {
     rejectionAndRework: acc.rejectionAndRework + toCount(row.rejectionAndRework),
     rejectionOnly: acc.rejectionOnly + toCount(row.rejectionOnly)
   }), { production: 0, rejectionAndRework: 0, rejectionOnly: 0 }), [crsRows]);
+  const stageTotals = useMemo(() => collectRowsTotals(stageRows), [stageRows]);
+  const finalStageTotals = useMemo(() => collectRowsTotals(finalStageRows), [finalStageRows]);
+  const simpleTotals = activeTab === 'finalStages' ? finalStageTotals : stageTotals;
   const pieRows = activeTab === 'mis'
     ? [
         { name: 'Total Production', value: Math.max(misTotals.production - misTotals.rejection, 0) },
         { name: 'Rejected', value: misTotals.rejection }
       ].filter((row) => row.value > 0)
-    : [
+    : activeTab === 'crs'
+      ? [
         { name: 'Total Production', value: Math.max(crsTotals.production - crsTotals.rejectionAndRework, 0) },
         { name: 'Rejection & Rework', value: crsTotals.rejectionAndRework },
         { name: 'Rejected Only', value: crsTotals.rejectionOnly }
+      ].filter((row) => row.value > 0)
+      : [
+        { name: activeTab === 'finalStages' ? 'OK' : 'Accepted Output', value: Math.max(simpleTotals.production - simpleTotals.rejection, 0) },
+        { name: activeTab === 'finalStages' ? 'Not OK' : 'Rejected', value: simpleTotals.rejection }
       ].filter((row) => row.value > 0);
 
   return (
@@ -454,7 +527,7 @@ const AdminDashboard = () => {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-          <p className="text-slate-500 dark:text-slate-400">Visual MIS and CRS summaries from Report Management data.</p>
+          <p className="text-slate-500 dark:text-slate-400">Visual MIS, CRS, stage, and final stage summaries from Report Management data.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {(activeTab === 'mis' || activeTab === 'crs') && (
@@ -505,6 +578,20 @@ const AdminDashboard = () => {
           <PieChartIcon className="h-4 w-4" />
           CRS
         </button>
+        <button
+          onClick={() => setActiveTab('stages')}
+          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === 'stages' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300' : 'text-slate-600 dark:text-slate-300'}`}
+        >
+          <BarChart3 className="h-4 w-4" />
+          Stages
+        </button>
+        <button
+          onClick={() => setActiveTab('finalStages')}
+          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === 'finalStages' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300' : 'text-slate-600 dark:text-slate-300'}`}
+        >
+          <PieChartIcon className="h-4 w-4" />
+          Final Stages
+        </button>
       </div>
 
       {loading ? (
@@ -524,7 +611,7 @@ const AdminDashboard = () => {
                   tone="amber"
                 />
               </>
-            ) : (
+            ) : activeTab === 'crs' ? (
               <>
                 <StatCard label="Production Qty" value={crsTotals.production} tone="blue" />
                 <StatCard label="Rejection & Rework Qty" value={crsTotals.rejectionAndRework} tone="red" />
@@ -534,20 +621,48 @@ const AdminDashboard = () => {
                   tone="amber"
                 />
               </>
+            ) : (
+              <>
+                <StatCard label={activeTab === 'finalStages' ? 'OK Qty' : 'Production Qty'} value={Math.max(simpleTotals.production - simpleTotals.rejection, 0)} tone="blue" />
+                <StatCard label={activeTab === 'finalStages' ? 'Not OK Qty' : 'Rejected Qty'} value={simpleTotals.rejection} tone="red" />
+                <StatCard
+                  label={activeTab === 'finalStages' ? 'Not OK %' : 'Rejection %'}
+                  value={`${simpleTotals.production ? ((simpleTotals.rejection / simpleTotals.production) * 100).toFixed(2) : '0.00'}%`}
+                  tone="amber"
+                />
+              </>
             )}
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
             <ChartCard
-              title={activeTab === 'mis' ? 'MIS Part / Process Rejections' : 'CRS Rejection Details'}
-              subtitle={activeTab === 'mis' ? 'Production and rejection quantities by part and process.' : 'Production, rejection, and rework quantities by CRS report.'}
+              title={activeTab === 'mis'
+                ? 'MIS Part / Process Rejections'
+                : activeTab === 'crs'
+                  ? 'CRS Rejection Details'
+                  : activeTab === 'stages'
+                    ? 'Stage Rejections'
+                    : 'Final Stage Not OK Details'}
+              subtitle={activeTab === 'mis'
+                ? 'Production and rejection quantities by part and process.'
+                : activeTab === 'crs'
+                  ? 'Production, rejection, and rework quantities by CRS report.'
+                  : activeTab === 'stages'
+                    ? 'Production and rejected quantities from regular stage reports.'
+                    : 'OK and Not OK quantities from final stage reports.'}
             >
               {currentRows.length ? <HorizontalBarChart rows={currentRows} mode={activeTab} /> : <EmptyChart />}
             </ChartCard>
 
             <ChartCard
-              title={activeTab === 'mis' ? 'MIS Acceptance Mix' : 'CRS Rejection Share'}
-              subtitle={activeTab === 'mis' ? 'Accepted output versus rejected quantity.' : 'Good output versus rejection and rework.'}
+              title={activeTab === 'mis'
+                ? 'MIS Acceptance Mix'
+                : activeTab === 'crs'
+                  ? 'CRS Rejection Share'
+                  : activeTab === 'stages'
+                    ? 'Stage Acceptance Mix'
+                    : 'Final Stage OK Mix'}
+              subtitle={activeTab === 'crs' ? 'Good output versus rejection and rework.' : 'Accepted output versus rejected quantity.'}
             >
               {pieRows.length ? <DonutChart rows={pieRows} /> : <EmptyChart />}
             </ChartCard>
