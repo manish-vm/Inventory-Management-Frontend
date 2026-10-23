@@ -31,7 +31,7 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
   const label = roleLabels[personType] || 'Employee';
   const stageRoleFor = personType === 'inspector' ? 'inspector' : 'employee';
   const stageRoles = roles.filter((role) => (role.roleFor || 'employee') === stageRoleFor);
-  const finalStageRoles = roles.filter((role) => role.roleFor === 'finalStages');
+  const finalStageRoles = roles.filter((role) => ['finalStages', 'employeeFinalStages'].includes(role.roleFor));
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     phone: employee?.phone || '',

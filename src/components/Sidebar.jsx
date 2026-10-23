@@ -90,7 +90,7 @@ const Sidebar = ({ isSuperAdmin }) => {
     { path: '/app/dashboard', icon: LayoutDashboard, label: 'Report Management' },
     { path: '/app/inspector-management', icon: ClipboardCheck, label: 'Inspector Management' },
     { path: '/app/products', icon: Package, label: 'Products' },
-    { path: '/app/manufacturing-config', icon: Workflow, label: 'Manufacturing Config' },
+    { path: '/app/manufacturing-config', icon: Workflow, label: 'Processing Stages' },
     { path: '/app/qr-generator', icon: QrCode, label: 'QR Generator' },
     // { path: '/app/invoices', icon: Receipt, label: 'Invoices' },
     // { path: '/app/refund-requests', icon: RefreshCcw, label: 'Refund Requests', badge: pendingRefundCount },
