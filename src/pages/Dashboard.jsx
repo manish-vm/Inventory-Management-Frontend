@@ -644,6 +644,29 @@ const dayColumns = Array.from({ length: 31 }, (_, index) => {
 const formatPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
 const getCellValue = (value, report) => (typeof value === 'function' ? value(report) : value);
 const normalizeReportKey = (value) => String(value || '').trim().toLowerCase();
+const compareReportText = (left, right) => String(left || '').localeCompare(String(right || ''), undefined, {
+  numeric: true,
+  sensitivity: 'base'
+});
+const stageOrder = (row) => {
+  const stageNumber = Number(row.stageNumber);
+  if (Number.isFinite(stageNumber) && stageNumber > 0) return stageNumber;
+  const match = String(row.stageName || '').match(/\bstage\s*(\d+)\b/i);
+  return match ? Number(match[1]) : null;
+};
+const sortRowsByStageProcess = (rows) => [...rows].sort((left, right) => {
+  const leftStage = stageOrder(left);
+  const rightStage = stageOrder(right);
+  if (leftStage !== null && rightStage !== null && leftStage !== rightStage) return leftStage - rightStage;
+  if (leftStage !== null && rightStage === null) return -1;
+  if (leftStage === null && rightStage !== null) return 1;
+  return compareReportText(
+    left.stageName || left.assemblyProcess || left.processName,
+    right.stageName || right.assemblyProcess || right.processName
+  ) ||
+  compareReportText(left.partDetails || left.partName, right.partDetails || right.partName) ||
+  compareReportText(left.defectDetails || left.rejectionDetails || left.defectName, right.defectDetails || right.rejectionDetails || right.defectName);
+});
 const clampColumnWidth = (width, min = 72, max = 190) => Math.min(max, Math.max(min, width));
 const estimateTextColumnWidth = (label, rows = [], key, { min = 72, max = 190 } = {}) => {
   const values = [
@@ -862,23 +885,14 @@ const getRejectionDayValue = (report, column, metric) => {
 
 const getMisProcessRows = (report) => {
   if (Array.isArray(report?.processRows) && report.processRows.length) {
-    const rowsByPart = new Map((report?.rows || []).map((row) => [
-      normalizeReportKey(row.partName || row.partDetails),
-      row
-    ]));
-    return report.processRows.map((row) => {
-      const matchingRow = rowsByPart.get(normalizeReportKey(row.partName));
-      const correctedProcessName = matchingRow?.assemblyProcess || matchingRow?.processName || row.processName;
-      return {
-        ...row,
-        processName: correctedProcessName
-      };
-    });
+    return report.processRows;
   }
   return (report?.rows || []).map((row) => ({
-    key: row.drrRowKey || row.defectCode || `${row.partDetails || row.partName}-${row.assemblyProcess || row.processName}`,
+    key: row.drrRowKey || row.defectCode || `${row.partDetails || row.partName}-${row.stageName || row.assemblyProcess || row.processName}`,
     partName: row.partDetails || row.partName || '',
-    processName: row.assemblyProcess || row.processName || row.questionAnswer || row.defectDetails || '',
+    stageNumber: row.stageNumber,
+    stageName: row.stageName || '',
+    processName: row.stageName || row.assemblyProcess || row.processName || row.questionAnswer || row.defectDetails || '',
     days: (row.days || []).map((value, index) => ({
       output: toNumber(row.outputDays?.[index] ?? row.daysOutput?.[index] ?? row.output ?? 0),
       rejection: toNumber(value)
@@ -910,6 +924,7 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
       subOption,
       subQuestionPath,
       hasSubQuestion: hasQuestionnaireSubDetail(backendRow),
+      stageNumber: backendRow.stageNumber,
       stageName: backendRow.stageName || '',
       assemblyProcess: backendRow.assemblyProcess || backendRow.questionAnswer || backendReport.processName || '',
       partDetails: backendRow.partName || backendReport.partName || '',
@@ -960,8 +975,8 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
     ? Number(((totals.rework / totals.output) * 100).toFixed(2))
     : 0;
   return {
-    rows: editableRows,
-    processRows: (backendReport?.processRows || []).map((row) => ({
+    rows: sortRowsByStageProcess(editableRows),
+    processRows: sortRowsByStageProcess((backendReport?.processRows || []).map((row) => ({
       ...row,
       days: columns.map((column, dayIndex) => ({
         output: toNumber(row.days?.[dayIndex]?.output),
@@ -969,7 +984,7 @@ const buildEditableDrrReport = (rows, overrides, columns, backendReport = null, 
       })),
       totalOutput: toNumber(row.totalOutput),
       totalRejection: toNumber(row.totalRejection)
-    })),
+    }))),
     days,
     daysById: days.reduce((acc, day, index) => {
       acc[columns[index].id] = day;
@@ -1025,7 +1040,7 @@ const applyEmployeeSheetAggregateToDrrReport = (report, aggregateRows = [], metr
 
   return {
     ...report,
-    rows,
+    rows: sortRowsByStageProcess(rows),
     days,
     daysById: days.reduce((acc, day, index) => {
       acc[Object.keys(report.daysById || {})[index] || `day-${String(index + 1).padStart(2, '0')}`] = day;
@@ -1125,7 +1140,7 @@ const buildEditableRejectionReport = (report, overrides, dayColumnsForReport) =>
       return acc;
     }, {}),
     totals,
-    rows: rowsWithPercent
+    rows: sortRowsByStageProcess(rowsWithPercent)
   };
 };
 
@@ -1166,10 +1181,10 @@ const applyEmployeeSheetAggregateToRejectionReport = (report, aggregateRows = []
 
   return {
     ...report,
-    rows: rows.map((row) => ({
+    rows: sortRowsByStageProcess(rows.map((row) => ({
       ...row,
       totalPercent: totals.rejection ? Number(((row.total / totals.rejection) * 100).toFixed(2)) : 0
-    })),
+    }))),
     days,
     daysById: days.reduce((acc, day, index) => {
       acc[dayColumnsForReport[index].id] = day;
@@ -2349,6 +2364,7 @@ const AdminDashboard = ({
               subOption,
               subQuestionPath,
               hasSubQuestion: hasQuestionnaireSubDetail(row),
+              stageNumber: row.stageNumber,
               stageName: row.stageName || '',
               partDetails: row.partName || backendReport.partName || '',
               rejectionDetails: rejectionDetails || row.defectName || 'Unspecified',
@@ -2423,7 +2439,9 @@ const AdminDashboard = ({
       const firstQuestionHeader = reportRows
         .map((row) => String(row.questionHeader || '').trim())
         .find(Boolean);
-      const questionHeaderIsDefectDetails = normalizeReportKey(firstQuestionHeader) === normalizeReportKey('Defect Details');
+      const normalizedQuestionHeader = normalizeReportKey(firstQuestionHeader);
+      const questionHeaderIsDefectDetails = normalizedQuestionHeader.includes('defect')
+        && normalizedQuestionHeader.includes('detail');
       const stageColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'stageName');
       const partDetailsColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'partDetails');
       const questionAnswerColumn = activeSubReportBase.descriptorColumns.find((column) => column.key === 'assemblyProcess') || activeSubReportBase.descriptorColumns[0];
@@ -2438,12 +2456,12 @@ const AdminDashboard = ({
               ...partDetailsColumn,
               width: estimateTextColumnWidth(partDetailsColumn.label, reportRows, partDetailsColumn.key, { min: 96, max: 150 })
             },
-            questionAnswerColumn && {
+            !questionHeaderIsDefectDetails && questionAnswerColumn && {
               ...questionAnswerColumn,
               label: firstQuestionHeader,
               width: estimateTextColumnWidth(firstQuestionHeader, reportRows, questionAnswerColumn.key)
             },
-            !questionHeaderIsDefectDetails && defectDetailsColumn && {
+            defectDetailsColumn && {
               ...defectDetailsColumn,
               label: 'Defect Details',
               width: estimateTextColumnWidth('Defect Details', reportRows, defectDetailsColumn.key, { min: 180, max: 360 })

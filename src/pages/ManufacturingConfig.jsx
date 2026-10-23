@@ -355,7 +355,7 @@ const ManufacturingConfig = () => {
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Manufacturing Configuration</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Processing Stages</h1>
             <p className="text-slate-600 dark:text-slate-400">Configure product workflows (stage 1 is direct)</p>
           </div>
 

@@ -31,12 +31,9 @@ const EmployeeModal = ({ employee, onClose, onSave, roles, personType }) => {
   const label = roleLabels[personType] || 'Employee';
   const stageRoleFor = personType === 'inspector' ? 'inspector' : 'employee';
   const stageRoles = roles.filter((role) => (role.roleFor || 'employee') === stageRoleFor);
-  const finalStageRoleFor = personType === 'inspector' ? 'inspectorFinalStages' : 'employeeFinalStages';
-  const currentFinalStageRoleId = String(employee?.assignedFinalStageRole?._id || employee?.assignedFinalStageRole || '');
-  const finalStageRoles = roles.filter((role) =>
-    role.roleFor === finalStageRoleFor
-    || (role.roleFor === 'finalStages' && String(role._id) === currentFinalStageRoleId)
-  );
+  const finalStageRoles = personType === 'inspector'
+    ? []
+    : roles.filter((role) => role.roleFor === 'finalStages');
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     phone: employee?.phone || '',
